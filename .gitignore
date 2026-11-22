@@ -42,3 +42,4 @@ secrets/
 # Artefatos de build locais
 /sfrega
 *.test
+.fuse_hidden*
