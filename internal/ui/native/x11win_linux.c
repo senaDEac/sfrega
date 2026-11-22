@@ -7,6 +7,13 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+/* Xlib não é thread-safe por padrão; janelas/EQ/PL chamam estas
+ * funções de goroutines Go distintas. */
+__attribute__((constructor)) static void x11_threads_init(void)
+{
+    XInitThreads();
+}
+
 /* MotifWmHints layout lido pelo muffin (src/x11/xprops.h):
  * flags, functions, decorations, input_mode, status — 5 cardinais. */
 static const unsigned long motif_hints[5] = { 2 /*MWM_HINTS_DECORATIONS*/, 0, 0, 0, 0 };

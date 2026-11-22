@@ -7,7 +7,25 @@ package native
 */
 import "C"
 
-func wmNoDecorations() { C.sfrega_no_decorations() }
+import "sync"
 
-func wmSaveGeometry()   { C.sfrega_geo_save() }
-func wmRestoreGeometry() { C.sfrega_geo_restore() }
+// Serializa chamadas X11 vindas das goroutines das 3 janelas.
+var wmMu sync.Mutex
+
+func wmNoDecorations() {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	C.sfrega_no_decorations()
+}
+
+func wmSaveGeometry() {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	C.sfrega_geo_save()
+}
+
+func wmRestoreGeometry() {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	C.sfrega_geo_restore()
+}
