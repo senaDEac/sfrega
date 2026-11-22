@@ -24,8 +24,8 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	// ---- titlebar ----
 	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, 222, 11)) // contend
 	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))         // option
-	ui.spr(gtx, "TITLEBAR", R(9, 0, 9, 9), R(244, 3, 9, 9))        // minimize
-	ui.spr(gtx, "TITLEBAR", R(0, 18, 9, 9), R(254, 3, 9, 9))       // shade
+	ui.spr(gtx, "TITLEBAR", R(9, 0, 9, 9), R(244, 3, 9, 9))       // minimize
+	ui.spr(gtx, "TITLEBAR", R(0, 18, 9, 9), R(254, 3, 9, 9))      // shade
 	if ui.spriteBtn(gtx, &ui.btnClose, "TITLEBAR", R(264, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.winMain.Perform(system.ActionClose)
 	}
@@ -193,11 +193,11 @@ func (ui *uiState) posBar(gtx layout.Context, R func(int, int, int, int) image.R
 // transport desenha prev/play/pause/stop/next/eject (CBUTTONS.png).
 func (ui *uiState) transport(gtx layout.Context, R func(int, int, int, int) image.Rectangle) {
 	type tb struct {
-		b    *uibtn
-		x    int
-		col  int
-		w    int
-		fn   func()
+		b   *uibtn
+		x   int
+		col int
+		w   int
+		fn  func()
 	}
 	btns := []tb{
 		{&ui.btnPrev, 16, 0, 23, func() { ui.p.Prev(); ui.p.Play() }},

@@ -74,33 +74,40 @@ type uiState struct {
 
 	// widgets main
 	btnPrev, btnPlay, btnPause, btnStop, btnNext uibtn
-	btnEject, btnClose, btnEQ, btnPL       uibtn
-	btnShuf, btnRep                        uibtn
-	volDrag, balDrag, posDrag              fader
+	btnEject, btnClose, btnEQ, btnPL             uibtn
+	btnShuf, btnRep                              uibtn
+	volDrag, balDrag, posDrag                    fader
 
 	// widgets EQ
-	plRowClicks []uibtn
-	eqSliders   [10]fader
-	preampSlide fader
-	eqGains     [10]float64 // dB
-	btnEQClose  uibtn
+	plRowClicks                   []uibtn
+	eqSliders                     [10]fader
+	preampSlide                   fader
+	eqGains                       [10]float64 // dB
+	btnEQClose                    uibtn
 	btnEQOn, btnEQAuto, btnEQPres uibtn
-	eqOn        bool
-	eqAuto      bool
-	eqPresOpen  bool
-	eqPresetBtns [6]uibtn
+	eqOn                          bool
+	eqAuto                        bool
+	eqPresOpen                    bool
+	eqPresetBtns                  [6]uibtn
 
 	// widgets playlist
 	plList                                                    widget.List
 	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite, btnPLClose uibtn
-	btnPLClear uibtn
+	btnPLClear                                                uibtn
+	btnPLShade                                                uibtn
+	btnPLMAdd, btnPLMRem, btnPLMSel                           uibtn
+	btnPLMMisc, btnPLMList                                    uibtn
+	btnPLPrev, btnPLPlay, btnPLPause                          uibtn
+	btnPLStop, btnPLNext, btnPLEject                          uibtn
+	plMenuClicks                                              [5][]uibtn
+	plMenuOpen                                                int
 	plSel                                                     int
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
 	shuffle, repeat bool
-	marqueeX         int
-	lastTick         time.Time
+	marqueeX        int
+	lastTick        time.Time
 }
 
 // uibtn é um botão simples via pointer events (sem macro do Clickable).
@@ -186,13 +193,14 @@ func Run(p *player.Player) error {
 	faces, _ := loadFonts()
 	shaper := text.NewShaper(text.WithCollection(faces))
 	ui := &uiState{
-		p:        p,
-		skin:     skin,
-		shaper:   shaper,
-		fontUI:   font.Font{Typeface: "DejaVu Sans"},
-		fontBold: font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
-		fontMono: font.Font{Typeface: "DejaVu Sans Mono"},
-		plSel:    -1,
+		p:          p,
+		skin:       skin,
+		shaper:     shaper,
+		fontUI:     font.Font{Typeface: "DejaVu Sans"},
+		fontBold:   font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
+		fontMono:   font.Font{Typeface: "DejaVu Sans Mono"},
+		plSel:      -1,
+		plMenuOpen: -1,
 	}
 	ui.volDrag.val = 1.0
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
