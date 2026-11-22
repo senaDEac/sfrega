@@ -3,6 +3,7 @@ package native
 import (
 	"image"
 	"image/color"
+	"time"
 
 	"gioui.org/app"
 	"gioui.org/f32"
@@ -49,6 +50,10 @@ func (ui *uiState) toggleEQ() {
 		ui.winEQ = w
 		ui.eqOpen = true
 		go ui.eqLoop()
+		go func() {
+			time.Sleep(400 * time.Millisecond)
+			wmNoDecorations()
+		}()
 		return
 	}
 	ui.eqOpen = false
@@ -69,6 +74,10 @@ func (ui *uiState) togglePL() {
 		ui.winPL = w
 		ui.plOpen = true
 		go ui.plLoop()
+		go func() {
+			time.Sleep(400 * time.Millisecond)
+			wmNoDecorations()
+		}()
 		return
 	}
 	ui.plOpen = false

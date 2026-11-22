@@ -89,9 +89,21 @@ void sfrega_drag_begin(void) {
 	g_oy = cy;
 
 	/* muffin posiciona o ConfigureRequest como se x,y fossem do frame
-	   (incluindo _NET_FRAME_EXTENTS); compensa left/top. */
+	   (incluindo _NET_FRAME_EXTENTS); compensa left/top.
+	   Janela sem frame (parent==root) não tem compensação —
+	   _NET_FRAME_EXTENTS pode estar stale após undecorate. */
 	g_ex = 0;
 	g_ey = 0;
+	Window gparent = None;
+	{
+		Window jr;
+		Window *children = NULL;
+		unsigned int nc = 0;
+		if (XQueryTree(g_dpy, g_win, &jr, &gparent, &children, &nc) && children)
+			XFree(children);
+	}
+	if (gparent == root || gparent == None)
+		return; /* sem frame: ConfigureRequest usa coords do client */
 	Atom fe = XInternAtom(g_dpy, "_NET_FRAME_EXTENTS", False);
 	Atom actual;
 	int fmt;

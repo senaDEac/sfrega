@@ -338,6 +338,11 @@ func Run(p *player.Player) error {
 	)
 
 	go func() {
+		time.Sleep(500 * time.Millisecond)
+		wmNoDecorations()
+	}()
+
+	go func() {
 		t := time.NewTicker(33 * time.Millisecond)
 		for range t.C {
 			ui.winMain.Invalidate()
