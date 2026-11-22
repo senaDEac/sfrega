@@ -86,11 +86,17 @@ type uiState struct {
 	btnEQClose  uibtn
 	btnEQOn, btnEQAuto, btnEQPres uibtn
 	eqOn        bool
+	eqAuto      bool
+	eqPresOpen  bool
+	eqPresetBtns [6]uibtn
 
 	// widgets playlist
 	plList                                                    widget.List
 	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite, btnPLClose uibtn
+	btnPLClear uibtn
 	plSel                                                     int
+
+	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
 	shuffle, repeat bool
 	marqueeX         int
@@ -144,6 +150,7 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 type fader struct {
 	tag    event.Tag
 	val    float32 // 0..1
+	active bool
 	commit func(float32)
 }
 
@@ -189,6 +196,7 @@ func Run(p *player.Player) error {
 	}
 	ui.volDrag.val = 1.0
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
+	ui.eqOn = true
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
@@ -215,6 +223,9 @@ func Run(p *player.Player) error {
 		for range t.C {
 			ui.winMain.Invalidate()
 			ui.mu.Lock()
+			if ui.winEQ != nil {
+				ui.winEQ.Invalidate()
+			}
 			if ui.winPL != nil {
 				ui.winPL.Invalidate()
 			}
@@ -268,10 +279,24 @@ func box(gtx layout.Context, r image.Rectangle, top, bot, light, dark color.NRGB
 
 // lbl desenha texto simples.
 func (ui *uiState) lbl(gtx layout.Context, fnt font.Font, size unit.Sp, txt string, c color.NRGBA) layout.Dimensions {
+	ui.shapeMu.Lock()
+	defer ui.shapeMu.Unlock()
 	m := op.Record(gtx.Ops)
 	paint.ColorOp{Color: c}.Add(gtx.Ops)
 	mat := m.Stop()
 	return widget.Label{Alignment: text.Start}.Layout(gtx, ui.shaper, fnt, size, txt, mat)
+}
+
+// textAt desenha uma linha de texto em pos (thread-safe).
+func (ui *uiState) textAt(gtx layout.Context, fnt font.Font, size unit.Sp, txt string, c color.NRGBA, pos image.Point) {
+	ui.shapeMu.Lock()
+	defer ui.shapeMu.Unlock()
+	m := op.Record(gtx.Ops)
+	paint.ColorOp{Color: c}.Add(gtx.Ops)
+	mat := m.Stop()
+	off := op.Offset(pos).Push(gtx.Ops)
+	widget.Label{MaxLines: 1}.Layout(gtx, ui.shaper, fnt, size, txt, mat)
+	off.Pop()
 }
 
 // winampButton desenha um botão quadrado estilo Winamp com glifo.
@@ -294,7 +319,9 @@ func (ui *uiState) winampButton(gtx layout.Context, c *widget.Clickable, glyph s
 		offX := (w - 8) / 2
 		offY := (h - 12) / 2
 		offset := op.Offset(image.Pt(offX, offY)).Push(gtx.Ops)
+		ui.shapeMu.Lock()
 		widget.Label{}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(10), glyph, mat)
+		ui.shapeMu.Unlock()
 		offset.Pop()
 		return layout.Dimensions{Size: sz}
 	})

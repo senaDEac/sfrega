@@ -12,9 +12,11 @@ import (
 	"image/png"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 //go:embed base-2.91/*.png base-2.91/VISCOLOR.TXT
@@ -24,12 +26,13 @@ var baseFS embed.FS
 type Skin struct {
 	imgs  map[string]*image.RGBA
 	vis   []color.NRGBA
+	mu    sync.Mutex
 	spr   map[string]*image.RGBA // cache de recortes
 }
 
 // OpenEmbedded carrega uma skin embutida no binário (ex.: "base-2.91").
 func OpenEmbedded(name string) (*Skin, error) {
-	return loadFS(baseFS, "base-2.91/"+name)
+	return loadFS(baseFS, path.Join("base-2.91", name))
 }
 
 // OpenDir carrega uma skin de um diretório contendo PNGs + VISCOLOR.TXT.
@@ -110,6 +113,8 @@ func (s *Skin) Get(name string) *image.RGBA {
 
 // Spr retorna um recorte cacheado de um bitmap.
 func (s *Skin) Spr(name string, r image.Rectangle) *image.RGBA {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	key := fmt.Sprintf("%s@%d,%d,%d,%d", name, r.Min.X, r.Min.Y, r.Max.X, r.Max.Y)
 	if c, ok := s.spr[key]; ok {
 		return c

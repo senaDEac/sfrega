@@ -89,7 +89,9 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 	}
 	cs := clip.Rect(R(111, 24, viewW, 12)).Push(gtx.Ops)
 	off := op.Offset(image.Pt(111+ui.marqueeX, 26)).Push(gtx.Ops)
+	ui.shapeMu.Lock()
 	widget.Label{MaxLines: 1}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(8), title, ui.txtMat(gtx, green))
+	ui.shapeMu.Unlock()
 	off.Pop()
 	cs.Pop()
 
