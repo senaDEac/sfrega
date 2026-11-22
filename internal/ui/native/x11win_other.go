@@ -2,6 +2,6 @@
 
 package native
 
-func wmNoDecorations()  {}
-func wmSaveGeometry()   {}
-func wmRestoreGeometry() {}
+func wmStart()        {}
+func wmTick()         {}
+func wmSaveGeometry() {}
