@@ -19,7 +19,7 @@ cat > "$DESKTOP_FILE" <<'EOF'
 Type=Application
 Name=sfrega
 Comment=Player de áudio estilo Winamp
-Exec=$HOME/.local/bin/sfrega %U
+Exec=sfrega %U
 Icon=multimedia-audio-player
 Categories=AudioVideo;Audio;Player;
 MimeType=audio/mpeg;audio/x-wav;audio/flac;audio/ogg;audio/mp4;audio/aac;audio/x-ms-wma;
@@ -27,6 +27,7 @@ Terminal=false
 StartupNotify=true
 Version=1.0
 EOF
+	sed -i "s|^Exec=sfrega|Exec=$HOME/.local/bin/sfrega|" "$DESKTOP_FILE"
 	command -v update-desktop-database >/dev/null && update-desktop-database "$HOME/.local/share/applications" || true
 else
 	echo "AVISO: ~/.local/share/applications não é gravável (dono root)."
