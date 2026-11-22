@@ -13,6 +13,63 @@ import (
 	"sfrega/internal/spectrum"
 )
 
+// eqBandFreqs são as frequências centrais do equalizador de 10 bandas (ISO).
+var eqBandFreqs = [10]float64{31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000}
+
+// biquad é um filtro biquad (RBJ peaking EQ).
+type biquad struct {
+	b0, b1, b2, a1, a2 float64
+	z1, z2             float64
+}
+
+func (b *biquad) process(x float64) float64 {
+	y := b.b0*x + b.z1
+	b.z1 = b.b1*x - b.a1*y + b.z2
+	b.z2 = b.b2*x - b.a2*y
+	return y
+}
+
+func (b *biquad) reset() { b.z1, b.z2 = 0, 0 }
+
+// eqState contém os filtros EQ por banda e canal.
+type eqState struct {
+	filters [10][2]biquad
+}
+
+// eqFromGains calcula coeficientes para ganhos em dB (len deve ser 10).
+func eqFromGains(gainsDb [10]float64, sampleRate uint32) *eqState {
+	e := &eqState{}
+	for b := 0; b < 10; b++ {
+		e.filters[b][0] = biquad{b0: 1} // identity (bypass)
+		e.filters[b][1] = biquad{b0: 1}
+	}
+	Q := 1.4
+	for band := 0; band < 10; band++ {
+		db := gainsDb[band]
+		if math.Abs(db) < 0.01 {
+			continue // bypass
+		}
+		A := math.Pow(10, db/40)
+		w0 := 2 * math.Pi * eqBandFreqs[band] / float64(sampleRate)
+		cosw := math.Cos(w0)
+		sinw := math.Sin(w0)
+		alpha := sinw / (2 * Q)
+		b0 := 1 + alpha*A
+		b1 := -2 * cosw
+		b2 := 1 - alpha*A
+		a0 := 1 + alpha/A
+		a1 := -2 * cosw
+		a2 := 1 - alpha/A
+		for ch := 0; ch < 2; ch++ {
+			e.filters[band][ch] = biquad{
+				b0: b0 / a0, b1: b1 / a0, b2: b2 / a0,
+				a1: a1 / a0, a2: a2 / a0,
+			}
+		}
+	}
+	return e
+}
+
 const (
 	decodeChunkFrames = 4096
 	ringSeconds       = 2 // ~2s de buffer
@@ -42,6 +99,8 @@ type Player struct {
 
 	playing   atomic.Bool
 	volume    atomic.Uint32 // float32 bits
+	eq        atomic.Value  // *eqState
+	preamp    atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
 	decoded   atomic.Uint64 // frames decodificados totais da faixa
 	done      chan struct{}
 	trackDone chan struct{} // cancelado ao trocar de faixa
@@ -63,6 +122,8 @@ func New(rate uint32, channels uint32) (*Player, error) {
 		analyzer: spectrum.New(),
 	}
 	p.volume.Store(math.Float32bits(1.0))
+	p.preamp.Store(math.Float32bits(0))
+	p.eq.Store(eqFromGains([10]float64{}, 44100))
 	return p, nil
 }
 
@@ -143,6 +204,91 @@ func (p *Player) SetVolume(v float32) {
 	}
 	p.mu.Unlock()
 	p.emit(Event{Kind: "state-change", Volume: v, Playing: p.playing.Load()})
+}
+
+// SetEQ define os ganhos do equalizador em dB (10 bandas ISO).
+// Requer sampleRate para calcular coeficientes; use EQSampleRate ou 0 para
+// usar a taxa da faixa atual quando souber.
+func (p *Player) SetEQ(gainsDb [10]float64, sampleRate uint32) {
+	if sampleRate == 0 {
+		p.mu.Lock()
+		if p.dec != nil {
+			sampleRate = p.dec.SampleRate()
+		}
+		p.mu.Unlock()
+		if sampleRate == 0 {
+			sampleRate = 44100
+		}
+	}
+	p.eq.Store(eqFromGains(gainsDb, sampleRate))
+}
+
+// EQGains retorna ganhos atuais (se trackeados externamente).
+// SetPreamp define ganho pré-EQ em dB (±12).
+func (p *Player) SetPreamp(db float64) {
+	if db > 12 {
+		db = 12
+	}
+	if db < -12 {
+		db = -12
+	}
+	// converte dB para multiplicador e guarda em volume-like? guardamos o
+	// multiplicador linear em preamp (float32 bits)
+	p.preamp.Store(math.Float32bits(float32(math.Pow(10, db/20))))
+}
+
+func (p *Player) Preamp() float32 { return math.Float32frombits(p.preamp.Load()) }
+
+// Tracks retorna uma cópia da playlist.
+func (p *Player) Tracks() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.tracks...)
+}
+
+// RemoveAt remove a faixa i da playlist.
+func (p *Player) RemoveAt(i int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if i < 0 || i >= len(p.tracks) {
+		return
+	}
+	p.tracks = append(p.tracks[:i], p.tracks[i+1:]...)
+	if len(p.tracks) == 0 {
+		p.index = -1
+		p.resetLocked()
+		return
+	}
+	if i < p.index {
+		p.index--
+	} else if i == p.index {
+		p.index = -1
+		p.index = 0
+		if p.dec != nil {
+			p.closeTrackLocked()
+			p.decoded.Store(0)
+		}
+	}
+	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
+}
+
+// Move move a faixa de from para to.
+func (p *Player) Move(from, to int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if from < 0 || from >= len(p.tracks) || to < 0 || to >= len(p.tracks) || from == to {
+		return
+	}
+	t := p.tracks[from]
+	p.tracks = append(p.tracks[:from], p.tracks[from+1:]...)
+	p.tracks = append(p.tracks[:to], append([]string{t}, p.tracks[to:]...)...)
+	if p.index == from {
+		p.index = to
+	} else if from < p.index && to >= p.index {
+		p.index--
+	} else if from > p.index && to <= p.index {
+		p.index++
+	}
 }
 
 // Play inicia a faixa atual.
@@ -273,9 +419,11 @@ func (p *Player) openCurrentLocked() error {
 	return nil
 }
 
-// decodeLoop decodifica a faixa, alimenta analisador e ring buffer.
+// decodeLoop decodifica a faixa, aplica EQ/preamp, alimenta analisador e ring buffer.
 func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-chan struct{}) {
 	chBuf := make([]float32, decodeChunkFrames*channels)
+	eq := p.eq.Load().(*eqState)
+	preamp := p.Preamp()
 	for {
 		select {
 		case <-p.done:
@@ -295,6 +443,31 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 		}
 		samples := int(frames) * int(channels)
 		chunk := chBuf[:samples]
+		// EQ + preamp (recarrega estado a cada chunk p/ sliders ao vivo)
+		if eq2, ok := p.eq.Load().(*eqState); ok && eq2 != eq {
+			eq = eq2
+		}
+		preamp = p.Preamp()
+		if channels == 2 {
+			for i := 0; i < samples; i += 2 {
+				l := float64(chunk[i])
+				r := float64(chunk[i+1])
+				for b := 0; b < 10; b++ {
+					l = eq.filters[b][0].process(l)
+					r = eq.filters[b][1].process(r)
+				}
+				chunk[i] = float32(l * float64(preamp))
+				chunk[i+1] = float32(r * float64(preamp))
+			}
+		} else {
+			for i := 0; i < samples; i++ {
+				l := float64(chunk[i])
+				for b := 0; b < 10; b++ {
+					l = eq.filters[b][0].process(l)
+				}
+				chunk[i] = float32(l * float64(preamp))
+			}
+		}
 		bands := p.analyzer.Feed(chunk, rate)
 		p.lastBands.Store(bands)
 		// escreve no ring buffer (parcial + espera)

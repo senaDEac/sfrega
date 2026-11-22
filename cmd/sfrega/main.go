@@ -13,6 +13,7 @@ import (
 
 	"sfrega/internal/player"
 	"sfrega/internal/spectrum"
+	"sfrega/internal/ui/native"
 	"sfrega/internal/ui/web"
 )
 
@@ -79,6 +80,14 @@ func main() {
 		}
 		return
 	}
+
+	// modo nativo (padrão): janela Winamp via Gio
+	fmt.Println("sfrega — interface nativa (feche a janela para sair)")
+	if err := native.Run(p); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	return
 
 	fmt.Printf("sfrega — %d faixas | %s\n", len(tracks), tracks[0])
 	fmt.Println("controles: [espaço]=play/pause [n]=prox [p]=ant [q]=sair [+/-]=vol [m]=mute")
