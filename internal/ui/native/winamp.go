@@ -55,6 +55,7 @@ func (ui *uiState) titleClose(gtx layout.Context, r image.Rectangle) bool {
 			fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
 		}
 		path := clip.Path{}
+		path.Begin(gtx.Ops)
 		path.MoveTo(f32.Pt(5, 5))
 		path.LineTo(f32.Pt(11, 11))
 		path.LineTo(f32.Pt(11, 12))
@@ -285,6 +286,7 @@ func drawGlyph(gtx layout.Context, g glyph, r image.Rectangle) {
 	switch g {
 	case glyphPlay:
 		path := clip.Path{}
+		path.Begin(gtx.Ops)
 		path.MoveTo(f32.Pt(float32(cx-4), float32(cy-6)))
 		path.LineTo(f32.Pt(float32(cx+6), float32(cy)))
 		path.LineTo(f32.Pt(float32(cx-4), float32(cy+6)))
@@ -298,6 +300,7 @@ func drawGlyph(gtx layout.Context, g glyph, r image.Rectangle) {
 	case glyphPrev:
 		fillRect(gtx.Ops, image.Rect(cx-6, cy-5, cx-4, cy+5), ink)
 		path := clip.Path{}
+		path.Begin(gtx.Ops)
 		path.MoveTo(f32.Pt(float32(cx+5), float32(cy-6)))
 		path.LineTo(f32.Pt(float32(cx-4), float32(cy)))
 		path.LineTo(f32.Pt(float32(cx+5), float32(cy+6)))
@@ -305,6 +308,7 @@ func drawGlyph(gtx layout.Context, g glyph, r image.Rectangle) {
 		paint.FillShape(gtx.Ops, ink, clip.Outline{Path: path.End()}.Op())
 	case glyphNext:
 		path := clip.Path{}
+		path.Begin(gtx.Ops)
 		path.MoveTo(f32.Pt(float32(cx-5), float32(cy-6)))
 		path.LineTo(f32.Pt(float32(cx+4), float32(cy)))
 		path.LineTo(f32.Pt(float32(cx-5), float32(cy+6)))
@@ -314,6 +318,7 @@ func drawGlyph(gtx layout.Context, g glyph, r image.Rectangle) {
 	case glyphEject:
 		fillRect(gtx.Ops, image.Rect(cx-8, cy+5, cx+8, cy+6), ink)
 		path := clip.Path{}
+		path.Begin(gtx.Ops)
 		path.MoveTo(f32.Pt(float32(cx-5), float32(cy-4)))
 		path.LineTo(f32.Pt(float32(cx+5), float32(cy-4)))
 		path.LineTo(f32.Pt(float32(cx), float32(cy+4)))

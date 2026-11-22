@@ -149,6 +149,7 @@ func (ui *uiState) plCloseBtn(gtx layout.Context, r image.Rectangle) bool {
 			fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
 		}
 		path := clip.Path{}
+		path.Begin(gtx.Ops)
 		path.MoveTo(f32.Pt(5, 5))
 		path.LineTo(f32.Pt(11, 11))
 		path.LineTo(f32.Pt(11, 12))

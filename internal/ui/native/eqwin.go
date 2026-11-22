@@ -1,10 +1,10 @@
 package native
 
 import (
+	"gioui.org/f32"
 	"image"
 	"image/color"
-	"gioui.org/f32"
-	
+
 	"gioui.org/app"
 	"gioui.org/io/system"
 	"gioui.org/layout"
@@ -19,12 +19,12 @@ import (
 var eqFreqLabels = [10]string{"31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"}
 
 var eqPresets = map[string][10]float64{
-	"Flat":      {},
+	"Flat":       {},
 	"Bass Boost": {6, 5, 4, 2, 0, 0, 0, 0, 0, 0},
-	"Rock":      {4, 3, 1, -1, -2, -1, 2, 4, 5, 4},
-	"Pop":       {-2, -1, 0, 2, 4, 4, 2, 0, -1, -2},
-	"Classical": {3, 2, 0, -1, -2, -2, 0, 2, 3, 4},
-	"Dance":     {5, 4, 1, -1, -2, -1, 2, 4, 5, 4},
+	"Rock":       {4, 3, 1, -1, -2, -1, 2, 4, 5, 4},
+	"Pop":        {-2, -1, 0, 2, 4, 4, 2, 0, -1, -2},
+	"Classical":  {3, 2, 0, -1, -2, -2, 0, 2, 3, 4},
+	"Dance":      {5, 4, 1, -1, -2, -1, 2, 4, 5, 4},
 }
 
 // toggleEQ abre/fecha a janela do equalizador.
@@ -249,7 +249,6 @@ func (ui *uiState) presetBtn(gtx layout.Context, name string, x, y, w, h int, fn
 	}
 }
 
-
 // eqCloseBtn desenha o X da janela EQ.
 func (ui *uiState) eqCloseBtn(gtx layout.Context, r image.Rectangle) bool {
 	return ui.button(gtx, &ui.btnEQClose, r, func(gtx layout.Context, down bool) {
@@ -257,6 +256,7 @@ func (ui *uiState) eqCloseBtn(gtx layout.Context, r image.Rectangle) bool {
 			fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
 		}
 		path := clip.Path{}
+		path.Begin(gtx.Ops)
 		path.MoveTo(f32.Pt(5, 5))
 		path.LineTo(f32.Pt(11, 11))
 		path.LineTo(f32.Pt(11, 12))

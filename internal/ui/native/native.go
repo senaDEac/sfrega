@@ -29,29 +29,29 @@ import (
 
 // Paleta Winamp 2.x (skin clássica cinza).
 var (
-	colWindowTop    = color.NRGBA{R: 0xC0, G: 0xC0, B: 0xC0, A: 0xFF}
-	colWindowBot    = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
-	colBevelLight   = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
-	colBevelDark    = color.NRGBA{R: 0x40, G: 0x40, B: 0x40, A: 0xFF}
-	colBevelDk2     = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
-	colLCDTop       = color.NRGBA{R: 0x0A, G: 0x3D, B: 0x0A, A: 0xFF}
-	colLCDBot       = color.NRGBA{R: 0x02, G: 0x1A, B: 0x02, A: 0xFF}
-	colLCDText      = color.NRGBA{R: 0x7F, G: 0xFF, B: 0x7F, A: 0xFF}
-	colLCDTextDim   = color.NRGBA{R: 0x2F, G: 0x8F, B: 0x2F, A: 0xFF}
-	colBtnTop       = color.NRGBA{R: 0xE8, G: 0xE8, B: 0xE8, A: 0xFF}
-	colBtnBot       = color.NRGBA{R: 0xA8, G: 0xA8, B: 0xA8, A: 0xFF}
-	colBtnEdge      = color.NRGBA{R: 0x60, G: 0x60, B: 0x60, A: 0xFF}
-	colSpecBg       = color.NRGBA{R: 0x05, G: 0x05, B: 0x05, A: 0xFF}
-	colSpecBar      = color.NRGBA{R: 0x33, G: 0xFF, B: 0x66, A: 0xFF}
-	colSpecBarDim   = color.NRGBA{R: 0x1A, G: 0x7A, B: 0x2A, A: 0xFF}
-	colTitlebarTop  = color.NRGBA{R: 0x30, G: 0x30, B: 0x30, A: 0xFF}
-	colTitlebarBot  = color.NRGBA{R: 0x10, G: 0x10, B: 0x10, A: 0xFF}
-	colTitleText    = color.NRGBA{R: 0xC8, G: 0xC8, B: 0xC8, A: 0xFF}
-	colListBg       = color.NRGBA{R: 0x10, G: 0x10, B: 0x10, A: 0xFF}
-	colListSel      = color.NRGBA{R: 0x2A, G: 0x5A, B: 0x2A, A: 0xFF}
-	colListText     = color.NRGBA{R: 0xBB, G: 0xBB, B: 0xBB, A: 0xFF}
-	colListSelText  = color.NRGBA{R: 0x7F, G: 0xFF, B: 0x7F, A: 0xFF}
-	colEqBg         = color.NRGBA{R: 0x1A, G: 0x1A, B: 0x1A, A: 0xFF}
+	colWindowTop   = color.NRGBA{R: 0xC0, G: 0xC0, B: 0xC0, A: 0xFF}
+	colWindowBot   = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
+	colBevelLight  = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+	colBevelDark   = color.NRGBA{R: 0x40, G: 0x40, B: 0x40, A: 0xFF}
+	colBevelDk2    = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
+	colLCDTop      = color.NRGBA{R: 0x0A, G: 0x3D, B: 0x0A, A: 0xFF}
+	colLCDBot      = color.NRGBA{R: 0x02, G: 0x1A, B: 0x02, A: 0xFF}
+	colLCDText     = color.NRGBA{R: 0x7F, G: 0xFF, B: 0x7F, A: 0xFF}
+	colLCDTextDim  = color.NRGBA{R: 0x2F, G: 0x8F, B: 0x2F, A: 0xFF}
+	colBtnTop      = color.NRGBA{R: 0xE8, G: 0xE8, B: 0xE8, A: 0xFF}
+	colBtnBot      = color.NRGBA{R: 0xA8, G: 0xA8, B: 0xA8, A: 0xFF}
+	colBtnEdge     = color.NRGBA{R: 0x60, G: 0x60, B: 0x60, A: 0xFF}
+	colSpecBg      = color.NRGBA{R: 0x05, G: 0x05, B: 0x05, A: 0xFF}
+	colSpecBar     = color.NRGBA{R: 0x33, G: 0xFF, B: 0x66, A: 0xFF}
+	colSpecBarDim  = color.NRGBA{R: 0x1A, G: 0x7A, B: 0x2A, A: 0xFF}
+	colTitlebarTop = color.NRGBA{R: 0x30, G: 0x30, B: 0x30, A: 0xFF}
+	colTitlebarBot = color.NRGBA{R: 0x10, G: 0x10, B: 0x10, A: 0xFF}
+	colTitleText   = color.NRGBA{R: 0xC8, G: 0xC8, B: 0xC8, A: 0xFF}
+	colListBg      = color.NRGBA{R: 0x10, G: 0x10, B: 0x10, A: 0xFF}
+	colListSel     = color.NRGBA{R: 0x2A, G: 0x5A, B: 0x2A, A: 0xFF}
+	colListText    = color.NRGBA{R: 0xBB, G: 0xBB, B: 0xBB, A: 0xFF}
+	colListSelText = color.NRGBA{R: 0x7F, G: 0xFF, B: 0x7F, A: 0xFF}
+	colEqBg        = color.NRGBA{R: 0x1A, G: 0x1A, B: 0x1A, A: 0xFF}
 )
 
 // uiState concentra widgets e fontes.
@@ -84,9 +84,9 @@ type uiState struct {
 	btnEQClose  uibtn
 
 	// widgets playlist
-	plList    widget.List
+	plList                                                    widget.List
 	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite, btnPLClose uibtn
-	plSel     int
+	plSel                                                     int
 
 	marqueeX int
 	lastTick time.Time
@@ -94,7 +94,7 @@ type uiState struct {
 
 // uibtn é um botão simples via pointer events (sem macro do Clickable).
 type uibtn struct {
-	tag event.Tag
+	tag  event.Tag
 	down bool
 }
 
