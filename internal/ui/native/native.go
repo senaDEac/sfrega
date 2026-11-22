@@ -25,6 +25,7 @@ import (
 	"gioui.org/widget"
 
 	"sfrega/internal/player"
+	"sfrega/internal/skins"
 )
 
 // Paleta Winamp 2.x (skin clássica cinza).
@@ -58,6 +59,7 @@ var (
 type uiState struct {
 	mu       sync.Mutex // protege winEQ/winPL
 	p        *player.Player
+	skin     *skins.Skin
 	shaper   *text.Shaper
 	fontUI   font.Font
 	fontBold font.Font
@@ -72,9 +74,9 @@ type uiState struct {
 
 	// widgets main
 	btnPrev, btnPlay, btnPause, btnStop, btnNext uibtn
-	btnEject, btnOpen, btnClose, btnEQ, btnPL    uibtn
-	btnMute                                      uibtn
-	volSlider, balSlider                         fader
+	btnEject, btnClose, btnEQ, btnPL       uibtn
+	btnShuf, btnRep                        uibtn
+	volDrag, balDrag, posDrag              fader
 
 	// widgets EQ
 	plRowClicks []uibtn
@@ -82,14 +84,17 @@ type uiState struct {
 	preampSlide fader
 	eqGains     [10]float64 // dB
 	btnEQClose  uibtn
+	btnEQOn, btnEQAuto, btnEQPres uibtn
+	eqOn        bool
 
 	// widgets playlist
 	plList                                                    widget.List
 	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite, btnPLClose uibtn
 	plSel                                                     int
 
-	marqueeX int
-	lastTick time.Time
+	shuffle, repeat bool
+	marqueeX         int
+	lastTick         time.Time
 }
 
 // uibtn é um botão simples via pointer events (sem macro do Clickable).
@@ -167,19 +172,26 @@ func loadFonts() ([]text.FontFace, error) {
 
 // Run inicia a aplicação nativa.
 func Run(p *player.Player) error {
+	skin, err := skins.Default()
+	if err != nil {
+		return err
+	}
 	faces, _ := loadFonts()
 	shaper := text.NewShaper(text.WithCollection(faces))
 	ui := &uiState{
 		p:        p,
+		skin:     skin,
 		shaper:   shaper,
 		fontUI:   font.Font{Typeface: "DejaVu Sans"},
 		fontBold: font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
 		fontMono: font.Font{Typeface: "DejaVu Sans Mono"},
 		plSel:    -1,
 	}
-	ui.volSlider.val = 1.0
-	ui.volSlider.commit = func(v float32) { p.SetVolume(v) }
-	ui.balSlider.val = 0.5
+	ui.volDrag.val = 1.0
+	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
+	ui.balDrag.val = 0.5
+	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
+	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
 	ui.preampSlide.val = 0.5
 	ui.preampSlide.commit = func(v float32) {
 		// -12..+12 dB
@@ -195,7 +207,7 @@ func Run(p *player.Player) error {
 	ui.winMain.Option(
 		app.Title("sfrega"),
 		app.Decorated(false),
-		app.Size(unit.Dp(540), unit.Dp(120)),
+		app.Size(unit.Dp(275), unit.Dp(116)),
 	)
 
 	go func() {
@@ -304,9 +316,9 @@ func (ui *uiState) faderLayout(gtx layout.Context, f *fader, rect image.Rectangl
 		if e, ok := ev.(pointer.Event); ok {
 			var t float32
 			if vertical {
-				t = 1 - float32(e.Position.Y)/float32(rect.Dy())
+				t = 1 - (float32(e.Position.Y)-float32(rect.Min.Y))/float32(rect.Dy())
 			} else {
-				t = float32(e.Position.X) / float32(rect.Dx())
+				t = (float32(e.Position.X) - float32(rect.Min.X)) / float32(rect.Dx())
 			}
 			if t < 0 {
 				t = 0
@@ -351,9 +363,82 @@ func (ui *uiState) faderLayout(gtx layout.Context, f *fader, rect image.Rectangl
 	_ = label
 }
 
-// spectrumDraw desenha as barras do analisador.
+// ---------- desenho via sprites da skin ----------
+
+// spr desenha o recorte src do bitmap name em dst (escala se necessário).
+func (ui *uiState) spr(gtx layout.Context, name string, src, dst image.Rectangle) {
+	img := ui.skin.Spr(name, src)
+	if img == nil {
+		return
+	}
+	blit(gtx, img, dst)
+}
+
+// blit desenha src preenchendo dst.
+func blit(gtx layout.Context, src image.Image, dst image.Rectangle) {
+	if src == nil || dst.Empty() {
+		return
+	}
+	cs := clip.Rect(dst).Push(gtx.Ops)
+	off := op.Offset(dst.Min).Push(gtx.Ops)
+	if sb := src.Bounds(); sb.Dx() != dst.Dx() || sb.Dy() != dst.Dy() {
+		op.Affine(f32.Affine2D{}.Scale(f32.Pt(0, 0),
+			f32.Pt(float32(dst.Dx())/float32(sb.Dx()), float32(dst.Dy())/float32(sb.Dy())))).Add(gtx.Ops)
+	}
+	paint.NewImageOp(src).Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	off.Pop()
+	cs.Pop()
+}
+
+// scrub registra drag horizontal em r e atualiza f.val (0..1) + commit.
+func (ui *uiState) scrub(gtx layout.Context, f *fader, r image.Rectangle) {
+	cs := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &f.tag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &f.tag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		if e.Kind == pointer.Press || e.Kind == pointer.Drag {
+			t := (float32(e.Position.X) - float32(r.Min.X)) / float32(r.Dx())
+			if t < 0 {
+				t = 0
+			}
+			if t > 1 {
+				t = 1
+			}
+			f.val = t
+			if f.commit != nil {
+				f.commit(t)
+			}
+		}
+	}
+}
+
+// spriteBtn é um uibtn que desenha estados normal/pressed de um sprite.
+// states: [normal, pressed] retângulos de origem no bitmap name.
+func (ui *uiState) spriteBtn(gtx layout.Context, b *uibtn, name string, dst image.Rectangle, normal, pressed image.Rectangle) bool {
+	return ui.button(gtx, b, dst, func(gtx layout.Context, down bool) {
+		src := normal
+		if down {
+			src = pressed
+		}
+		ui.spr(gtx, name, src, image.Rectangle{Max: dst.Size()})
+	})
+}
+
+// spectrumDraw desenha as barras do analisador com a paleta VISCOLOR da skin.
 func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
-	fillRect(gtx.Ops, r, colSpecBg)
+	fillRect(gtx.Ops, r, color.NRGBA{A: 0xFF})
 	bands := ui.p.Spectrum()
 	n := len(bands)
 	bw := r.Dx() / n
@@ -373,6 +458,8 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 			continue
 		}
 		bar := image.Rect(r.Min.X+i*bw, r.Max.Y-h, r.Min.X+(i+1)*bw-1, r.Max.Y)
-		fillRect(gtx.Ops, bar, colSpecBar)
+		// cor por altura: topo = cores claras (índice baixo)
+		ci := int((1 - v) * 17)
+		fillRect(gtx.Ops, bar, ui.skin.VisColor(ci))
 	}
 }

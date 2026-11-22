@@ -1,7 +1,6 @@
 package native
 
 import (
-	"gioui.org/f32"
 	"image"
 	"image/color"
 
@@ -9,9 +8,7 @@ import (
 	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
-	"gioui.org/op/clip"
 	"gioui.org/op/paint"
-	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
 )
@@ -36,14 +33,15 @@ func (ui *uiState) toggleEQ() {
 		w.Option(
 			app.Title("Equalizador"),
 			app.Decorated(false),
-			app.Size(unit.Dp(320), unit.Dp(150)),
+			app.Size(unit.Dp(275), unit.Dp(315)),
 		)
 		ui.winEQ = w
+		ui.eqOpen = true
 		go ui.eqLoop()
 		return
 	}
+	ui.eqOpen = false
 	ui.winEQ.Perform(system.ActionClose)
-	// winEQ será nil quando DestroyEvent chegar
 }
 
 // togglePL abre/fecha a janela da playlist.
@@ -55,12 +53,14 @@ func (ui *uiState) togglePL() {
 		w.Option(
 			app.Title("Playlist"),
 			app.Decorated(false),
-			app.Size(unit.Dp(380), unit.Dp(300)),
+			app.Size(unit.Dp(275), unit.Dp(240)),
 		)
 		ui.winPL = w
+		ui.plOpen = true
 		go ui.plLoop()
 		return
 	}
+	ui.plOpen = false
 	ui.winPL.Perform(system.ActionClose)
 	ui.winPL = nil
 }
@@ -74,6 +74,7 @@ func (ui *uiState) eqLoop() {
 		case app.DestroyEvent:
 			ui.mu.Lock()
 			ui.winEQ = nil
+			ui.eqOpen = false
 			ui.mu.Unlock()
 			return
 		case app.FrameEvent:
@@ -93,180 +94,76 @@ func (ui *uiState) applyEQ() {
 	ui.p.SetEQ(gains, 0)
 }
 
-// layoutEQ desenha a janela do equalizador.
+// layoutEQ desenha a janela do equalizador com a skin EQMAIN (275x315).
 func (ui *uiState) layoutEQ(gtx layout.Context) {
+	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
-	winW := gtx.Constraints.Max.X
-	winH := gtx.Constraints.Max.Y
+	ui.spr(gtx, "EQMAIN", R(0, 0, 275, 315), R(0, 0, 275, 315))
 
-	// titlebar
-	tb := image.Rect(0, 0, winW, 18)
-	vgradient(gtx, tb, colTitlebarTop, colTitlebarBot)
-	m := op.Record(gtx.Ops)
-	paint.ColorOp{Color: colTitleText}.Add(gtx.Ops)
-	tmat := m.Stop()
-	off := op.Offset(image.Pt(8, 1)).Push(gtx.Ops)
-	widget.Label{}.Layout(gtx, ui.shaper, ui.fontBold, unit.Sp(11), "Equalizador", tmat)
-	off.Pop()
-	// close X
-	if ui.eqCloseBtn(gtx, image.Rect(winW-20, 0, winW-2, 18)) {
+	// close (TITLEBAR sprite)
+	if ui.spriteBtn(gtx, &ui.btnEQClose, "TITLEBAR", R(264, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.winEQ.Perform(system.ActionClose)
 	}
 
-	// fundo
-	body := image.Rect(0, 18, winW, winH)
-	fillRect(gtx.Ops, body, colWindowBot)
+	// ON / AUTO / PRESETS (botões de texto sobre a área y~16-30)
+	ui.eqTxtBtn(gtx, &ui.btnEQOn, "ON", 10, 16, func() { ui.eqOn = !ui.eqOn })
+	ui.eqTxtBtn(gtx, &ui.btnEQAuto, "AUTO", 40, 16, func() {})
+	ui.eqTxtBtn(gtx, &ui.btnEQPres, "PRESETS", 226, 16, func() {})
 
-	// fileira de presets (topo)
-	presetNames := []string{"Flat", "Bass+", "Rock", "Pop", "Classic", "Dance"}
-	px := 10
-	for i, name := range presetNames {
-		_ = i
-		ui.presetBtn(gtx, name, px, 24, 44, 18, func() {
-			preset, ok := eqPresets[presetKey(name)]
-			if !ok {
-				return
-			}
-			for b := 0; b < 10; b++ {
-				db := preset[b]
-				ui.eqSliders[b].val = float32(db/24 + 0.5)
-			}
-			ui.applyEQ()
-			ui.mu.Lock()
-			if ui.winEQ != nil {
-				ui.winEQ.Invalidate()
-			}
-			ui.mu.Unlock()
-		})
-		px += 48
-	}
+	// preamp: coluna x=16, faders y170-285
+	ui.eqFader(gtx, &ui.preampSlide, 16, true)
 
-	// preamp (fader vertical esquerdo)
-	preR := image.Rect(14, 52, 30, 118)
-	box(gtx, preR, colBtnBot, colBtnBot, colBevelDark, colBevelDk2)
-	ui.faderLayout(gtx, &ui.preampSlide, preR, true, "")
-	// label preamp
-	m2 := op.Record(gtx.Ops)
-	paint.ColorOp{Color: colTitleText}.Add(gtx.Ops)
-	pmat := m2.Stop()
-	poff := op.Offset(image.Pt(2, 124)).Push(gtx.Ops)
-	widget.Label{}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(8), "Preamp", pmat)
-	poff.Pop()
-
-	// 10 faders
-	sliderArea := image.Rect(44, 50, winW-10, 118)
-	bandW := sliderArea.Dx() / 10
+	// 10 bandas: colunas x=31..211 step 15 → reespaça para 10 em x=30..240
 	for i := 0; i < 10; i++ {
-		x := sliderArea.Min.X + i*bandW + bandW/2 - 5
-		fr := image.Rect(x, sliderArea.Min.Y, x+10, sliderArea.Max.Y)
-		box(gtx, fr, colBtnBot, colBtnBot, colBevelDark, colBevelDk2)
-		ui.faderLayout(gtx, &ui.eqSliders[i], fr, true, "")
-		// label freq
-		m3 := op.Record(gtx.Ops)
-		paint.ColorOp{Color: colTitleText}.Add(gtx.Ops)
-		fmat := m3.Stop()
-		foff := op.Offset(image.Pt(x-6, sliderArea.Max.Y+4)).Push(gtx.Ops)
-		widget.Label{}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(8), eqFreqLabels[i], fmat)
-		foff.Pop()
-		// valor dB
-		db := int((ui.eqSliders[i].val-0.5)*24 + (dbSign(ui.eqSliders[i].val-0.5) * 0))
-		_ = db
-		m4 := op.Record(gtx.Ops)
-		paint.ColorOp{Color: colLCDTextDim}.Add(gtx.Ops)
-		dmat := m4.Stop()
-		dboff := op.Offset(image.Pt(x-4, sliderArea.Min.Y-14)).Push(gtx.Ops)
-		widget.Label{}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(8), eqDbText(ui.eqSliders[i].val), dmat)
-		dboff.Pop()
-	}
-}
-
-func dbSign(v float32) float32 {
-	if v < 0 {
-		return -1
-	}
-	return 1
-}
-
-func eqDbText(v float32) string {
-	db := (v - 0.5) * 24
-	s := ""
-	if db < -0.5 {
-		s = "-"
-		db = -db
-	} else if db > 0.5 {
-		s = "+"
-	}
-	whole := int(db)
-	frac := int(db*10+0.5) % 10
-	return s + itoa(whole) + "." + itoa(frac)
-}
-
-func presetKey(name string) string {
-	switch name {
-	case "Flat":
-		return "Flat"
-	case "Bass+":
-		return "Bass Boost"
-	case "Rock":
-		return "Rock"
-	case "Pop":
-		return "Pop"
-	case "Classic":
-		return "Classical"
-	case "Dance":
-		return "Dance"
-	}
-	return ""
-}
-
-var eqPresetBtns [6]uibtn
-
-// presetBtn desenha botão de preset.
-func (ui *uiState) presetBtn(gtx layout.Context, name string, x, y, w, h int, fn func()) {
-	idx := 0
-	for i, n := range []string{"Flat", "Bass+", "Rock", "Pop", "Classic", "Dance"} {
-		if n == name {
-			idx = i
-		}
-	}
-	c := &eqPresetBtns[idx]
-	r := image.Rect(x, y, x+w, y+h)
-	if ui.button(gtx, c, r, func(gtx layout.Context, down bool) {
-		top, bot := colBtnTop, colBtnBot
-		if down {
-			top, bot = colBtnBot, colBtnTop
-		}
-		lr := image.Rectangle{Max: r.Size()}
-		box(gtx, lr, top, bot, colBevelLight, colBevelDark)
+		x := 30 + i*23
+		ui.eqFader(gtx, &ui.eqSliders[i], x, false)
+		// label freq (EQMAIN já tem escalas; desenhamos valor dB pequeno)
 		m := op.Record(gtx.Ops)
-		paint.ColorOp{Color: color.NRGBA{R: 0x20, G: 0x20, B: 0x20, A: 0xFF}}.Add(gtx.Ops)
+		paint.ColorOp{Color: color.NRGBA{R: 0xAA, G: 0xAA, B: 0xAA, A: 0xFF}}.Add(gtx.Ops)
 		mat := m.Stop()
-		off2 := op.Offset(image.Pt(0, 3)).Push(gtx.Ops)
-		widget.Label{Alignment: text.Middle}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(8), name, mat)
-		off2.Pop()
+		off := op.Offset(image.Pt(x-8, 292)).Push(gtx.Ops)
+		widget.Label{}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(7), eqFreqLabels[i], mat)
+		off.Pop()
+	}
+}
+
+// eqFader desenha um fader vertical com trilho escuro + thumb claro.
+// x = centro do fader; track y170-285.
+func (ui *uiState) eqFader(gtx layout.Context, f *fader, x int, isPreamp bool) {
+	R := func(a, b, c, d int) image.Rectangle { return image.Rect(a, b, c, d) }
+	track := R(x-3, 170, x+3, 285)
+	fillRect(gtx.Ops, track, color.NRGBA{R: 0x10, G: 0x10, B: 0x18, A: 0xFF})
+	// centro (0dB) marca
+	fillRect(gtx.Ops, R(x-3, 226, x+3, 228), color.NRGBA{R: 0x40, G: 0x40, B: 0x50, A: 0xFF})
+	// thumb 12x6 na posição do valor
+	ty := 285 - int(f.val*float32(115)) - 3
+	thumb := R(x-6, ty, x+6, ty+6)
+	fillRect(gtx.Ops, thumb, color.NRGBA{R: 0xCC, G: 0xCC, B: 0xDD, A: 0xFF})
+	bevel(gtx, thumb, color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}, color.NRGBA{R: 0x40, G: 0x40, B: 0x40, A: 0xFF})
+	_ = isPreamp
+	// input: área track inteira
+	r := R(x-8, 170, x+8, 285)
+	ui.faderLayout(gtx, f, r, true, "")
+}
+
+// eqTxtBtn desenha botão de texto pequeno.
+func (ui *uiState) eqTxtBtn(gtx layout.Context, b *uibtn, txt string, x, y int, fn func()) {
+	r := image.Rect(x, y, x+24, y+10)
+	if ui.button(gtx, b, r, func(gtx layout.Context, down bool) {
+		c := color.NRGBA{R: 0x88, G: 0x88, B: 0x99, A: 0xFF}
+		if down {
+			c = color.NRGBA{R: 0x33, G: 0xFF, B: 0x66, A: 0xFF}
+		}
+		if ui.eqOpen { // usa como "ativo" quando EQ ligado? simplificação
+		}
+		fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x18, G: 0x18, B: 0x28, A: 0xFF})
+		m := op.Record(gtx.Ops)
+		paint.ColorOp{Color: c}.Add(gtx.Ops)
+		mat := m.Stop()
+		off := op.Offset(image.Pt(2, 1)).Push(gtx.Ops)
+		widget.Label{}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(7), txt, mat)
+		off.Pop()
 	}) {
 		fn()
 	}
-}
-
-// eqCloseBtn desenha o X da janela EQ.
-func (ui *uiState) eqCloseBtn(gtx layout.Context, r image.Rectangle) bool {
-	return ui.button(gtx, &ui.btnEQClose, r, func(gtx layout.Context, down bool) {
-		if down {
-			fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
-		}
-		path := clip.Path{}
-		path.Begin(gtx.Ops)
-		path.MoveTo(f32.Pt(5, 5))
-		path.LineTo(f32.Pt(11, 11))
-		path.LineTo(f32.Pt(11, 12))
-		path.LineTo(f32.Pt(5, 6))
-		path.Close()
-		path.MoveTo(f32.Pt(11, 5))
-		path.LineTo(f32.Pt(5, 11))
-		path.LineTo(f32.Pt(4, 11))
-		path.LineTo(f32.Pt(10, 5))
-		path.Close()
-		paint.FillShape(gtx.Ops, colTitleText, clip.Outline{Path: path.End()}.Op())
-	})
 }

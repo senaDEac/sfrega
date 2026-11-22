@@ -47,18 +47,22 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 	winH := gtx.Constraints.Max.Y
 	tracks := ui.p.Tracks()
 
-	// titlebar
-	tb := image.Rect(0, 0, winW, 18)
-	vgradient(gtx, tb, colTitlebarTop, colTitlebarBot)
-	m := op.Record(gtx.Ops)
-	paint.ColorOp{Color: colTitleText}.Add(gtx.Ops)
-	tmat := m.Stop()
-	off := op.Offset(image.Pt(8, 1)).Push(gtx.Ops)
-	widget.Label{}.Layout(gtx, ui.shaper, ui.fontBold, unit.Sp(11), "Playlist", tmat)
-	off.Pop()
-	if ui.plCloseBtn(gtx, image.Rect(winW-20, 0, winW-2, 18)) {
+	// titlebar com sprites da skin
+	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
+	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, winW-53, 11))
+	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))
+	ui.spr(gtx, "TITLEBAR", R(9, 0, 9, 9), R(winW-31, 3, 9, 9))
+	ui.spr(gtx, "TITLEBAR", R(0, 18, 9, 9), R(winW-21, 3, 9, 9))
+	if ui.spriteBtn(gtx, &ui.btnPLClose, "TITLEBAR", R(winW-11, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.winPL.Perform(system.ActionClose)
 	}
+	// título verde
+	m := op.Record(gtx.Ops)
+	paint.ColorOp{Color: color.NRGBA{R: 0, G: 0xFF, B: 0, A: 0xFF}}.Add(gtx.Ops)
+	tmat := m.Stop()
+	off := op.Offset(image.Pt(20, 4)).Push(gtx.Ops)
+	widget.Label{}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(8), "Playlist - sfrega", tmat)
+	off.Pop()
 
 	// toolbar
 	by := 22

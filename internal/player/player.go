@@ -101,6 +101,7 @@ type Player struct {
 	volume    atomic.Uint32 // float32 bits
 	eq        atomic.Value  // *eqState
 	preamp    atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
+	pan       atomic.Uint32 // float32 bits (-1 esquerda .. +1 direita)
 	decoded   atomic.Uint64 // frames decodificados totais da faixa
 	done      chan struct{}
 	trackDone chan struct{} // cancelado ao trocar de faixa
@@ -123,6 +124,7 @@ func New(rate uint32, channels uint32) (*Player, error) {
 	}
 	p.volume.Store(math.Float32bits(1.0))
 	p.preamp.Store(math.Float32bits(0))
+	p.pan.Store(math.Float32bits(0))
 	p.eq.Store(eqFromGains([10]float64{}, 44100))
 	return p, nil
 }
@@ -238,6 +240,50 @@ func (p *Player) SetPreamp(db float64) {
 }
 
 func (p *Player) Preamp() float32 { return math.Float32frombits(p.preamp.Load()) }
+
+// SetBalance define o balanço -1 (esquerda) .. +1 (direita).
+func (p *Player) SetBalance(b float32) {
+	if b < -1 {
+		b = -1
+	}
+	if b > 1 {
+		b = 1
+	}
+	p.pan.Store(math.Float32bits(b))
+}
+
+func (p *Player) Balance() float32 { return math.Float32frombits(p.pan.Load()) }
+
+// Channels retorna o número de canais da faixa atual (0 se nenhuma).
+func (p *Player) Channels() uint32 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.dec == nil {
+		return 0
+	}
+	return p.dec.Channels()
+}
+
+// SeekFraction posiciona em fração 0..1 da duração.
+func (p *Player) SeekFraction(f float64) error {
+	if f < 0 {
+		f = 0
+	}
+	if f > 1 {
+		f = 1
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.dec == nil {
+		return errors.New("player: nada tocando")
+	}
+	total := p.dec.LengthFrames()
+	if !p.dec.SeekFrame(int64(float64(total) * f)) {
+		return errors.New("player: seek falhou")
+	}
+	p.decoded.Store(uint64(int64(float64(total) * f)))
+	return nil
+}
 
 // Tracks retorna uma cópia da playlist.
 func (p *Player) Tracks() []string {
@@ -448,7 +494,14 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 			eq = eq2
 		}
 		preamp = p.Preamp()
+		pan := p.Balance()
 		if channels == 2 {
+			gl, gr := 1.0, 1.0
+			if pan < 0 {
+				gr = float64(1 + pan)
+			} else {
+				gl = float64(1 - pan)
+			}
 			for i := 0; i < samples; i += 2 {
 				l := float64(chunk[i])
 				r := float64(chunk[i+1])
@@ -456,8 +509,8 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 					l = eq.filters[b][0].process(l)
 					r = eq.filters[b][1].process(r)
 				}
-				chunk[i] = float32(l * float64(preamp))
-				chunk[i+1] = float32(r * float64(preamp))
+				chunk[i] = float32(l * float64(preamp) * gl)
+				chunk[i+1] = float32(r * float64(preamp) * gr)
 			}
 		} else {
 			for i := 0; i < samples; i++ {
