@@ -337,9 +337,13 @@ func Run(p *player.Player) error {
 		app.Size(unit.Dp(275), unit.Dp(116)),
 	)
 
+	// X11/muffin: aplica _MOTIF_WM_HINTS assim que a janela aparece
+	// em _NET_CLIENT_LIST — polling curto evita a piscada de titlebar.
 	go func() {
-		time.Sleep(500 * time.Millisecond)
-		wmNoDecorations()
+		t := time.NewTicker(30 * time.Millisecond)
+		for range t.C {
+			wmNoDecorations()
+		}
 	}()
 
 	go func() {

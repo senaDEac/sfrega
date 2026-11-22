@@ -44,11 +44,16 @@ static char *window_name(Display *dpy, Window w, Atom name_atom, Atom utf8_strin
     return s;
 }
 
+static Display *g_dpy;
+
 void sfrega_no_decorations(void)
 {
-    Display *dpy = XOpenDisplay(NULL);
-    if (!dpy)
-        return;
+    if (!g_dpy) {
+        g_dpy = XOpenDisplay(NULL);
+        if (!g_dpy)
+            return;
+    }
+    Display *dpy = g_dpy;
 
     Atom net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
     Atom net_wm_name = XInternAtom(dpy, "_NET_WM_NAME", False);
@@ -117,5 +122,4 @@ void sfrega_no_decorations(void)
 out:
     if (clients)
         XFree(clients);
-    XCloseDisplay(dpy);
 }
