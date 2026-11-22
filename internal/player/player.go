@@ -94,6 +94,33 @@ func (p *Player) currentTitle() string {
 	return ""
 }
 
+// TrackAt retorna o caminho da faixa i (ou "").
+func (p *Player) TrackAt(i int) string {
+	if i >= 0 && i < len(p.tracks) {
+		return p.tracks[i]
+	}
+	return ""
+}
+
+// PlayIndex toca a faixa i da playlist.
+func (p *Player) PlayIndex(i int) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if i < 0 || i >= len(p.tracks) {
+		return errors.New("player: índice inválido")
+	}
+	p.index = i
+	if p.dec != nil {
+		p.closeTrackLocked()
+		p.decoded.Store(0)
+	}
+	if err := p.openCurrentLocked(); err != nil {
+		return err
+	}
+	p.playing.Store(true)
+	return nil
+}
+
 func (p *Player) Index() int    { return p.index }
 func (p *Player) Count() int    { return len(p.tracks) }
 func (p *Player) Playing() bool { return p.playing.Load() }

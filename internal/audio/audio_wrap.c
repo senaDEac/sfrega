@@ -15,7 +15,8 @@ struct ma_dec {
 ma_dec_t* dec_open(const char* path) {
     ma_dec_t* d = (ma_dec_t*)calloc(1, sizeof(ma_dec_t));
     if (!d) return NULL;
-    ma_result r = ma_decoder_init_file(path, NULL, &d->decoder);
+    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0);
+    ma_result r = ma_decoder_init_file(path, &config, &d->decoder);
     if (r != MA_SUCCESS) { free(d); return NULL; }
     ma_format fmt;
     ma_uint32 ch = 0, sr = 0;

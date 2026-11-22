@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>sfrega</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0a;
+    font-family: "Tahoma", "Segoe UI", sans-serif;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh;
+  }
+  #winamp {
+    width: 480px; background: linear-gradient(#3a3a3a,#2a2a2a);
+    border: 2px solid #111; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 10px 40px #000;
+    user-select: none;
+  }
+  /* ---- display ---- */
+  #display {
+    margin: 10px; padding: 8px 12px;
+    background: linear-gradient(#0d3d0d,#071f07);
+    border: 2px solid #000; border-radius: 4px;
+    color: #33ff66; font-family: "Courier New", monospace;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+  #time { font-size: 12px; }
+  /* ---- spectrum ---- */
+  #spectrum { display: block; width: 456px; height: 80px; background: #050505; margin: 0 12px 8px; border: 1px solid #000; }
+  /* ---- controls ---- */
+  #controls { display: flex; align-items: center; gap: 8px; padding: 6px 12px 10px; }
+  .btn {
+    width: 34px; height: 30px; border: 1px solid #000; border-radius: 4px;
+    background: linear-gradient(#555,#333); color: #eee; font-size: 15px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .btn:active { background: #222; }
+  .btn.play { width: 44px; font-size: 17px; }
+  #volwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; color:#ccc; font-size:11px; }
+  #vol { width: 90px; accent-color: #33ff66; }
+  /* ---- playlist ---- */
+  #playlist {
+    margin: 0 10px 10px; max-height: 160px; overflow-y: auto;
+    background: #101010; border: 1px solid #000; border-radius: 4px;
+    font-size: 12px; color: #aaa;
+  }
+  #playlist div { padding: 4px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #playlist div:hover { background: #1e3a1e; color: #33ff66; }
+  #playlist div.sel { background: #2a4a2a; color: #33ff66; }
+  #eq { margin: 0 12px 10px; height: 14px; background: #0a0a0a; border:1px solid #000; border-radius:3px; position:relative; cursor:pointer; }
+  #eqfill { height: 100%; width: 0%; background: linear-gradient(90deg,#1a5c1a,#33ff66); border-radius:3px; }
+</style>
+</head>
+<body>
+<div id="winamp">
+  <div id="display">
+    <span id="title">sfrega — selecione uma pasta</span>
+    <span id="time">0:00 / 0:00</span>
+  </div>
+  <canvas id="spectrum"></canvas>
+  <div id="eq"><div id="eqfill"></div></div>
+  <div id="controls">
+    <button class="btn" id="prev" title="Anterior">|◀</button>
+    <button class="btn play" id="play" title="Play/Pause">▶</button>
+    <button class="btn" id="next" title="Próxima">▶|</button>
+    <button class="btn" id="stop" title="Parar">■</button>
+    <div id="volwrap">VOL <input type="range" id="vol" min="0" max="100" value="100"></div>
+  </div>
+  <div id="playlist"></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const cv = $('spectrum'), ctx = cv.getContext('2d');
+cv.width = 456; cv.height = 80;
+let state = {playing:false, vol:100};
+
+async function api(path, method='GET') {
+  const r = await fetch(path, {method});
+  return r.json();
+}
+function fmt(s){ s=Math.floor(s); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+
+async function refresh() {
+  const s = await api('/api/state');
+  state = s;
+  $('title').textContent = s.title || '—';
+  $('time').textContent = fmt(s.pos) + ' / ' + fmt(s.dur);
+  $('eqfill').style.width = (s.pos/s.dur*100||0)+'%';
+  $('play').textContent = s.playing ? '❚❚' : '▶';
+  $('vol').value = Math.round(s.vol*100);
+  const pl = $('playlist');
+  if (pl.childElementCount !== s.tracks.length) {
+    pl.innerHTML = '';
+    s.tracks.forEach((t,i)=>{
+      const d = document.createElement('div');
+      d.textContent = (i+1)+'. '+t.split('/').pop();
+      d.onclick = ()=>api('/api/play?i='+i);
+      pl.appendChild(d);
+    });
+  }
+  [...pl.children].forEach((d,i)=>d.className = i===s.index?'sel':'');
+  // spectrum
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const bands = s.bands, n = bands.length, bw = cv.width/n;
+  for (let i=0;i<n;i++) {
+    const h = Math.min(cv.height, bands[i]*cv.height*1.4);
+    const g = ctx.createLinearGradient(0,cv.height-h,0,cv.height);
+    g.addColorStop(0,'#7dff8a'); g.addColorStop(1,'#1a7a2a');
+    ctx.fillStyle = g;
+    ctx.fillRect(i*bw+1, cv.height-h, bw-2, h);
+  }
+}
+$('play').onclick = ()=>api('/api/toggle','POST');
+$('stop').onclick = ()=>api('/api/stop','POST');
+$('next').onclick = ()=>api('/api/next','POST');
+$('prev').onclick = ()=>api('/api/prev','POST');
+$('vol').oninput = e=>api('/api/volume?v='+e.target.value/100,'POST');
+setInterval(refresh, 50);
+refresh();
+</script>
+</body>
+</html>

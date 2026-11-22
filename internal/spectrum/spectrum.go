@@ -74,16 +74,29 @@ func (a *Analyzer) Feed(pcm []float32, sampleRate uint32) [Bands]float32 {
 		if kHi > half {
 			kHi = half
 		}
-		var sum float64
+		if kHi <= kLo {
+			a.prev[b] *= a.smooth
+			out[b] = a.prev[b]
+			continue
+		}
+		var peak float64
 		for k := kLo; k < kHi && k < half; k++ {
 			m := cmplxAbs(a.fftBuf[k])
-			sum += m
+			if m > peak {
+				peak = m
+			}
 		}
-		avg := sum / float64(kHi-kLo) * 2.0 / float64(FFTSize)
+		avg := peak * 2.0 / float64(FFTSize) * 4.0
 		// compressão perceptual + suavização temporal
 		v := float32(math.Pow(avg, 0.6))
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			v = 0
+		}
 		if v > 1 {
 			v = 1
+		}
+		if v < 0 {
+			v = 0
 		}
 		a.prev[b] = a.prev[b]*a.smooth + v*(1-a.smooth)
 		out[b] = a.prev[b]

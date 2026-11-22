@@ -3,7 +3,9 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,7 @@ import (
 
 	"sfrega/internal/player"
 	"sfrega/internal/spectrum"
+	"sfrega/internal/ui/web"
 )
 
 var audioExts = map[string]bool{
@@ -33,10 +36,13 @@ func collect(dir string) []string {
 }
 
 func main() {
-	args := os.Args[1:]
+	webMode := flag.Bool("web", false, "serve interface web em http://localhost:8080")
+	addr := flag.String("addr", ":8080", "endereço do servidor web")
+	flag.Parse()
+	args := flag.Args()
 	if len(args) == 0 {
-		fmt.Println("uso: sfrega <arquivo|diretorio> [...]")
-		fmt.Println("controles: [espaço]=play/pause [n]=prox [p]=ant [q]=sair [+/-]=vol [m]=mute")
+		fmt.Println("uso: sfrega [--web] [--addr :8080] <arquivo|diretorio> [...]")
+		fmt.Println("controles CLI: [espaço]=play/pause [n]=prox [p]=ant [q]=sair [+/-]=vol [m]=mute")
 		os.Exit(1)
 	}
 	var tracks []string
@@ -62,6 +68,16 @@ func main() {
 	if err := p.Play(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+
+	if *webMode {
+		srv := web.New(p)
+		fmt.Printf("sfrega web → http://localhost%s (%d faixas)\n", *addr, len(tracks))
+		if err := http.ListenAndServe(*addr, srv.Handler()); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	fmt.Printf("sfrega — %d faixas | %s\n", len(tracks), tracks[0])
