@@ -5,11 +5,11 @@ import (
 	"image/color"
 
 	"gioui.org/f32"
+	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
-	"gioui.org/io/system"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
@@ -17,53 +17,12 @@ import (
 
 // layoutMain desenha a janela principal do Winamp.
 func (ui *uiState) layoutMain(gtx layout.Context) {
-	// processa botões de transporte
-	if ui.btnPrev.Clicked(gtx) {
-		ui.p.Prev()
-		ui.p.Play()
-	}
-	if ui.btnPlay.Clicked(gtx) {
-		ui.p.Play()
-	}
-	if ui.btnPause.Clicked(gtx) {
-		ui.p.Pause()
-	}
-	if ui.btnStop.Clicked(gtx) {
-		ui.p.Pause()
-		ui.p.SeekFrame(0)
-	}
-	if ui.btnNext.Clicked(gtx) {
-		ui.p.Next()
-		ui.p.Play()
-	}
-	if ui.btnEject.Clicked(gtx) {
-		ui.p.Pause()
-		ui.p.SeekFrame(0)
-	}
-	if ui.btnEQ.Clicked(gtx) {
-		ui.toggleEQ()
-	}
-	if ui.btnPL.Clicked(gtx) {
-		ui.togglePL()
-	}
-	if ui.btnMute.Clicked(gtx) {
-		if ui.p.Volume() > 0 {
-			ui.volSlider.val = 0
-			ui.p.SetVolume(0)
-		} else {
-			ui.volSlider.val = 1
-			ui.p.SetVolume(1)
-		}
-	}
-	if ui.btnClose.Clicked(gtx) {
-		ui.winMain.Perform(system.ActionClose)
-	}
+	winW := gtx.Constraints.Max.X
 
 	// ---- titlebar (18px) ----
-	tb := image.Rect(0, 0, gtx.Constraints.Max.X, 18)
+	tb := image.Rect(0, 0, winW, 18)
 	vgradient(gtx, tb, colTitlebarTop, colTitlebarBot)
-	fillRect(gtx.Ops, image.Rect(0, 17, gtx.Constraints.Max.X, 18), colBevelDk2)
-	// título
+	fillRect(gtx.Ops, image.Rect(0, 17, winW, 18), colBevelDk2)
 	m := op.Record(gtx.Ops)
 	paint.ColorOp{Color: colTitleText}.Add(gtx.Ops)
 	tmat := m.Stop()
@@ -71,39 +30,30 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	widget.Label{}.Layout(gtx, ui.shaper, ui.fontBold, unit.Sp(11), "Winamp", tmat)
 	off.Pop()
 	// botão fechar da titlebar
-	closeR := image.Rect(gtx.Constraints.Max.X-20, 0, gtx.Constraints.Max.X-2, 18)
-	ui.titleClose(gtx, closeR)
+	if ui.titleClose(gtx, image.Rect(winW-20, 0, winW-2, 18)) {
+		ui.winMain.Perform(system.ActionClose)
+	}
 
 	// ---- LCD (y=20..52) ----
-	lcd := image.Rect(6, 20, gtx.Constraints.Max.X-6, 52)
+	lcd := image.Rect(6, 20, winW-6, 52)
 	lcdBox(gtx, lcd)
 	ui.lcdContent(gtx, lcd)
 
 	// ---- spectrum (y=54..78) ----
-	spec := image.Rect(6, 54, gtx.Constraints.Max.X-6, 78)
+	spec := image.Rect(6, 54, winW-6, 78)
 	box(gtx, spec, colSpecBg, colSpecBg, color.NRGBA{A: 0}, color.NRGBA{A: 0})
 	ui.spectrumDraw(gtx, spec)
 
 	// ---- controles (y=80..112) ----
-	ui.controlsRow(gtx, gtx.Constraints.Max.X)
+	ui.controlsRow(gtx, winW)
 }
 
-// titleClose desenha o X da barra de título (usa ui.btnClose).
-func (ui *uiState) titleClose(gtx layout.Context, r image.Rectangle) {
-	off := op.Offset(r.Min).Push(gtx.Ops)
-	defer off.Pop()
-	sz := r.Size()
-	_ = ui.btnClose.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		lr := image.Rectangle{Max: sz}
-		if ui.btnClose.Hovered() {
-			fillRect(gtx.Ops, lr, color.NRGBA{R: 0x80, G: 0x00, B: 0x00, A: 0xFF})
+// titleClose desenha o X da barra de título.
+func (ui *uiState) titleClose(gtx layout.Context, r image.Rectangle) bool {
+	return ui.button(gtx, &ui.btnClose, r, func(gtx layout.Context, down bool) {
+		if down {
+			fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
 		}
-		m := op.Record(gtx.Ops)
-		paint.ColorOp{Color: colTitleText}.Add(gtx.Ops)
-		mat := m.Stop()
-		// X via path
 		path := clip.Path{}
 		path.MoveTo(f32.Pt(5, 5))
 		path.LineTo(f32.Pt(11, 11))
@@ -116,8 +66,6 @@ func (ui *uiState) titleClose(gtx layout.Context, r image.Rectangle) {
 		path.LineTo(f32.Pt(10, 5))
 		path.Close()
 		paint.FillShape(gtx.Ops, colTitleText, clip.Outline{Path: path.End()}.Op())
-		_ = mat
-		return layout.Dimensions{Size: sz}
 	})
 }
 
@@ -125,10 +73,10 @@ func (ui *uiState) titleClose(gtx layout.Context, r image.Rectangle) {
 func (ui *uiState) lcdContent(gtx layout.Context, lcd image.Rectangle) {
 	inner := image.Rect(lcd.Min.X+4, lcd.Min.Y+3, lcd.Max.X-4, lcd.Max.Y-3)
 	clipStack := clip.Rect(inner).Push(gtx.Ops)
+	defer clipStack.Pop()
 
 	pos := ui.p.Position()
 	dur := ui.p.Duration()
-	// tempo decorrido (esquerda)
 	m := op.Record(gtx.Ops)
 	paint.ColorOp{Color: colLCDText}.Add(gtx.Ops)
 	tmat := m.Stop()
@@ -136,25 +84,20 @@ func (ui *uiState) lcdContent(gtx layout.Context, lcd image.Rectangle) {
 	widget.Label{}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(12), formatDur(pos.Seconds()), tmat)
 	left.Pop()
 
-	// tempo total (direita)
 	right := op.Offset(image.Pt(inner.Max.X-40, inner.Min.Y+2)).Push(gtx.Ops)
 	widget.Label{}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(12), formatDur(dur.Seconds()), tmat)
 	right.Pop()
 
-	// título com marquee (centro)
 	title := ui.p.TrackAt(ui.p.Index())
 	if title == "" {
 		title = "sfrega"
 	}
-	base := title
 	for i := len(title) - 1; i > 0; i-- {
 		if title[i] == '/' || title[i] == '\\' {
 			title = title[i+1:]
 			break
 		}
 	}
-	_ = base
-	// largura aproximada do texto
 	textW := len(title) * 7
 	viewW := inner.Dx() - 90
 	if textW > viewW {
@@ -173,8 +116,6 @@ func (ui *uiState) lcdContent(gtx layout.Context, lcd image.Rectangle) {
 	toff := op.Offset(image.Pt(cx, inner.Min.Y+2)).Push(gtx.Ops)
 	widget.Label{MaxLines: 1}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(12), title, tmat2)
 	toff.Pop()
-
-	clipStack.Pop()
 }
 
 // controlsRow desenha a fileira de transporte + volume/balance + EQ/PL.
@@ -186,51 +127,72 @@ func (ui *uiState) controlsRow(gtx layout.Context, winW int) {
 	gap := 4
 	x := 10
 
-	// transporte: prev play pause stop next eject open
-	glyphs := []struct {
-		c   *widget.Clickable
-		g   string
-		vec bool
-	}{}
-	_ = glyphs
-	ui.transportBtn(gtx, &ui.btnPrev, x, btnY, btnW, btnH, glyphPrev)
+	if ui.transportBtn(gtx, &ui.btnPrev, x, btnY, btnW, btnH, glyphPrev) {
+		ui.p.Prev()
+		ui.p.Play()
+	}
 	x += btnW + gap
-	ui.transportBtn(gtx, &ui.btnPlay, x, btnY, btnW, btnH, glyphPlay)
+	if ui.transportBtn(gtx, &ui.btnPlay, x, btnY, btnW, btnH, glyphPlay) {
+		ui.p.Play()
+	}
 	x += btnW + gap
-	ui.transportBtn(gtx, &ui.btnPause, x, btnY, btnW, btnH, glyphPause)
+	if ui.transportBtn(gtx, &ui.btnPause, x, btnY, btnW, btnH, glyphPause) {
+		ui.p.Pause()
+	}
 	x += btnW + gap
-	ui.transportBtn(gtx, &ui.btnStop, x, btnY, btnW, btnH, glyphStop)
+	if ui.transportBtn(gtx, &ui.btnStop, x, btnY, btnW, btnH, glyphStop) {
+		ui.p.Pause()
+		ui.p.SeekFrame(0)
+	}
 	x += btnW + gap
-	ui.transportBtn(gtx, &ui.btnNext, x, btnY, btnW, btnH, glyphNext)
+	if ui.transportBtn(gtx, &ui.btnNext, x, btnY, btnW, btnH, glyphNext) {
+		ui.p.Next()
+		ui.p.Play()
+	}
 	x += btnW + gap
-	ui.transportBtn(gtx, &ui.btnEject, x, btnY, btnW, btnH, glyphEject)
+	if ui.transportBtn(gtx, &ui.btnEject, x, btnY, btnW, btnH, glyphEject) {
+		ui.p.Pause()
+		ui.p.SeekFrame(0)
+	}
 	x += btnW + gap
-	ui.transportBtn(gtx, &ui.btnOpen, x, btnY, btnW, btnH, glyphOpen)
+	if ui.transportBtn(gtx, &ui.btnOpen, x, btnY, btnW, btnH, glyphOpen) {
+		// TODO: seletor de arquivos/pasta
+	}
 
-	// EQ / PL à direita (botões pequenos com texto)
+	// EQ / PL à direita
 	eqX := winW - 96
 	plX := winW - 48
-	ui.textBtn(gtx, &ui.btnEQ, eqX, btnY, 42, btnH, "EQ")
-	ui.textBtn(gtx, &ui.btnPL, plX, btnY, 42, btnH, "PL")
+	if ui.textBtn(gtx, &ui.btnEQ, eqX, btnY, 42, btnH, "EQ") {
+		ui.toggleEQ()
+	}
+	if ui.textBtn(gtx, &ui.btnPL, plX, btnY, 42, btnH, "PL") {
+		ui.togglePL()
+	}
 
-	// volume + balance (faders horizontais)
+	// volume + balance
 	volY := y + 14
 	volX := 240
 	volW := 200
-	// label VOL
 	m := op.Record(gtx.Ops)
 	paint.ColorOp{Color: colTitleText}.Add(gtx.Ops)
 	vmat := m.Stop()
 	voff := op.Offset(image.Pt(volX, volY+2)).Push(gtx.Ops)
 	widget.Label{}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(9), "VOL", vmat)
 	voff.Pop()
-	// slider de volume
 	vr := image.Rect(volX+34, volY+4, volX+volW, volY+12)
 	box(gtx, vr, colBtnBot, colBtnBot, colBevelDark, colBevelDk2)
 	ui.faderLayout(gtx, &ui.volSlider, vr, false, "")
 	// mute
 	muteR := image.Rect(volX+volW+6, volY, volX+volW+30, volY+16)
-	ui.miniBtn(gtx, &ui.btnMute, muteR, "M")
+	if ui.miniBtn(gtx, &ui.btnMute, muteR, "M") {
+		if ui.p.Volume() > 0 {
+			ui.volSlider.val = 0
+			ui.p.SetVolume(0)
+		} else {
+			ui.volSlider.val = 1
+			ui.p.SetVolume(1)
+		}
+	}
 	// balance
 	balX := volX + volW + 40
 	m2 := op.Record(gtx.Ops)
@@ -245,64 +207,54 @@ func (ui *uiState) controlsRow(gtx layout.Context, winW int) {
 }
 
 // transportBtn desenha botão de transporte com glifo vetorial.
-func (ui *uiState) transportBtn(gtx layout.Context, c *widget.Clickable, x, y, w, h int, g glyph) {
-	off := op.Offset(image.Pt(x, y)).Push(gtx.Ops)
-	defer off.Pop()
-	sz := image.Point{X: w, Y: h}
-	_ = c.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		r := image.Rectangle{Max: sz}
-		pressed := c.Pressed()
+func (ui *uiState) transportBtn(gtx layout.Context, b *uibtn, x, y, w, h int, g glyph) bool {
+	r := image.Rect(x, y, x+w, y+h)
+	return ui.button(gtx, b, r, func(gtx layout.Context, down bool) {
 		top, bot := colBtnTop, colBtnBot
-		if pressed {
+		if down {
 			top, bot = colBtnBot, colBtnTop
 		}
-		box(gtx, r, top, bot, colBevelLight, colBevelDark)
-		drawGlyph(gtx, g, r)
-		return layout.Dimensions{Size: sz}
+		lr := image.Rectangle{Max: r.Size()}
+		box(gtx, lr, top, bot, colBevelLight, colBevelDark)
+		drawGlyph(gtx, g, lr)
 	})
 }
 
 // textBtn desenha botão com texto.
-func (ui *uiState) textBtn(gtx layout.Context, c *widget.Clickable, x, y, w, h int, txt string) {
-	off := op.Offset(image.Pt(x, y)).Push(gtx.Ops)
-	defer off.Pop()
-	sz := image.Point{X: w, Y: h}
-	_ = c.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		r := image.Rectangle{Max: sz}
-		pressed := c.Pressed()
+func (ui *uiState) textBtn(gtx layout.Context, b *uibtn, x, y, w, h int, txt string) bool {
+	r := image.Rect(x, y, x+w, y+h)
+	return ui.button(gtx, b, r, func(gtx layout.Context, down bool) {
 		top, bot := colBtnTop, colBtnBot
-		if pressed {
+		if down {
 			top, bot = colBtnBot, colBtnTop
 		}
-		box(gtx, r, top, bot, colBevelLight, colBevelDark)
+		lr := image.Rectangle{Max: r.Size()}
+		box(gtx, lr, top, bot, colBevelLight, colBevelDark)
 		m := op.Record(gtx.Ops)
 		paint.ColorOp{Color: color.NRGBA{R: 0x20, G: 0x20, B: 0x20, A: 0xFF}}.Add(gtx.Ops)
 		mat := m.Stop()
 		// centraliza texto
+		off2 := op.Offset(image.Pt(0, 4)).Push(gtx.Ops)
 		widget.Label{Alignment: text.Middle}.Layout(gtx, ui.shaper, ui.fontBold, unit.Sp(9), txt, mat)
-		return layout.Dimensions{Size: sz}
+		off2.Pop()
 	})
 }
 
 // miniBtn botão pequeno quadrado.
-func (ui *uiState) miniBtn(gtx layout.Context, c *widget.Clickable, r image.Rectangle, txt string) {
-	off := op.Offset(r.Min).Push(gtx.Ops)
-	defer off.Pop()
-	sz := r.Size()
-	_ = c.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		lr := image.Rectangle{Max: sz}
-		box(gtx, lr, colBtnTop, colBtnBot, colBevelLight, colBevelDark)
+func (ui *uiState) miniBtn(gtx layout.Context, b *uibtn, r image.Rectangle, txt string) bool {
+	return ui.button(gtx, b, r, func(gtx layout.Context, down bool) {
+		top, bot := colBtnTop, colBtnBot
+		if down {
+			top, bot = colBtnBot, colBtnTop
+		}
+		lr := image.Rectangle{Max: r.Size()}
+		box(gtx, lr, top, bot, colBevelLight, colBevelDark)
 		m := op.Record(gtx.Ops)
 		paint.ColorOp{Color: color.NRGBA{R: 0x20, G: 0x20, B: 0x20, A: 0xFF}}.Add(gtx.Ops)
 		mat := m.Stop()
+		off2 := op.Offset(image.Pt(0, 2)).Push(gtx.Ops)
 		widget.Label{Alignment: text.Middle}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(9), txt, mat)
-		return layout.Dimensions{Size: sz}
+		off2.Pop()
 	})
 }
 
@@ -332,7 +284,6 @@ func drawGlyph(gtx layout.Context, g glyph, r image.Rectangle) {
 	cx, cy := r.Dx()/2, r.Dy()/2
 	switch g {
 	case glyphPlay:
-		// triângulo direita
 		path := clip.Path{}
 		path.MoveTo(f32.Pt(float32(cx-4), float32(cy-6)))
 		path.LineTo(f32.Pt(float32(cx+6), float32(cy)))
@@ -361,7 +312,6 @@ func drawGlyph(gtx layout.Context, g glyph, r image.Rectangle) {
 		paint.FillShape(gtx.Ops, ink, clip.Outline{Path: path.End()}.Op())
 		fillRect(gtx.Ops, image.Rect(cx+4, cy-5, cx+6, cy+5), ink)
 	case glyphEject:
-		// triângulo para baixo sobre linha
 		fillRect(gtx.Ops, image.Rect(cx-8, cy+5, cx+8, cy+6), ink)
 		path := clip.Path{}
 		path.MoveTo(f32.Pt(float32(cx-5), float32(cy-4)))
@@ -370,7 +320,6 @@ func drawGlyph(gtx layout.Context, g glyph, r image.Rectangle) {
 		path.Close()
 		paint.FillShape(gtx.Ops, ink, clip.Outline{Path: path.End()}.Op())
 	case glyphOpen:
-		// pasta simplificada
 		fillRect(gtx.Ops, image.Rect(cx-7, cy-3, cx+7, cy+5), ink)
 		fillRect(gtx.Ops, image.Rect(cx-7, cy-5, cx-2, cy-3), ink)
 	}

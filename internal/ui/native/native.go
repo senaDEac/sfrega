@@ -71,25 +71,68 @@ type uiState struct {
 	plOpen  bool
 
 	// widgets main
-	btnPrev, btnPlay, btnPause, btnStop, btnNext widget.Clickable
-	btnEject, btnOpen, btnClose, btnEQ, btnPL widget.Clickable
-	btnMute                                      widget.Clickable
+	btnPrev, btnPlay, btnPause, btnStop, btnNext uibtn
+	btnEject, btnOpen, btnClose, btnEQ, btnPL    uibtn
+	btnMute                                      uibtn
 	volSlider, balSlider                         fader
 
 	// widgets EQ
-	plRowClicks []widget.Clickable
+	plRowClicks []uibtn
 	eqSliders   [10]fader
 	preampSlide fader
 	eqGains     [10]float64 // dB
-	btnEQClose  widget.Clickable
+	btnEQClose  uibtn
 
 	// widgets playlist
 	plList    widget.List
-	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite, btnPLClose widget.Clickable
+	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite, btnPLClose uibtn
 	plSel     int
 
 	marqueeX int
 	lastTick time.Time
+}
+
+// uibtn é um botão simples via pointer events (sem macro do Clickable).
+type uibtn struct {
+	tag event.Tag
+	down bool
+}
+
+// button registra hit-area, processa press/release e desenha via face.
+// Retorna true no frame do clique (release dentro).
+func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face func(gtx layout.Context, down bool)) bool {
+	clipStack := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &b.tag)
+	clipStack.Pop()
+	clicked := false
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &b.tag,
+			Kinds:  pointer.Press | pointer.Release | pointer.Drag | pointer.Move | pointer.Cancel | pointer.Enter | pointer.Leave,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			b.down = true
+		case pointer.Release:
+			if b.down {
+				clicked = true
+			}
+			b.down = false
+		case pointer.Cancel, pointer.Leave:
+			b.down = false
+		}
+	}
+	off := op.Offset(r.Min).Push(gtx.Ops)
+	face(gtx, b.down)
+	off.Pop()
+	return clicked
 }
 
 // fader é um slider vertical/horizontal arrastável.

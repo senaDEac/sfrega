@@ -95,9 +95,7 @@ func (ui *uiState) applyEQ() {
 
 // layoutEQ desenha a janela do equalizador.
 func (ui *uiState) layoutEQ(gtx layout.Context) {
-	if ui.btnEQClose.Clicked(gtx) {
-		ui.winEQ.Perform(system.ActionClose)
-	}
+
 	winW := gtx.Constraints.Max.X
 	winH := gtx.Constraints.Max.Y
 
@@ -111,31 +109,9 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 	widget.Label{}.Layout(gtx, ui.shaper, ui.fontBold, unit.Sp(11), "Equalizador", tmat)
 	off.Pop()
 	// close X
-	closeR := image.Rect(winW-20, 0, winW-2, 18)
-	uioff := op.Offset(closeR.Min).Push(gtx.Ops)
-	sz := closeR.Size()
-	_ = ui.btnEQClose.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		lr := image.Rectangle{Max: sz}
-		if ui.btnEQClose.Hovered() {
-			fillRect(gtx.Ops, lr, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
-		}
-		path := clip.Path{}
-		path.MoveTo(f32.Pt(5, 5))
-		path.LineTo(f32.Pt(11, 11))
-		path.LineTo(f32.Pt(11, 12))
-		path.LineTo(f32.Pt(5, 6))
-		path.Close()
-		path.MoveTo(f32.Pt(11, 5))
-		path.LineTo(f32.Pt(5, 11))
-		path.LineTo(f32.Pt(4, 11))
-		path.LineTo(f32.Pt(10, 5))
-		path.Close()
-		paint.FillShape(gtx.Ops, colTitleText, clip.Outline{Path: path.End()}.Op())
-		return layout.Dimensions{Size: sz}
-	})
-	uioff.Pop()
+	if ui.eqCloseBtn(gtx, image.Rect(winW-20, 0, winW-2, 18)) {
+		ui.winEQ.Perform(system.ActionClose)
+	}
 
 	// fundo
 	body := image.Rect(0, 18, winW, winH)
@@ -243,11 +219,10 @@ func presetKey(name string) string {
 	return ""
 }
 
-var eqPresetBtns [6]widget.Clickable
+var eqPresetBtns [6]uibtn
 
 // presetBtn desenha botão de preset.
 func (ui *uiState) presetBtn(gtx layout.Context, name string, x, y, w, h int, fn func()) {
-	// mapeia nome -> índice estável
 	idx := 0
 	for i, n := range []string{"Flat", "Bass+", "Rock", "Pop", "Classic", "Dance"} {
 		if n == name {
@@ -255,26 +230,43 @@ func (ui *uiState) presetBtn(gtx layout.Context, name string, x, y, w, h int, fn
 		}
 	}
 	c := &eqPresetBtns[idx]
-	off := op.Offset(image.Pt(x, y)).Push(gtx.Ops)
-	defer off.Pop()
-	sz := image.Point{X: w, Y: h}
-	_ = c.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		r := image.Rectangle{Max: sz}
+	r := image.Rect(x, y, x+w, y+h)
+	if ui.button(gtx, c, r, func(gtx layout.Context, down bool) {
 		top, bot := colBtnTop, colBtnBot
-		if c.Pressed() {
+		if down {
 			top, bot = colBtnBot, colBtnTop
 		}
-		box(gtx, r, top, bot, colBevelLight, colBevelDark)
+		lr := image.Rectangle{Max: r.Size()}
+		box(gtx, lr, top, bot, colBevelLight, colBevelDark)
 		m := op.Record(gtx.Ops)
 		paint.ColorOp{Color: color.NRGBA{R: 0x20, G: 0x20, B: 0x20, A: 0xFF}}.Add(gtx.Ops)
 		mat := m.Stop()
+		off2 := op.Offset(image.Pt(0, 3)).Push(gtx.Ops)
 		widget.Label{Alignment: text.Middle}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(8), name, mat)
-		return layout.Dimensions{Size: sz}
-	})
-	if c.Clicked(gtx) {
+		off2.Pop()
+	}) {
 		fn()
 	}
 }
 
+
+// eqCloseBtn desenha o X da janela EQ.
+func (ui *uiState) eqCloseBtn(gtx layout.Context, r image.Rectangle) bool {
+	return ui.button(gtx, &ui.btnEQClose, r, func(gtx layout.Context, down bool) {
+		if down {
+			fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
+		}
+		path := clip.Path{}
+		path.MoveTo(f32.Pt(5, 5))
+		path.LineTo(f32.Pt(11, 11))
+		path.LineTo(f32.Pt(11, 12))
+		path.LineTo(f32.Pt(5, 6))
+		path.Close()
+		path.MoveTo(f32.Pt(11, 5))
+		path.LineTo(f32.Pt(5, 11))
+		path.LineTo(f32.Pt(4, 11))
+		path.LineTo(f32.Pt(10, 5))
+		path.Close()
+		paint.FillShape(gtx.Ops, colTitleText, clip.Outline{Path: path.End()}.Op())
+	})
+}

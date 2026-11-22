@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,19 +43,22 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {
-		fmt.Println("uso: sfrega [--web] [--addr :8080] <arquivo|diretorio> [...]")
-		fmt.Println("controles CLI: [espaço]=play/pause [n]=prox [p]=ant [q]=sair [+/-]=vol [m]=mute")
-		os.Exit(1)
+		// sem argumentos: abre a GUI com playlist vazia
+		// (janelas EQ/PL e transporte ficam disponíveis)
+		args = defaultMusicDirs()
 	}
 	var tracks []string
 	for _, a := range args {
+		a = fileURIToPath(a)
 		if st, err := os.Stat(a); err == nil && st.IsDir() {
 			tracks = append(tracks, collect(a)...)
-		} else {
+		} else if err == nil {
 			tracks = append(tracks, a)
 		}
 	}
-	if len(tracks) == 0 {
+	if len(tracks) == 0 && !*webMode {
+		// GUI sem faixas ainda é útil; segue com playlist vazia
+	} else if len(tracks) == 0 {
 		fmt.Println("nenhuma faixa encontrada")
 		os.Exit(1)
 	}
@@ -65,10 +69,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer p.Close()
-	p.SetTracks(tracks)
-	if err := p.Play(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	if len(tracks) > 0 {
+		p.SetTracks(tracks)
+		if err := p.Play(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 
 	if *webMode {
@@ -89,11 +95,40 @@ func main() {
 	}
 	return
 
-	fmt.Printf("sfrega — %d faixas | %s\n", len(tracks), tracks[0])
+	fmt.Printf("sfrega — %d faixas\n", len(tracks))
 	fmt.Println("controles: [espaço]=play/pause [n]=prox [p]=ant [q]=sair [+/-]=vol [m]=mute")
 
 	go handleKeys(p)
 	renderSpectrum(p)
+}
+
+// defaultMusicDirs retorna diretórios de música comuns quando nenhum
+// argumento é passado (execução pelo menu de apps).
+func defaultMusicDirs() []string {
+	home, _ := os.UserHomeDir()
+	var out []string
+	for _, d := range []string{"Music", "Música", "Downloads", "Baixados"} {
+		p := filepath.Join(home, d)
+		if st, err := os.Stat(p); err == nil && st.IsDir() {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// fileURIToPath converte "file:///caminho" (ou file://hostname) em path.
+func fileURIToPath(a string) string {
+	if !strings.HasPrefix(a, "file://") {
+		return a
+	}
+	u := strings.TrimPrefix(a, "file://")
+	if i := strings.Index(u, "/"); i > 0 {
+		u = u[i:] // remove host
+	}
+	if dec, err := url.PathUnescape(u); err == nil {
+		return dec
+	}
+	return u
 }
 
 func handleKeys(p *player.Player) {

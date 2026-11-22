@@ -9,8 +9,8 @@ import (
 	"sort"
 
 	"gioui.org/app"
-	"gioui.org/io/system"
 	"gioui.org/f32"
+	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -56,43 +56,17 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 	off := op.Offset(image.Pt(8, 1)).Push(gtx.Ops)
 	widget.Label{}.Layout(gtx, ui.shaper, ui.fontBold, unit.Sp(11), "Playlist", tmat)
 	off.Pop()
-	// close
-	closeR := image.Rect(winW-20, 0, winW-2, 18)
-	coff := op.Offset(closeR.Min).Push(gtx.Ops)
-	sz := closeR.Size()
-	_ = ui.btnPLClose.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		lr := image.Rectangle{Max: sz}
-		if ui.btnPLClose.Hovered() {
-			fillRect(gtx.Ops, lr, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
-		}
-		path := clip.Path{}
-		path.MoveTo(f32.Pt(5, 5))
-		path.LineTo(f32.Pt(11, 11))
-		path.LineTo(f32.Pt(11, 12))
-		path.LineTo(f32.Pt(5, 6))
-		path.Close()
-		path.MoveTo(f32.Pt(11, 5))
-		path.LineTo(f32.Pt(5, 11))
-		path.LineTo(f32.Pt(4, 11))
-		path.LineTo(f32.Pt(10, 5))
-		path.Close()
-		paint.FillShape(gtx.Ops, colTitleText, clip.Outline{Path: path.End()}.Op())
-		return layout.Dimensions{Size: sz}
-	})
-	coff.Pop()
-	if ui.btnPLClose.Clicked(gtx) {
+	if ui.plCloseBtn(gtx, image.Rect(winW-20, 0, winW-2, 18)) {
 		ui.winPL.Perform(system.ActionClose)
 	}
 
 	// toolbar
 	by := 22
 	bh := 20
-	bw := 56
+	bw := 62
 	bx := 6
 	plBtns := []struct {
-		c   *widget.Clickable
+		b   *uibtn
 		txt string
 		fn  func()
 	}{
@@ -104,8 +78,6 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 		}},
 		{&ui.btnPLRand, "Random", func() {
 			cp := append([]string(nil), tracks...)
-			sort.Slice(cp, func(i, j int) bool { return tracks[i] < tracks[j] })
-			// shuffle simples
 			for i := len(cp) - 1; i > 0; i-- {
 				j := int(uint32(i*2654435761) % uint32(i+1))
 				cp[i], cp[j] = cp[j], cp[i]
@@ -133,8 +105,7 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 		}},
 	}
 	for _, b := range plBtns {
-		ui.plBtn(gtx, b.c, bx, by, bw, bh, b.txt)
-		if b.c.Clicked(gtx) {
+		if ui.plBtn(gtx, b.b, bx, by, bw, bh, b.txt) {
 			b.fn()
 		}
 		bx += bw + 6
@@ -147,7 +118,6 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 	fillRect(gtx.Ops, listR, colListBg)
 	bevel(gtx, listR, colBevelLight, colBevelDark)
 
-	// list widget
 	loff := op.Offset(listR.Min).Push(gtx.Ops)
 	lgtx := gtx
 	lgtx.Constraints.Min = image.Point{}
@@ -170,6 +140,27 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 	widget.Label{}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(9),
 		fmt.Sprintf("%d faixas", len(tracks)), smat)
 	soff.Pop()
+}
+
+// plCloseBtn desenha o X da janela playlist.
+func (ui *uiState) plCloseBtn(gtx layout.Context, r image.Rectangle) bool {
+	return ui.button(gtx, &ui.btnPLClose, r, func(gtx layout.Context, down bool) {
+		if down {
+			fillRect(gtx.Ops, image.Rectangle{Max: r.Size()}, color.NRGBA{R: 0x80, G: 0, B: 0, A: 0xFF})
+		}
+		path := clip.Path{}
+		path.MoveTo(f32.Pt(5, 5))
+		path.LineTo(f32.Pt(11, 11))
+		path.LineTo(f32.Pt(11, 12))
+		path.LineTo(f32.Pt(5, 6))
+		path.Close()
+		path.MoveTo(f32.Pt(11, 5))
+		path.LineTo(f32.Pt(5, 11))
+		path.LineTo(f32.Pt(4, 11))
+		path.LineTo(f32.Pt(10, 5))
+		path.Close()
+		paint.FillShape(gtx.Ops, colTitleText, clip.Outline{Path: path.End()}.Op())
+	})
 }
 
 // plRow desenha uma linha da playlist.
@@ -199,18 +190,9 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string) layout.Dime
 	off.Pop()
 	// clique seleciona/toca
 	for len(ui.plRowClicks) <= i {
-		ui.plRowClicks = append(ui.plRowClicks, widget.Clickable{})
+		ui.plRowClicks = append(ui.plRowClicks, uibtn{})
 	}
-	clk := &ui.plRowClicks[i]
-	cr := image.Rect(0, 0, w, h)
-	coff := op.Offset(cr.Min).Push(gtx.Ops)
-	_ = clk.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = image.Pt(w, h)
-		gtx.Constraints.Max = image.Pt(w, h)
-		return layout.Dimensions{Size: image.Pt(w, h)}
-	})
-	coff.Pop()
-	if clk.Clicked(gtx) {
+	if ui.button(gtx, &ui.plRowClicks[i], r, func(gtx layout.Context, down bool) {}) {
 		ui.plSel = i
 		ui.p.PlayIndex(i)
 	}
@@ -218,24 +200,21 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string) layout.Dime
 }
 
 // plBtn desenha botão da toolbar da playlist.
-func (ui *uiState) plBtn(gtx layout.Context, c *widget.Clickable, x, y, w, h int, txt string) {
-	off := op.Offset(image.Pt(x, y)).Push(gtx.Ops)
-	defer off.Pop()
-	sz := image.Point{X: w, Y: h}
-	_ = c.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = sz
-		gtx.Constraints.Max = sz
-		r := image.Rectangle{Max: sz}
+func (ui *uiState) plBtn(gtx layout.Context, b *uibtn, x, y, w, h int, txt string) bool {
+	r := image.Rect(x, y, x+w, y+h)
+	return ui.button(gtx, b, r, func(gtx layout.Context, down bool) {
 		top, bot := colBtnTop, colBtnBot
-		if c.Pressed() {
+		if down {
 			top, bot = colBtnBot, colBtnTop
 		}
-		box(gtx, r, top, bot, colBevelLight, colBevelDark)
+		lr := image.Rectangle{Max: r.Size()}
+		box(gtx, lr, top, bot, colBevelLight, colBevelDark)
 		m := op.Record(gtx.Ops)
 		paint.ColorOp{Color: color.NRGBA{R: 0x20, G: 0x20, B: 0x20, A: 0xFF}}.Add(gtx.Ops)
 		mat := m.Stop()
+		off2 := op.Offset(image.Pt(0, 3)).Push(gtx.Ops)
 		widget.Label{Alignment: text.Middle}.Layout(gtx, ui.shaper, ui.fontUI, unit.Sp(9), txt, mat)
-		return layout.Dimensions{Size: sz}
+		off2.Pop()
 	})
 }
 
@@ -244,8 +223,7 @@ func (ui *uiState) writeM3U(tracks []string) {
 	if len(tracks) == 0 {
 		return
 	}
-	name := "playlist.m3u"
-	f, err := os.Create(name)
+	f, err := os.Create("playlist.m3u")
 	if err != nil {
 		return
 	}
