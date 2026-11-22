@@ -14,23 +14,45 @@ __attribute__((constructor)) static void x11_threads_init(void)
     XInitThreads();
 }
 
+/* O handler de erro padrão do Xlib chama exit(1) — fatal para nós,
+ * pois consultamos janelas que podem estar sendo destruídas
+ * (BadWindow em _NET_CLIENT_LIST). Ignoramos erros não-fatais. */
+static int x_error_handler(Display *d, XErrorEvent *e)
+{
+    (void)d;
+    (void)e;
+    return 0;
+}
+
+static Display *open_display(void)
+{
+    Display *d = XOpenDisplay(NULL);
+    if (d)
+        XSetErrorHandler(x_error_handler);
+    return d;
+}
+
 /* MotifWmHints layout lido pelo muffin (src/x11/xprops.h):
  * flags, functions, decorations, input_mode, status — 5 cardinais. */
 static const unsigned long motif_hints[5] = { 2 /*MWM_HINTS_DECORATIONS*/, 0, 0, 0, 0 };
 
 static const char *window_names[] = { "sfrega", "Equalizador", "Playlist" };
 
-static Window done[16];
-static int done_n;
-
-static int already_done(Window w)
+/* Janela "nossa" já está sem frame quando o parent é o root
+ * (muffin reparenta em frame só quando decorada). Stateless —
+ * imune a reuso de XID. */
+static int has_frame(Display *dpy, Window w)
 {
-    for (int i = 0; i < done_n; i++)
-        if (done[i] == w)
-            return 1;
-    if (done_n < 16)
-        done[done_n++] = w;
-    return 0;
+    Window root, parent;
+    Window *children = NULL;
+    unsigned int nc = 0;
+    int framed = 1;
+    if (XQueryTree(dpy, w, &root, &parent, &children, &nc)) {
+        framed = (parent != root && parent != None);
+    }
+    if (children)
+        XFree(children);
+    return framed;
 }
 
 static char *window_name(Display *dpy, Window w, Atom name_atom, Atom utf8_string)
@@ -57,7 +79,7 @@ static Display *g_dpy;
 void sfrega_no_decorations(void)
 {
     if (!g_dpy) {
-        g_dpy = XOpenDisplay(NULL);
+        g_dpy = open_display();
         if (!g_dpy)
             return;
     }
@@ -102,7 +124,7 @@ void sfrega_no_decorations(void)
             if (strcmp(name, window_names[j]) == 0)
                 match = 1;
         free(name);
-        if (!match || already_done(w))
+        if (!match || !has_frame(dpy, w))
             continue;
 
         /* Garante _NET_WM_PID para identificação futura. */
@@ -177,7 +199,7 @@ static int root_pos(Display *dpy, Window w, int *x, int *y)
 void sfrega_geo_save(void)
 {
     if (!g_dpy)
-        g_dpy = XOpenDisplay(NULL);
+        g_dpy = open_display();
     if (!g_dpy)
         return;
     Display *dpy = g_dpy;
@@ -191,6 +213,22 @@ void sfrega_geo_save(void)
     snprintf(cfg, sizeof(cfg), "%s/.config/sfrega", getenv("HOME") ? getenv("HOME") : "/tmp");
     mkdir(cfg, 0755);
 
+    /* preserva posições de janelas hoje fechadas */
+    char old_name[3][64];
+    int old_x[3], old_y[3], nold = 0;
+    FILE *of = fopen(path, "r");
+    if (of) {
+        char on[64];
+        int ox, oy;
+        while (nold < 3 && fscanf(of, "%63s %d %d", on, &ox, &oy) == 3) {
+            snprintf(old_name[nold], 64, "%s", on);
+            old_x[nold] = ox;
+            old_y[nold] = oy;
+            nold++;
+        }
+        fclose(of);
+    }
+
     FILE *f = fopen(path, "w");
     if (!f)
         return;
@@ -199,29 +237,40 @@ void sfrega_geo_save(void)
         if (w == None)
             continue;
         int x, y;
-        if (root_pos(dpy, w, &x, &y))
+        if (root_pos(dpy, w, &x, &y)) {
             fprintf(f, "%s %d %d\n", window_names[i], x, y);
+            for (int j = 0; j < nold; j++)
+                if (strcmp(old_name[j], window_names[i]) == 0)
+                    old_name[j][0] = 0;
+        }
     }
+    for (int i = 0; i < nold; i++)
+        if (old_name[i][0])
+            fprintf(f, "%s %d %d\n", old_name[i], old_x[i], old_y[i]);
     fclose(f);
 }
 
-static Window restored[16];
-static int restored_n;
-
-static int was_restored(Window w)
+/* Marca de "posição já restaurada" gravada na própria janela —
+ * imune a reuso de XID (instância nova não tem a propriedade). */
+static int prop_exists(Display *dpy, Window w, Atom prop)
 {
-    for (int i = 0; i < restored_n; i++)
-        if (restored[i] == w)
-            return 1;
-    if (restored_n < 16)
-        restored[restored_n++] = w;
-    return 0;
+    Atom actual;
+    int fmt;
+    unsigned long n, after;
+    unsigned char *data = NULL;
+    int found = 0;
+    if (XGetWindowProperty(dpy, w, prop, 0, 1, False, AnyPropertyType,
+                           &actual, &fmt, &n, &after, &data) == Success && data) {
+        found = 1;
+        XFree(data);
+    }
+    return found;
 }
 
 void sfrega_geo_restore(void)
 {
     if (!g_dpy)
-        g_dpy = XOpenDisplay(NULL);
+        g_dpy = open_display();
     if (!g_dpy)
         return;
     Display *dpy = g_dpy;
@@ -235,14 +284,19 @@ void sfrega_geo_restore(void)
     Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
     Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
     Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Atom done_prop = XInternAtom(dpy, "_SFREGA_POS_DONE", False);
+    Atom cardinal = XInternAtom(dpy, "CARDINAL", False);
 
     char name[64];
     int x, y;
     while (fscanf(f, "%63s %d %d", name, &x, &y) == 3) {
         Window w = find_by_name(dpy, name, ncl, nwn, u8);
-        if (w == None || was_restored(w))
+        if (w == None || prop_exists(dpy, w, done_prop))
             continue;
         XMoveWindow(dpy, w, x, y);
+        unsigned long one = 1;
+        XChangeProperty(dpy, w, done_prop, cardinal, 32, PropModeReplace,
+                        (unsigned char *)&one, 1);
     }
     fclose(f);
     XFlush(dpy);

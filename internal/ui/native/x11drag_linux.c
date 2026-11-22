@@ -12,6 +12,15 @@ static int g_px, g_py; /* pointer root no início */
 static int g_ox, g_oy; /* posição root do client no início */
 static int g_ex, g_ey; /* frame extents (left, top) a compensar */
 
+/* Handler padrão do Xlib chama exit(1) em qualquer erro X —
+ * aqui janelas sob o pointer podem estar sendo destruídas. */
+static int drag_error_handler(Display *d, XErrorEvent *e)
+{
+	(void)d;
+	(void)e;
+	return 0;
+}
+
 static Window find_client(Display *dpy, Window w) {
 	Atom wm_state = XInternAtom(dpy, "WM_STATE", False);
 	for (int depth = 0; depth < 8; depth++) {
@@ -61,6 +70,8 @@ void sfrega_drag_begin(void) {
 		g_dpy = NULL;
 	}
 	g_dpy = XOpenDisplay(NULL);
+	if (g_dpy)
+		XSetErrorHandler(drag_error_handler);
 	if (!g_dpy) {
 		return;
 	}
