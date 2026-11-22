@@ -19,11 +19,13 @@ cat > "$DESKTOP_FILE" <<'EOF'
 Type=Application
 Name=sfrega
 Comment=Player de áudio estilo Winamp
-Exec=sfrega %U
+Exec=$HOME/.local/bin/sfrega %U
 Icon=multimedia-audio-player
 Categories=AudioVideo;Audio;Player;
 MimeType=audio/mpeg;audio/x-wav;audio/flac;audio/ogg;audio/mp4;audio/aac;audio/x-ms-wma;
 Terminal=false
+StartupNotify=true
+Version=1.0
 EOF
 	command -v update-desktop-database >/dev/null && update-desktop-database "$HOME/.local/share/applications" || true
 else
