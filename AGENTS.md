@@ -1,5 +1,7 @@
 # AGENTS.md — sfrega
 
+> Sempre carregar as configs globais no início: `~/.config/devin/AGENTS.md`.
+
 ## Projeto
 Aplicação em **Go** multi-plataforma: Windows, Linux, macOS, Android, iOS.
 

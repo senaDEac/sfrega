@@ -21,7 +21,7 @@ Name=sfrega
 Comment=Player de áudio estilo Winamp
 Exec=sfrega %U
 Icon=multimedia-audio-player
-Categories=Audio;Player;
+Categories=AudioVideo;Audio;Player;
 MimeType=audio/mpeg;audio/x-wav;audio/flac;audio/ogg;audio/mp4;audio/aac;audio/x-ms-wma;
 Terminal=false
 EOF
