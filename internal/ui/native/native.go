@@ -16,6 +16,7 @@ import (
 	"gioui.org/font/opentype"
 	"gioui.org/io/event"
 	"gioui.org/io/pointer"
+	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -72,36 +73,41 @@ type uiState struct {
 	eqOpen  bool
 	plOpen  bool
 
+	mainScale, eqScale, plScale int
+	plWidth, plHeight           unit.Dp
+
 	// widgets main
 	btnPrev, btnPlay, btnPause, btnStop, btnNext uibtn
-	btnEject, btnClose, btnEQ, btnPL             uibtn
+	btnEject, btnMin, btnSize, btnClose          uibtn
+	btnEQ, btnPL                                 uibtn
 	btnShuf, btnRep                              uibtn
 	volDrag, balDrag, posDrag                    fader
 
 	// widgets EQ
-	plRowClicks                   []uibtn
-	eqSliders                     [10]fader
-	preampSlide                   fader
-	eqGains                       [10]float64 // dB
-	btnEQClose                    uibtn
-	btnEQOn, btnEQAuto, btnEQPres uibtn
-	eqOn                          bool
-	eqAuto                        bool
-	eqPresOpen                    bool
-	eqPresetBtns                  [6]uibtn
+	plRowClicks                     []uibtn
+	eqSliders                       [10]fader
+	preampSlide                     fader
+	eqGains                         [10]float64 // dB
+	btnEQClose, btnEQMin, btnEQSize uibtn
+	btnEQOn, btnEQAuto, btnEQPres   uibtn
+	eqOn                            bool
+	eqAuto                          bool
+	eqPresOpen                      bool
+	eqPresetBtns                    [6]uibtn
 
 	// widgets playlist
-	plList                                                    widget.List
-	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite, btnPLClose uibtn
-	btnPLClear                                                uibtn
-	btnPLShade                                                uibtn
-	btnPLMAdd, btnPLMRem, btnPLMSel                           uibtn
-	btnPLMMisc, btnPLMList                                    uibtn
-	btnPLPrev, btnPLPlay, btnPLPause                          uibtn
-	btnPLStop, btnPLNext, btnPLEject                          uibtn
-	plMenuClicks                                              [5][]uibtn
-	plMenuOpen                                                int
-	plSel                                                     int
+	plList                                        widget.List
+	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite uibtn
+	btnPLClose, btnPLMin, btnPLSize               uibtn
+	btnPLClear                                    uibtn
+	btnPLShade                                    uibtn
+	btnPLMAdd, btnPLMRem, btnPLMSel               uibtn
+	btnPLMMisc, btnPLMList                        uibtn
+	btnPLPrev, btnPLPlay, btnPLPause              uibtn
+	btnPLStop, btnPLNext, btnPLEject              uibtn
+	plMenuClicks                                  [5][]uibtn
+	plMenuOpen                                    int
+	plSel                                         int
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
@@ -114,6 +120,109 @@ type uiState struct {
 type uibtn struct {
 	tag  event.Tag
 	down bool
+}
+
+// beginScaledFrame configura o sistema de coordenadas lógico da janela e
+// aplica a escala visual 1x/2x escolhida pelo botão de tamanho.
+func beginScaledFrame(gtx layout.Context, scale int, logical image.Point) layout.Context {
+	if scale < 1 {
+		scale = 1
+	}
+	gtx.Constraints.Min = image.Point{}
+	gtx.Constraints.Max = logical
+	if scale != 1 {
+		op.Affine(f32.Affine2D{}.Scale(f32.Pt(0, 0), f32.Pt(float32(scale), float32(scale)))).Add(gtx.Ops)
+	}
+	return gtx
+}
+
+// toggleWindowScale alterna a janela entre 1x e 2x. A chamada vai para uma
+// goroutine porque Window.Option precisa retornar à thread de eventos.
+func toggleWindowScale(scale *int, w *app.Window, width, height unit.Dp) {
+	if *scale < 1 {
+		*scale = 1
+	}
+	if *scale == 1 {
+		*scale = 2
+	} else {
+		*scale = 1
+	}
+	if w == nil || width <= 0 || height <= 0 {
+		return
+	}
+	win := w
+	size := app.Size(width*unit.Dp(*scale), height*unit.Dp(*scale))
+	go win.Option(size)
+}
+
+// minimizeWindow minimiza a janela pelo WM (funciona em X11/Wayland, onde
+// Perform(ActionMinimize) não é implementado). Vai para uma goroutine porque
+// Window.Option precisa retornar à thread de eventos.
+func minimizeWindow(w *app.Window) {
+	if w == nil {
+		return
+	}
+	win := w
+	go func() {
+		win.Option(app.Windowed.Option())
+		win.Option(app.Minimized.Option())
+	}()
+}
+
+// dragArea registra uma área de título que pode ser arrastada pelo sistema.
+func dragArea(gtx layout.Context, r image.Rectangle) {
+	if r.Empty() {
+		return
+	}
+	clipStack := clip.Rect(r).Push(gtx.Ops)
+	system.ActionInputOp(system.ActionMove).Add(gtx.Ops)
+	clipStack.Pop()
+}
+
+var (
+	dragTag    event.Tag
+	dragActive bool
+)
+
+// dragAreaX11 move a janela via XMoveWindow durante o drag. Complementa
+// dragArea: no X11 o Gio não implementa ActionMove (ver x11drag_linux.go).
+func dragAreaX11(gtx layout.Context, r image.Rectangle) {
+	if r.Empty() {
+		return
+	}
+	clipStack := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &dragTag)
+	clipStack.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &dragTag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			if e.Buttons == pointer.ButtonPrimary {
+				dragActive = true
+				wmDragBegin()
+			}
+		case pointer.Drag:
+			if dragActive {
+				wmDragMove()
+			}
+		case pointer.Release:
+			if dragActive {
+				dragActive = false
+				wmDragEnd()
+			}
+			/* Cancel: mantém ativo — o C encerra ao soltar o botão. */
+		}
+	}
 }
 
 // button registra hit-area, processa press/release e desenha via face.
@@ -205,6 +314,8 @@ func Run(p *player.Player) error {
 	ui.volDrag.val = 1.0
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
 	ui.eqOn = true
+	ui.mainScale, ui.eqScale, ui.plScale = 1, 1, 1
+	ui.plWidth, ui.plHeight = unit.Dp(280), unit.Dp(240)
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
@@ -248,6 +359,7 @@ func Run(p *player.Player) error {
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
+			gtx = beginScaledFrame(gtx, ui.mainScale, image.Pt(275, 116))
 			ui.layoutMain(gtx)
 			e.Frame(gtx.Ops)
 		}

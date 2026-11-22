@@ -24,8 +24,14 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	// ---- titlebar ----
 	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, 222, 11)) // contend
 	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))         // option
-	ui.spr(gtx, "TITLEBAR", R(9, 0, 9, 9), R(244, 3, 9, 9))       // minimize
-	ui.spr(gtx, "TITLEBAR", R(0, 18, 9, 9), R(254, 3, 9, 9))      // shade
+	dragArea(gtx, R(16, 0, 228, 11))
+	dragAreaX11(gtx, R(16, 0, 228, 11))
+	if ui.spriteBtn(gtx, &ui.btnMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
+		minimizeWindow(ui.winMain)
+	}
+	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(254, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
+		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), unit.Dp(116))
+	}
 	if ui.spriteBtn(gtx, &ui.btnClose, "TITLEBAR", R(264, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.winMain.Perform(system.ActionClose)
 	}
@@ -118,10 +124,12 @@ func (ui *uiState) txtMat(gtx layout.Context, c color.NRGBA) op.CallOp {
 // infoRight desenha indicador mono/stereo.
 func (ui *uiState) infoRight(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
-	sel := ui.p.Channels() != 1 // stereo selecionado por padrão
+	channels := ui.p.Channels()
 	monoSrc, stSrc := R(29, 12, 27, 12), R(0, 12, 29, 12)
-	if sel {
-		monoSrc, stSrc = R(29, 0, 27, 12), R(0, 0, 29, 12)
+	if channels == 1 {
+		monoSrc = R(29, 0, 27, 12)
+	} else if channels > 1 {
+		stSrc = R(0, 0, 29, 12)
 	}
 	ui.spr(gtx, "MONOSTER", monoSrc, R(212, 37, 27, 12))
 	ui.spr(gtx, "MONOSTER", stSrc, R(239, 37, 29, 12))

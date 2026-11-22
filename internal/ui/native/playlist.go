@@ -55,6 +55,16 @@ func (ui *uiState) plLoop() {
 			return
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
+			logical := image.Pt(e.Size.X/ui.plScale, e.Size.Y/ui.plScale)
+			if logical.X < 1 {
+				logical.X = 1
+			}
+			if logical.Y < 1 {
+				logical.Y = 1
+			}
+			gtx = beginScaledFrame(gtx, ui.plScale, logical)
+			ui.plWidth = gtx.Metric.PxToDp(logical.X)
+			ui.plHeight = gtx.Metric.PxToDp(logical.Y)
 			ui.layoutPL(gtx)
 			e.Frame(gtx.Ops)
 		}
@@ -93,11 +103,15 @@ func (ui *uiState) plTopBar(gtx layout.Context, winW int, R func(int, int, int, 
 	ui.textAt(gtx, ui.fontMono, unit.Sp(8), "Playlist",
 		color.NRGBA{R: 0, G: 0xFF, B: 0, A: 0xFF}, image.Pt(30, 5))
 
-	// shade (collapse) e close — sprites "selected" do PLEDIT
-	if ui.spriteBtn(gtx, &ui.btnPLShade, "PLEDIT", R(winW-21, 3, 9, 9), R(62, 42, 9, 9), R(62, 42, 9, 9)) {
-		ui.winPL.Perform(system.ActionMinimize)
+	dragArea(gtx, R(0, 0, winW-32, plTopH))
+	dragAreaX11(gtx, R(0, 0, winW-32, plTopH))
+	if ui.spriteBtn(gtx, &ui.btnPLMin, "TITLEBAR", R(winW-31, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
+		minimizeWindow(ui.winPL)
 	}
-	if ui.spriteBtn(gtx, &ui.btnPLClose, "PLEDIT", R(winW-11, 3, 9, 9), R(52, 42, 9, 9), R(52, 42, 9, 9)) {
+	if ui.spriteBtn(gtx, &ui.btnPLSize, "TITLEBAR", R(winW-21, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
+		toggleWindowScale(&ui.plScale, ui.winPL, ui.plWidth, ui.plHeight)
+	}
+	if ui.spriteBtn(gtx, &ui.btnPLClose, "TITLEBAR", R(winW-11, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.winPL.Perform(system.ActionClose)
 	}
 }

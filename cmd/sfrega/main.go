@@ -94,12 +94,6 @@ func main() {
 		os.Exit(1)
 	}
 	return
-
-	fmt.Printf("sfrega — %d faixas\n", len(tracks))
-	fmt.Println("controles: [espaço]=play/pause [n]=prox [p]=ant [q]=sair [+/-]=vol [m]=mute")
-
-	go handleKeys(p)
-	renderSpectrum(p)
 }
 
 // defaultMusicDirs retorna diretórios de música comuns quando nenhum

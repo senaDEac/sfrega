@@ -91,6 +91,7 @@ func (ui *uiState) eqLoop() {
 			return
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
+			gtx = beginScaledFrame(gtx, ui.eqScale, image.Pt(275, 116))
 			ui.layoutEQ(gtx)
 			e.Frame(gtx.Ops)
 		}
@@ -144,6 +145,17 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 	// título na barra superior
 	ui.textAt(gtx, ui.fontUI, unit.Sp(8), "Equalizer",
 		color.NRGBA{R: 0xCC, G: 0xCC, B: 0xCC, A: 0xFF}, image.Pt(20, 4))
+
+	dragArea(gtx, R(16, 0, 44, 14))
+	dragArea(gtx, R(208, 0, 36, 14))
+	dragAreaX11(gtx, R(16, 0, 44, 14))
+	dragAreaX11(gtx, R(208, 0, 36, 14))
+	if ui.spriteBtn(gtx, &ui.btnEQMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
+		minimizeWindow(ui.winEQ)
+	}
+	if ui.spriteBtn(gtx, &ui.btnEQSize, "TITLEBAR", R(254, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
+		toggleWindowScale(&ui.eqScale, ui.winEQ, unit.Dp(275), unit.Dp(116))
+	}
 
 	// close (EQ_CLOSE_BUTTON)
 	if ui.spriteBtn(gtx, &ui.btnEQClose, "EQMAIN", R(264, 3, 9, 9), R(0, 116, 9, 9), R(0, 125, 9, 9)) {
