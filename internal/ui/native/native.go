@@ -338,13 +338,13 @@ func Run(p *player.Player) error {
 		app.Size(unit.Dp(275), unit.Dp(116)),
 	)
 
-	// X11/muffin: thread C reage a MapNotify/CreateNotify (~1ms) e
-	// remove titlebar/bordas + restaura posição. Poll lento = fallback.
-	wmStart()
+	// X11/muffin: aplica _MOTIF_WM_HINTS assim que a janela aparece
+	// em _NET_CLIENT_LIST — polling curto evita a piscada de titlebar.
 	go func() {
-		t := time.NewTicker(200 * time.Millisecond)
+		t := time.NewTicker(30 * time.Millisecond)
 		for range t.C {
-			wmTick()
+			wmNoDecorations()
+			wmRestoreGeometry()
 		}
 	}()
 
