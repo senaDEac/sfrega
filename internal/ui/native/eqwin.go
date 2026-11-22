@@ -83,6 +83,7 @@ func (ui *uiState) eqLoop() {
 	for {
 		switch e := w.Event().(type) {
 		case app.DestroyEvent:
+			wmSaveGeometry()
 			ui.mu.Lock()
 			ui.winEQ = nil
 			ui.eqOpen = false

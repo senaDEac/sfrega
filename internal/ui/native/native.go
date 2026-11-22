@@ -219,6 +219,7 @@ func dragAreaX11(gtx layout.Context, r image.Rectangle) {
 			if dragActive {
 				dragActive = false
 				wmDragEnd()
+				wmSaveGeometry()
 			}
 			/* Cancel: mantém ativo — o C encerra ao soltar o botão. */
 		}
@@ -343,6 +344,7 @@ func Run(p *player.Player) error {
 		t := time.NewTicker(30 * time.Millisecond)
 		for range t.C {
 			wmNoDecorations()
+			wmRestoreGeometry()
 		}
 	}()
 
@@ -365,6 +367,7 @@ func Run(p *player.Player) error {
 	for {
 		switch e := ui.winMain.Event().(type) {
 		case app.DestroyEvent:
+			wmSaveGeometry()
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)

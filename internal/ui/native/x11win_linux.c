@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 /* MotifWmHints layout lido pelo muffin (src/x11/xprops.h):
  * flags, functions, decorations, input_mode, status — 5 cardinais. */
@@ -122,4 +123,120 @@ void sfrega_no_decorations(void)
 out:
     if (clients)
         XFree(clients);
+}
+
+/* ---------- geometria (posição das janelas) ---------- */
+
+static void geo_path(char *buf, size_t len)
+{
+    const char *home = getenv("HOME");
+    if (!home)
+        home = "/tmp";
+    snprintf(buf, len, "%s/.config/sfrega/geometry.txt", home);
+}
+
+static Window find_by_name(Display *dpy, const char *want, Atom ncl, Atom nwn, Atom u8)
+{
+    Window root = DefaultRootWindow(dpy);
+    Atom actual;
+    int fmt;
+    unsigned long n = 0, after = 0;
+    unsigned char *data = NULL;
+    Window *clients = NULL;
+    Window found = None;
+
+    XGetWindowProperty(dpy, root, ncl, 0, 1024, False, AnyPropertyType,
+                       &actual, &fmt, &n, &after, &data);
+    if (!data)
+        return None;
+    clients = (Window *)data;
+
+    for (unsigned long i = 0; i < n && found == None; i++) {
+        char *name = window_name(dpy, clients[i], nwn, u8);
+        if (name && strcmp(name, want) == 0)
+            found = clients[i];
+        free(name);
+    }
+    XFree(data);
+    return found;
+}
+
+static int root_pos(Display *dpy, Window w, int *x, int *y)
+{
+    Window junk;
+    return XTranslateCoordinates(dpy, w, DefaultRootWindow(dpy), 0, 0, x, y, &junk);
+}
+
+void sfrega_geo_save(void)
+{
+    if (!g_dpy)
+        g_dpy = XOpenDisplay(NULL);
+    if (!g_dpy)
+        return;
+    Display *dpy = g_dpy;
+
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+
+    char path[512], cfg[512];
+    geo_path(path, sizeof(path));
+    snprintf(cfg, sizeof(cfg), "%s/.config/sfrega", getenv("HOME") ? getenv("HOME") : "/tmp");
+    mkdir(cfg, 0755);
+
+    FILE *f = fopen(path, "w");
+    if (!f)
+        return;
+    for (size_t i = 0; i < sizeof(window_names) / sizeof(window_names[0]); i++) {
+        Window w = find_by_name(dpy, window_names[i], ncl, nwn, u8);
+        if (w == None)
+            continue;
+        int x, y;
+        if (root_pos(dpy, w, &x, &y))
+            fprintf(f, "%s %d %d\n", window_names[i], x, y);
+    }
+    fclose(f);
+}
+
+static Window restored[16];
+static int restored_n;
+
+static int was_restored(Window w)
+{
+    for (int i = 0; i < restored_n; i++)
+        if (restored[i] == w)
+            return 1;
+    if (restored_n < 16)
+        restored[restored_n++] = w;
+    return 0;
+}
+
+void sfrega_geo_restore(void)
+{
+    if (!g_dpy)
+        g_dpy = XOpenDisplay(NULL);
+    if (!g_dpy)
+        return;
+    Display *dpy = g_dpy;
+
+    char path[512];
+    geo_path(path, sizeof(path));
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return;
+
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+
+    char name[64];
+    int x, y;
+    while (fscanf(f, "%63s %d %d", name, &x, &y) == 3) {
+        Window w = find_by_name(dpy, name, ncl, nwn, u8);
+        if (w == None || was_restored(w))
+            continue;
+        XMoveWindow(dpy, w, x, y);
+    }
+    fclose(f);
+    XFlush(dpy);
 }

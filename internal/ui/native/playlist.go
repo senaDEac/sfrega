@@ -48,6 +48,7 @@ func (ui *uiState) plLoop() {
 	for {
 		switch e := w.Event().(type) {
 		case app.DestroyEvent:
+			wmSaveGeometry()
 			ui.mu.Lock()
 			ui.winPL = nil
 			ui.plMenuOpen = -1

@@ -8,3 +8,6 @@ package native
 import "C"
 
 func wmNoDecorations() { C.sfrega_no_decorations() }
+
+func wmSaveGeometry()   { C.sfrega_geo_save() }
+func wmRestoreGeometry() { C.sfrega_geo_restore() }
