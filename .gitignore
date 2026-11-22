@@ -28,3 +28,17 @@ Thumbs.db
 *.key
 *.pem
 secrets/
+
+# Pacotes/binários de release
+*.deb
+*.rpm
+*.AppImage
+*.msi
+*.dmg
+*.pkg
+*.tar.gz
+/releases/
+
+# Artefatos de build locais
+/sfrega
+*.test
