@@ -35,6 +35,20 @@ var eqPresets = []struct {
 	{"Dance", [10]float64{5, 4, 1, -1, -2, -1, 2, 4, 5, 4}},
 }
 
+// eqWin/closeEQ acessam a janela EQ com segurança (pode ser anulada pelo
+// DestroyEvent enquanto um frame ainda renderiza).
+func (ui *uiState) eqWin() *app.Window {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	return ui.winEQ
+}
+
+func (ui *uiState) closeEQ() {
+	if w := ui.eqWin(); w != nil {
+		w.Perform(system.ActionClose)
+	}
+}
+
 // toggleEQ abre/fecha a janela do equalizador.
 func (ui *uiState) toggleEQ() {
 	ui.mu.Lock()
@@ -160,15 +174,17 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 	dragAreaX11(gtx, R(16, 0, 44, 14), &ui.shadeEQ)
 	dragAreaX11(gtx, R(208, 0, 36, 14), &ui.shadeEQ)
 	if ui.spriteBtn(gtx, &ui.btnEQMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
-		minimizeWindow(ui.winEQ)
+		minimizeWindow(ui.eqWin())
 	}
 	if ui.spriteBtn(gtx, &ui.btnEQSize, "TITLEBAR", R(254, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
-		toggleWindowScale(&ui.eqScale, ui.winEQ, unit.Dp(275), unit.Dp(116))
+		if w := ui.eqWin(); w != nil {
+			toggleWindowScale(&ui.eqScale, w, unit.Dp(275), unit.Dp(116))
+		}
 	}
 
 	// close (EQ_CLOSE_BUTTON)
 	if ui.spriteBtn(gtx, &ui.btnEQClose, "EQMAIN", R(264, 3, 9, 9), R(0, 116, 9, 9), R(0, 125, 9, 9)) {
-		ui.winEQ.Perform(system.ActionClose)
+		ui.closeEQ()
 	}
 
 	// volume/balance compactos na barra de título (61,4,97x6) e (164,4,43x6)

@@ -6,6 +6,7 @@ import (
 	"embed"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -32,13 +33,43 @@ func configPath() string {
 	return filepath.Join(home, ".config", "sfrega", "lang.txt")
 }
 
+// langDirs retorna os diretórios de idiomas em runtime (sem rebuild).
+func langDirs() []string {
+	home, _ := os.UserHomeDir()
+	var dirs []string
+	if x := os.Getenv("XDG_DATA_HOME"); x != "" {
+		dirs = append(dirs, filepath.Join(x, "sfrega", "lang"))
+	}
+	dirs = append(dirs,
+		filepath.Join(home, ".local", "share", "sfrega", "lang"),
+		"internal/language",
+		"lang",
+	)
+	return dirs
+}
+
+// readLang lê o arquivo de idioma: primeiro nos diretórios de runtime,
+// depois no embed.
+func readLang(l string) ([]byte, bool) {
+	name := l + ".txt"
+	for _, d := range langDirs() {
+		if b, err := os.ReadFile(filepath.Join(d, name)); err == nil {
+			return b, true
+		}
+	}
+	if b, err := fs.ReadFile(name); err == nil {
+		return b, true
+	}
+	return nil, false
+}
+
 func loadSaved() string {
 	b, err := os.ReadFile(configPath())
 	if err != nil {
 		return "en"
 	}
 	l := strings.TrimSpace(string(b))
-	if _, err := fs.ReadFile(l + ".txt"); err != nil {
+	if _, ok := readLang(l); !ok {
 		return "en"
 	}
 	return l
@@ -48,8 +79,8 @@ func loadSaved() string {
 func Set(l string) {
 	mu.Lock()
 	defer mu.Unlock()
-	data, err := fs.ReadFile(l + ".txt")
-	if err != nil {
+	data, ok := readLang(l)
+	if !ok {
 		return
 	}
 	m := map[string]string{}
@@ -92,8 +123,8 @@ func T(key string) string {
 // Name retorna o nome de exibição do idioma (chave lang.name do arquivo);
 // cai para o código se não houver.
 func Name(l string) string {
-	data, err := fs.ReadFile(l + ".txt")
-	if err != nil {
+	data, ok := readLang(l)
+	if !ok {
 		return l
 	}
 	for _, line := range strings.Split(string(data), "\n") {
@@ -104,14 +135,31 @@ func Name(l string) string {
 	return l
 }
 
-// Available retorna os idiomas embutidos (sem a extensão).
+// Available retorna os idiomas disponíveis (diretórios de runtime + embed).
 func Available() []string {
-	entries, _ := fs.ReadDir(".")
+	seen := map[string]bool{}
 	var out []string
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".txt") {
-			out = append(out, strings.TrimSuffix(e.Name(), ".txt"))
+	for _, d := range langDirs() {
+		ents, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		for _, e := range ents {
+			if strings.HasSuffix(e.Name(), ".txt") {
+				seen[strings.TrimSuffix(e.Name(), ".txt")] = true
+			}
 		}
 	}
+	if ents, err := fs.ReadDir("."); err == nil {
+		for _, e := range ents {
+			if strings.HasSuffix(e.Name(), ".txt") {
+				seen[strings.TrimSuffix(e.Name(), ".txt")] = true
+			}
+		}
+	}
+	for l := range seen {
+		out = append(out, l)
+	}
+	sort.Strings(out)
 	return out
 }

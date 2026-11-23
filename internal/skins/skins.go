@@ -10,17 +10,26 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
+
+	"archive/zip"
+
+	"golang.org/x/image/bmp"
 )
 
 //go:embed 00/*.png 00/VISCOLOR.TXT
 var baseFS embed.FS
+
+//go:embed *.wsz
+var wszFS embed.FS
 
 // Skin contém os bitmaps de uma skin do Winamp.
 type Skin struct {
@@ -38,6 +47,99 @@ func OpenEmbedded(name string) (*Skin, error) {
 // OpenDir carrega uma skin de um diretório contendo PNGs + VISCOLOR.TXT.
 func OpenDir(dir string) (*Skin, error) {
 	return loadFS(os.DirFS(dir), ".")
+}
+
+// skinDirs retorna os diretórios de skins em runtime (sem rebuild):
+// ./skins, ./internal/skins, $XDG_DATA_HOME/sfrega/skins e
+// ~/.local/share/sfrega/skins.
+func skinDirs() []string {
+	home, _ := os.UserHomeDir()
+	var dirs []string
+	if x := os.Getenv("XDG_DATA_HOME"); x != "" {
+		dirs = append(dirs, filepath.Join(x, "sfrega", "skins"))
+	}
+	dirs = append(dirs,
+		filepath.Join(home, ".local", "share", "sfrega", "skins"),
+		"skins",
+		"internal/skins",
+	)
+	return dirs
+}
+
+// WszNames retorna os nomes (sem .wsz) das skins .wsz disponíveis
+// (diretórios de runtime + embed), deduplicados e ordenados.
+func WszNames() []string {
+	seen := map[string]bool{}
+	for _, d := range skinDirs() {
+		ents, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		for _, e := range ents {
+			if strings.HasSuffix(e.Name(), ".wsz") {
+				seen[strings.TrimSuffix(e.Name(), ".wsz")] = true
+			}
+		}
+	}
+	if ents, err := wszFS.ReadDir("."); err == nil {
+		for _, e := range ents {
+			if strings.HasSuffix(e.Name(), ".wsz") {
+				seen[strings.TrimSuffix(e.Name(), ".wsz")] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for n := range seen {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// OpenWsz carrega uma skin de um arquivo .wsz (diretórios de runtime
+// primeiro, embed como fallback). Aceita nome com ou sem extensão.
+func OpenWsz(name string) (*Skin, error) {
+	file := name
+	if !strings.HasSuffix(strings.ToLower(file), ".wsz") {
+		file += ".wsz"
+	}
+	for _, d := range skinDirs() {
+		if data, err := os.ReadFile(filepath.Join(d, file)); err == nil {
+			return openWszData(file, data)
+		}
+	}
+	data, err := wszFS.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	return openWszData(file, data)
+}
+
+func openWszData(name string, data []byte) (*Skin, error) {
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+	s := &Skin{imgs: map[string]*image.RGBA{}, spr: map[string]*image.RGBA{}}
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		buf, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			continue
+		}
+		s.loadFile(f.Name, buf)
+	}
+	if len(s.imgs) == 0 {
+		return nil, fmt.Errorf("skin sem PNGs em %s", name)
+	}
+	return s, nil
 }
 
 // Default retorna a skin padrão: SFREGA_SKIN (arquivo .wsz/.png dir) >
@@ -82,24 +184,11 @@ func loadFS(fsys fs.FS, dir string) (*Skin, error) {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		name := strings.ToUpper(strings.TrimSuffix(filepath.Base(p), filepath.Ext(p)))
-		switch strings.ToUpper(filepath.Ext(p)) {
-		case ".PNG":
-			data, err := fs.ReadFile(fsys, p)
-			if err != nil {
-				return err
-			}
-			im, err := png.Decode(bytes.NewReader(data))
-			if err != nil {
-				return nil // ignora PNG inválido
-			}
-			s.imgs[name] = toRGBA(im)
-		case ".TXT":
-			if strings.EqualFold(filepath.Base(p), "VISCOLOR.TXT") {
-				data, _ := fs.ReadFile(fsys, p)
-				s.vis = parseVisColors(string(data))
-			}
+		data, err := fs.ReadFile(fsys, p)
+		if err != nil {
+			return err
 		}
+		s.loadFile(p, data)
 		return nil
 	})
 	if err != nil {
@@ -109,6 +198,29 @@ func loadFS(fsys fs.FS, dir string) (*Skin, error) {
 		return nil, fmt.Errorf("skin sem PNGs em %s", dir)
 	}
 	return s, nil
+}
+
+// loadFile ingere um único arquivo (PNG ou VISCOLOR.TXT) pelo nome.
+func (s *Skin) loadFile(fileName string, data []byte) {
+	name := strings.ToUpper(strings.TrimSuffix(filepath.Base(fileName), filepath.Ext(fileName)))
+	switch strings.ToUpper(filepath.Ext(fileName)) {
+	case ".PNG":
+		im, err := png.Decode(bytes.NewReader(data))
+		if err != nil {
+			return // ignora PNG inválido
+		}
+		s.imgs[name] = toRGBA(im)
+	case ".BMP":
+		im, err := bmp.Decode(bytes.NewReader(data))
+		if err != nil {
+			return
+		}
+		s.imgs[name] = toRGBA(im)
+	case ".TXT":
+		if strings.EqualFold(filepath.Base(fileName), "VISCOLOR.TXT") {
+			s.vis = parseVisColors(string(data))
+		}
+	}
 }
 
 // Get retorna o bitmap completo pelo nome ("MAIN", "VOLUME", ...).

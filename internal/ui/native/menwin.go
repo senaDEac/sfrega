@@ -18,6 +18,7 @@ import (
 	"gioui.org/unit"
 
 	"sfrega/internal/language"
+	"sfrega/internal/skins"
 )
 
 // Janela de menu (File / Always on top / Config>Language / About),
@@ -77,6 +78,17 @@ func (ui *uiState) toggleMenu() {
 	ui.winMenu = nil
 }
 
+// closeMenu fecha a janela de menu com segurança (winMenu pode já ter sido
+// anulado pelo DestroyEvent enquanto um frame ainda renderiza).
+func (ui *uiState) closeMenu() {
+	ui.mu.Lock()
+	w := ui.winMenu
+	ui.mu.Unlock()
+	if w != nil {
+		w.Perform(system.ActionClose)
+	}
+}
+
 // menuPlaceLoop posiciona a janela 50px abaixo do player assim que ela
 // aparece no WM.
 func (ui *uiState) menuPlaceLoop() {
@@ -108,6 +120,7 @@ func (ui *uiState) menuLoop() {
 			ui.menuFile = false
 			ui.menuCfg = false
 			ui.menuLang = false
+			ui.menuSkins = false
 			ui.menuScroll = 0
 			return
 		case app.FrameEvent:
@@ -140,11 +153,16 @@ func (ui *uiState) layoutMenu(gtx layout.Context) {
 	}
 	if ui.spriteBtn(gtx, &ui.btnMenuSize, "TITLEBAR", R(254, 3, 9, 9),
 		R(0, 18, 9, 9), R(9, 18, 9, 9)) {
-		toggleWindowScale(&ui.menuScale, ui.winMenu, unit.Dp(275), unit.Dp(116))
+		ui.mu.Lock()
+		w := ui.winMenu
+		ui.mu.Unlock()
+		if w != nil {
+			toggleWindowScale(&ui.menuScale, w, unit.Dp(275), unit.Dp(116))
+		}
 	}
 	if ui.spriteBtn(gtx, &ui.btnMenuClose, "TITLEBAR", R(264, 3, 9, 9),
 		R(18, 0, 9, 9), R(18, 9, 9, 9)) {
-		ui.winMenu.Perform(system.ActionClose)
+		ui.closeMenu()
 	}
 
 	// miolo: fundo azul escuro + itens de menu
@@ -217,7 +235,7 @@ func (ui *uiState) menuRows() []mrow {
 	if ui.menuFile {
 		rows = append(rows, mrow{label: language.T("menu.file.exit"), indent: 1,
 			act: func() {
-				ui.winMenu.Perform(system.ActionClose)
+				ui.closeMenu()
 				ui.winMain.Perform(system.ActionClose)
 			}})
 	}
@@ -246,11 +264,22 @@ func (ui *uiState) menuRows() []mrow {
 					act: func() { language.Set(code) }})
 			}
 		}
+		rows = append(rows, mrow{label: "Skins", indent: 1, kind: 2,
+			act: func() { ui.menuSkins = !ui.menuSkins }})
+		if ui.menuSkins {
+			rows = append(rows, mrow{label: "padrão", indent: 2,
+				act: func() { ui.applySkin("padrao"); saveSkinSel("padrao") }})
+			for _, n := range skins.WszNames() {
+				code := n
+				rows = append(rows, mrow{label: n, indent: 2,
+					act: func() { ui.applySkin(code); saveSkinSel(code) }})
+			}
+		}
 	}
 	rows = append(rows, mrow{label: language.T("menu.about"),
 		act: func() { ui.menuAbout = true }})
 	rows = append(rows, mrow{label: language.T("about.close"),
-		act: func() { ui.winMenu.Perform(system.ActionClose) }})
+		act: func() { ui.closeMenu() }})
 	return rows
 }
 

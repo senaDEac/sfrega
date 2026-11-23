@@ -29,9 +29,11 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 
 	// ---- titlebar ----
 	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, 222, 11)) // contend
-	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))         // option
 	dragArea(gtx, R(16, 0, 228, 11))
 	dragAreaX11(gtx, R(16, 0, 228, 11), &ui.shadeMain)
+	if ui.spriteBtn(gtx, &ui.btnOpt, "TITLEBAR", R(6, 3, 9, 9), R(0, 0, 9, 9), R(0, 9, 9, 9)) {
+		ui.toggleMenu()
+	}
 	if ui.spriteBtn(gtx, &ui.btnMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winMain)
 	}

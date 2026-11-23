@@ -41,6 +41,20 @@ type plMenuItem struct {
 	fn     func()
 }
 
+// plWin/closePL acessam a janela PL com segurança (pode ser anulada pelo
+// DestroyEvent enquanto um frame ainda renderiza).
+func (ui *uiState) plWin() *app.Window {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	return ui.winPL
+}
+
+func (ui *uiState) closePL() {
+	if w := ui.plWin(); w != nil {
+		w.Perform(system.ActionClose)
+	}
+}
+
 // plLoop é o loop de eventos da janela playlist.
 func (ui *uiState) plLoop() {
 	var ops op.Ops
@@ -106,13 +120,15 @@ func (ui *uiState) plTopBar(gtx layout.Context, winW int, R func(int, int, int, 
 	dragArea(gtx, R(0, 0, winW-32, plTopH))
 	dragAreaX11(gtx, R(0, 0, winW-32, plTopH), &ui.shadePL)
 	if ui.spriteBtn(gtx, &ui.btnPLMin, "TITLEBAR", R(winW-31, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
-		minimizeWindow(ui.winPL)
+		minimizeWindow(ui.plWin())
 	}
 	if ui.spriteBtn(gtx, &ui.btnPLSize, "TITLEBAR", R(winW-21, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
-		toggleWindowScale(&ui.plScale, ui.winPL, ui.plWidth, ui.plHeight)
+		if w := ui.plWin(); w != nil {
+			toggleWindowScale(&ui.plScale, w, ui.plWidth, ui.plHeight)
+		}
 	}
 	if ui.spriteBtn(gtx, &ui.btnPLClose, "TITLEBAR", R(winW-11, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
-		ui.winPL.Perform(system.ActionClose)
+		ui.closePL()
 	}
 }
 

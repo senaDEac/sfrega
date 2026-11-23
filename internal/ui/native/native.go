@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gioui.org/app"
@@ -71,7 +72,7 @@ var (
 type uiState struct {
 	mu           sync.Mutex // protege winEQ/winPL
 	p            *player.Player
-	skin         *skins.Skin
+	skin         atomic.Pointer[skins.Skin]
 	shaper       *text.Shaper
 	fontUI       font.Font
 	fontBold     font.Font
@@ -94,6 +95,7 @@ type uiState struct {
 	// widgets main
 	btnPrev, btnPlay, btnPause, btnStop, btnNext uibtn
 	btnEject, btnMin, btnSize, btnClose          uibtn
+	btnOpt                                       uibtn
 	btnEQ, btnPL                                 uibtn
 	btnShuf, btnRep                              uibtn
 	volDrag, balDrag, posDrag                    fader
@@ -133,10 +135,11 @@ type uiState struct {
 	btnMenuMin   uibtn
 	btnMenuSize  uibtn
 	btnMenuClose uibtn
-	menuBtns     [10]uibtn
+	menuBtns     [16]uibtn
 	menuFile     bool
 	menuCfg      bool
 	menuLang     bool
+	menuSkins    bool
 	menuAbout    bool
 	alwaysOnTop  bool
 	menuScale    int
@@ -270,6 +273,49 @@ func saveOpenWindows(eq, pl, menu bool) {
 	p := configPath("windows.txt")
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	_ = os.WriteFile(p, []byte(strings.Join(names, " ")+"\n"), 0o644)
+}
+
+// loadSkinSel lê a skin escolhida ("" = nenhuma/padrão automático).
+func loadSkinSel() string {
+	b, err := os.ReadFile(configPath("skin.txt"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// saveSkinSel grava a skin escolhida para a próxima sessão.
+func saveSkinSel(code string) {
+	p := configPath("skin.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(code+"\n"), 0o644)
+}
+
+// applySkin troca a skin ativa: "padrao" usa a pasta 00 embutida; demais
+// códigos são nomes de .wsz embutidos. Persiste a escolha.
+func (ui *uiState) applySkin(code string) {
+	var s *skins.Skin
+	var err error
+	if code == "" || code == "padrao" {
+		s, err = skins.OpenEmbedded(".")
+	} else {
+		s, err = skins.OpenWsz(code)
+	}
+	if err != nil {
+		return
+	}
+	ui.skin.Store(s)
+	fitCache.Range(func(k, _ any) bool {
+		fitCache.Delete(k)
+		return true
+	})
+	ui.mu.Lock()
+	for _, w := range []*app.Window{ui.winMain, ui.winEQ, ui.winPL, ui.winMenu} {
+		if w != nil {
+			w.Invalidate()
+		}
+	}
+	ui.mu.Unlock()
 }
 
 // toggleWindowScale alterna a janela entre 1x e 2x. A chamada vai para uma
@@ -486,7 +532,6 @@ func Run(p *player.Player) error {
 	shaper := text.NewShaper(text.WithCollection(faces))
 	ui := &uiState{
 		p:            p,
-		skin:         skin,
 		shaper:       shaper,
 		fontUI:       font.Font{Typeface: "DejaVu Sans"},
 		fontBold:     font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
@@ -497,6 +542,10 @@ func Run(p *player.Player) error {
 		plMenuOpen:   -1,
 	}
 	ui.volDrag.val = 1.0
+	ui.skin.Store(skin)
+	if sel := loadSkinSel(); sel != "" {
+		ui.applySkin(sel)
+	}
 	ui.menuScale = 1
 	ui.ontopDone = map[string]bool{}
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
@@ -760,7 +809,7 @@ func (ui *uiState) faderLayout(gtx layout.Context, f *fader, rect image.Rectangl
 
 // spr desenha o recorte src do bitmap name em dst (escala se necessário).
 func (ui *uiState) spr(gtx layout.Context, name string, src, dst image.Rectangle) {
-	img := ui.skin.Spr(name, src)
+	img := ui.skin.Load().Spr(name, src)
 	if img == nil {
 		return
 	}
@@ -790,7 +839,7 @@ var fitCache sync.Map // chave "nome|src|dxdy" -> *image.RGBA escalada
 // em Go quando necessário (o affine do Gio não escala de forma confiável
 // em todos os contextos de desenho).
 func (ui *uiState) sprFit(gtx layout.Context, name string, src, dst image.Rectangle) {
-	img := ui.skin.Spr(name, src)
+	img := ui.skin.Load().Spr(name, src)
 	if img == nil || dst.Empty() {
 		return
 	}
@@ -880,6 +929,6 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 		bar := image.Rect(r.Min.X+i*bw, r.Max.Y-h, r.Min.X+(i+1)*bw-1, r.Max.Y)
 		// cor por altura: topo = cores claras (índice baixo)
 		ci := int((1 - v) * 17)
-		fillRect(gtx.Ops, bar, ui.skin.VisColor(ci))
+		fillRect(gtx.Ops, bar, ui.skin.Load().VisColor(ci))
 	}
 }
