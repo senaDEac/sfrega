@@ -1,6 +1,7 @@
 package native
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 
@@ -19,9 +20,9 @@ import (
 func (ui *uiState) layoutMain(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
-	ui.shadeMain.arm(shadePx(ui.mainScale, 18))
+	ui.shadeMain.arm(shadePx(ui.mainScale, 22))
 	if ui.shadeMain.on {
-		ui.shadeBar(gtx, R(0, 0, 275, 18))
+		ui.shadeBar(gtx, R(0, 0, 275, 22))
 		return
 	}
 
@@ -58,22 +59,57 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	ui.shuffleRepeat(gtx, R)
 }
 
-// shadeBar desenha a barra fina do modo "window shade" (estilo Winamp 5):
-// faixa cinza-azulada com bordas laranja e o título da faixa atual.
+// shadeBar desenha o "window shade" com todos os controles essenciais:
+// transporte, título da faixa, tempo, volume, EQ/PL — estilo Winamp 5.
 func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
-	bg := color.NRGBA{R: 0x76, G: 0x7C, B: 0x8A, A: 0xFF}
-	edge := color.NRGBA{R: 0xD2, G: 0x8E, B: 0x52, A: 0xFF}
+	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
+
+	bg := color.NRGBA{R: 0x2D, G: 0x32, B: 0x42, A: 0xFF}
 	fillRect(gtx.Ops, r, bg)
-	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Min.X+2, r.Max.Y), edge)
-	fillRect(gtx.Ops, image.Rect(r.Max.X-2, r.Min.Y, r.Max.X, r.Max.Y), edge)
-	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1), color.NRGBA{R: 0x3A, G: 0x3E, B: 0x4A, A: 0xFF})
+	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1),
+		color.NRGBA{R: 0x5A, G: 0x62, B: 0x78, A: 0xFF})
+	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y),
+		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
 
-	dragArea(gtx, image.Rect(2, 0, 273, 18))
-	dragAreaX11(gtx, image.Rect(2, 0, 273, 18), &ui.shadeMain)
+	dragArea(gtx, R(0, 0, 200, 22))
+	dragAreaX11(gtx, R(0, 0, 200, 22), &ui.shadeMain)
 
+	// ---- transporte compacto (CBUTTONS escalado p/ 14px) ----
+	type tb struct {
+		b   *uibtn
+		x   int
+		col int
+		fn  func()
+	}
+	btns := []tb{
+		{&ui.btnPrev, 4, 0, func() { ui.p.Prev(); ui.p.Play() }},
+		{&ui.btnStop, 48, 69, func() { ui.p.Pause(); _ = ui.p.SeekFraction(0) }},
+		{&ui.btnNext, 64, 92, func() { ui.p.Next(); ui.p.Play() }},
+	}
+	for _, b := range btns {
+		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 4, 14, 14),
+			R(b.col, 0, 23, 18), R(b.col, 18, 23, 18)) {
+			b.fn()
+		}
+	}
+	// play/pause combinado em x=32
+	playCol := 23
+	if ui.p.Playing() {
+		playCol = 46
+	}
+	if ui.spriteBtn(gtx, &ui.btnPlay, "CBUTTONS", R(32, 4, 14, 14),
+		R(playCol, 0, 23, 18), R(playCol, 18, 23, 18)) {
+		if ui.p.Playing() {
+			ui.p.Pause()
+		} else {
+			ui.p.Play()
+		}
+	}
+
+	// ---- título da faixa ----
 	title := ui.p.TrackAt(ui.p.Index())
 	if title == "" {
-		title = "sfrega"
+		title = "Winamp"
 	}
 	for i := len(title) - 1; i > 0; i-- {
 		if title[i] == '/' || title[i] == '\\' {
@@ -81,10 +117,37 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 			break
 		}
 	}
-	cs := clip.Rect(image.Rect(10, 0, 265, 18)).Push(gtx.Ops)
+	cs := clip.Rect(R(82, 2, 92, 18)).Push(gtx.Ops)
 	ui.textAt(gtx, ui.fontMono, unit.Sp(8), title,
-		color.NRGBA{R: 0x23, G: 0x26, B: 0x30, A: 0xFF}, image.Pt(10, 5))
+		color.NRGBA{R: 0xC8, G: 0xCE, B: 0xDC, A: 0xFF}, image.Pt(82, 7))
 	cs.Pop()
+
+	// ---- tempo decorrido ----
+	s := int(ui.p.Position().Seconds())
+	if s < 0 {
+		s = 0
+	}
+	ui.textAt(gtx, ui.fontMono, unit.Sp(8),
+		fmt.Sprintf("%d:%02d", s/60, s%60),
+		color.NRGBA{R: 0x86, G: 0x8E, B: 0xA0, A: 0xFF}, image.Pt(176, 7))
+
+	// ---- volume (mini slider) ----
+	volR := R(196, 8, 34, 6)
+	fillRect(gtx.Ops, volR, color.NRGBA{R: 0x18, G: 0x1C, B: 0x28, A: 0xFF})
+	vw := int(ui.volDrag.val * 34)
+	if vw > 0 {
+		fillRect(gtx.Ops, image.Rect(volR.Min.X, volR.Min.Y, volR.Min.X+vw, volR.Max.Y),
+			color.NRGBA{R: 0x5E, G: 0xC8, B: 0x50, A: 0xFF})
+	}
+	ui.scrub(gtx, &ui.volDrag, R(196, 6, 34, 10))
+
+	// ---- EQ / PL ----
+	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(234, 5, 16, 11), ui.eqOpen,
+		R(0, 62, 23, 11), R(46, 61, 23, 11), R(0, 73, 23, 11), R(46, 72, 23, 11),
+		func() { ui.toggleEQ() })
+	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(252, 5, 16, 11), ui.plOpen,
+		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
+		func() { ui.togglePL() })
 }
 
 // lcdContent desenha dígitos do tempo, título rolante e indicador play.

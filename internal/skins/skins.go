@@ -61,7 +61,12 @@ func Default() (*Skin, error) {
 			continue
 		}
 		for _, e := range ents {
+			// só aceita subpastas que sejam skins de verdade (têm VISCOLOR.TXT);
+			// pastas 0-9/a-z/_ do acervo contêm .wsz + thumbs, não skins.
 			if e.IsDir() {
+				if _, err := os.Stat(filepath.Join(d, e.Name(), "VISCOLOR.TXT")); err != nil {
+					continue
+				}
 				if s, err := OpenDir(filepath.Join(d, e.Name())); err == nil {
 					return s, nil
 				}

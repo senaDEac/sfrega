@@ -4,6 +4,7 @@
 package native
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -25,6 +26,8 @@ import (
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
+
+	xdraw "golang.org/x/image/draw"
 
 	"sfrega/internal/player"
 	"sfrega/internal/skins"
@@ -590,6 +593,33 @@ func blit(gtx layout.Context, src image.Image, dst image.Rectangle) {
 	cs.Pop()
 }
 
+var fitCache sync.Map // chave "nome|src|dxdy" -> *image.RGBA escalada
+
+// sprFit desenha o recorte src do bitmap name em dst, escalando a imagem
+// em Go quando necessário (o affine do Gio não escala de forma confiável
+// em todos os contextos de desenho).
+func (ui *uiState) sprFit(gtx layout.Context, name string, src, dst image.Rectangle) {
+	img := ui.skin.Spr(name, src)
+	if img == nil || dst.Empty() {
+		return
+	}
+	dx, dy := dst.Dx(), dst.Dy()
+	if img.Bounds().Dx() == dx && img.Bounds().Dy() == dy {
+		blit(gtx, img, dst)
+		return
+	}
+	key := fmt.Sprintf("%s|%d,%d,%d,%d|%dx%d", name,
+		src.Min.X, src.Min.Y, src.Max.X, src.Max.Y, dx, dy)
+	if v, ok := fitCache.Load(key); ok {
+		blit(gtx, v.(*image.RGBA), dst)
+		return
+	}
+	out := image.NewRGBA(image.Rect(0, 0, dx, dy))
+	xdraw.CatmullRom.Scale(out, out.Bounds(), img, img.Bounds(), xdraw.Over, nil)
+	fitCache.Store(key, out)
+	blit(gtx, out, dst)
+}
+
 // scrub registra drag horizontal em r e atualiza f.val (0..1) + commit.
 func (ui *uiState) scrub(gtx layout.Context, f *fader, r image.Rectangle) {
 	cs := clip.Rect(r).Push(gtx.Ops)
@@ -631,7 +661,7 @@ func (ui *uiState) spriteBtn(gtx layout.Context, b *uibtn, name string, dst imag
 		if down {
 			src = pressed
 		}
-		ui.spr(gtx, name, src, image.Rectangle{Max: dst.Size()})
+		ui.sprFit(gtx, name, src, image.Rectangle{Max: dst.Size()})
 	})
 }
 
