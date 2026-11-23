@@ -242,6 +242,17 @@ void sfrega_shade_toggle(int title_h)
     XFlush(dpy);
 }
 
+/* Atualiza a altura "cheia" guardada de uma janela com shade (ex.: após
+   toggle de escala 1x/2x, para o unshade restaurar a altura correta). */
+void sfrega_shade_full(const char *name, int h)
+{
+    for (int i = 0; i < shades_n; i++)
+        if (strcmp(shades[i].name, name) == 0) {
+            shades[i].full_h = h;
+            return;
+        }
+}
+
 /* ---------- geometria (posição das janelas) ---------- */
 
 static void geo_path(char *buf, size_t len)

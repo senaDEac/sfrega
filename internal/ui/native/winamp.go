@@ -1,7 +1,6 @@
 package native
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 
@@ -73,85 +72,69 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 
 	// ---- decorações: ícone de onda + logotipo "winamp" (TITLEBAR.png topo) ----
 	ui.sprFit(gtx, "TITLEBAR", R(27, 0, 16, 16), R(2, 2, 14, 14))
-	ui.sprFit(gtx, "TITLEBAR", R(136, 4, 64, 8), R(18, 5, 64, 8))
+	ui.sprFit(gtx, "TITLEBAR", R(144, 5, 40, 6), R(18, 5, 42, 7))
 
 	dragArea(gtx, R(0, 0, 275, 18))
 	dragAreaX11(gtx, R(0, 0, 275, 18), &ui.shadeMain)
 
-	// ---- transporte compacto (CBUTTONS escalado p/ 14px) ----
+	// ---- transporte: prev, play, pause, stop, next, eject (CBUTTONS 12px) ----
 	type tb struct {
 		b   *uibtn
 		x   int
 		col int
+		w   int
 		fn  func()
 	}
 	btns := []tb{
-		{&ui.btnPrev, 84, 0, func() { ui.p.Prev(); ui.p.Play() }},
-		{&ui.btnStop, 116, 69, func() { ui.p.Pause(); _ = ui.p.SeekFraction(0) }},
-		{&ui.btnNext, 132, 92, func() { ui.p.Next(); ui.p.Play() }},
+		{&ui.btnPrev, 64, 0, 23, func() { ui.p.Prev(); ui.p.Play() }},
+		{&ui.btnPlay, 77, 23, 23, func() { ui.p.Play() }},
+		{&ui.btnPause, 90, 46, 23, func() { ui.p.Pause() }},
+		{&ui.btnStop, 103, 69, 23, func() { ui.p.Pause(); _ = ui.p.SeekFraction(0) }},
+		{&ui.btnNext, 116, 92, 22, func() { ui.p.Next(); ui.p.Play() }},
 	}
 	for _, b := range btns {
-		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 2, 14, 14),
-			R(b.col, 0, 23, 18), R(b.col, 18, 23, 18)) {
+		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 3, 12, 12),
+			R(b.col, 0, b.w, 18), R(b.col, 18, b.w, 18)) {
 			b.fn()
 		}
 	}
-	// play/pause combinado em x=100
-	playCol := 23
-	if ui.p.Playing() {
-		playCol = 46
-	}
-	if ui.spriteBtn(gtx, &ui.btnPlay, "CBUTTONS", R(100, 2, 14, 14),
-		R(playCol, 0, 23, 18), R(playCol, 18, 23, 18)) {
-		if ui.p.Playing() {
-			ui.p.Pause()
-		} else {
-			ui.p.Play()
-		}
+	if ui.spriteBtn(gtx, &ui.btnEject, "CBUTTONS", R(141, 3, 12, 12),
+		R(114, 0, 22, 16), R(114, 16, 22, 16)) {
+		ui.p.Pause()
+		_ = ui.p.SeekFraction(0)
 	}
 
-	// ---- título da faixa ----
-	title := ui.p.TrackAt(ui.p.Index())
-	if title == "" {
-		title = "Winamp"
-	}
-	for i := len(title) - 1; i > 0; i-- {
-		if title[i] == '/' || title[i] == '\\' {
-			title = title[i+1:]
-			break
-		}
-	}
-	cs := clip.Rect(R(152, 1, 56, 16)).Push(gtx.Ops)
-	ui.textAt(gtx, ui.fontMono, unit.Sp(8), title,
-		color.NRGBA{R: 0xC8, G: 0xCE, B: 0xDC, A: 0xFF}, image.Pt(152, 5))
-	cs.Pop()
-
-	// ---- tempo decorrido ----
-	s := int(ui.p.Position().Seconds())
-	if s < 0 {
-		s = 0
-	}
-	ui.textAt(gtx, ui.fontMono, unit.Sp(8),
-		fmt.Sprintf("%d:%02d", s/60, s%60),
-		color.NRGBA{R: 0x86, G: 0x8E, B: 0xA0, A: 0xFF}, image.Pt(210, 5))
+	// ---- VU spectrum (placeholder: retângulo preto) ----
+	fillRect(gtx.Ops, R(158, 5, 36, 8), color.NRGBA{A: 0xFF})
 
 	// ---- volume (mini slider) ----
-	volR := R(224, 6, 26, 6)
+	volR := R(196, 6, 32, 6)
 	fillRect(gtx.Ops, volR, color.NRGBA{R: 0x18, G: 0x1C, B: 0x28, A: 0xFF})
-	vw := int(ui.volDrag.val * 26)
+	vw := int(ui.volDrag.val * 32)
 	if vw > 0 {
 		fillRect(gtx.Ops, image.Rect(volR.Min.X, volR.Min.Y, volR.Min.X+vw, volR.Max.Y),
 			color.NRGBA{R: 0x5E, G: 0xC8, B: 0x50, A: 0xFF})
 	}
-	ui.scrub(gtx, &ui.volDrag, R(224, 4, 26, 10))
+	ui.scrub(gtx, &ui.volDrag, R(196, 4, 32, 10))
 
 	// ---- EQ / PL ----
-	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(252, 3, 12, 12), ui.eqOpen,
+	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(230, 4, 12, 10), ui.eqOpen,
 		R(0, 62, 23, 11), R(46, 61, 23, 11), R(0, 73, 23, 11), R(46, 72, 23, 11),
 		func() { ui.toggleEQ() })
-	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(264, 3, 12, 12), ui.plOpen,
+	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(242, 4, 12, 10), ui.plOpen,
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
 		func() { ui.togglePL() })
+
+	// ---- 2x/1x (mesmo sprite do botão size da titlebar) ----
+	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(261, 3, 12, 12),
+		R(0, 18, 9, 9), R(9, 18, 9, 9)) {
+		h := unit.Dp(116)
+		if ui.shadeMain.on {
+			h = unit.Dp(18)
+		}
+		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), h)
+		wmShadeFull("sfrega", shadePx(ui.mainScale, 116))
+	}
 }
 
 // lcdContent desenha dígitos do tempo, título rolante e indicador play.
@@ -314,7 +297,7 @@ func (ui *uiState) transport(gtx layout.Context, R func(int, int, int, int) imag
 		{&ui.btnPlay, 39, 23, 23, func() { ui.p.Play() }},
 		{&ui.btnPause, 62, 46, 23, func() { ui.p.Pause() }},
 		{&ui.btnStop, 85, 69, 23, func() { ui.p.Pause(); _ = ui.p.SeekFraction(0) }},
-		{&ui.btnNext, 108, 92, 22, func() { ui.p.Next(); ui.p.Play() }},
+		{&ui.btnNext, 116, 92, 22, func() { ui.p.Next(); ui.p.Play() }},
 	}
 	for _, b := range btns {
 		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 88, b.w, 18),
