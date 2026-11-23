@@ -9,6 +9,9 @@ import (
 	"image/color"
 	"math"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -140,6 +143,35 @@ func beginScaledFrame(gtx layout.Context, scale int, logical image.Point) layout
 		op.Affine(f32.Affine2D{}.Scale(f32.Pt(0, 0), f32.Pt(float32(scale), float32(scale)))).Add(gtx.Ops)
 	}
 	return gtx
+}
+
+// configPath retorna ~/.config/sfrega/<name>.
+func configPath(name string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "/tmp"
+	}
+	return filepath.Join(home, ".config", "sfrega", name)
+}
+
+// loadMainScale lê a escala persistida da janela principal (1 ou 2).
+func loadMainScale() int {
+	b, err := os.ReadFile(configPath("scale.txt"))
+	if err != nil {
+		return 1
+	}
+	s, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || s < 1 {
+		return 1
+	}
+	return s
+}
+
+// saveMainScale grava a escala da janela principal para a próxima sessão.
+func saveMainScale(s int) {
+	p := configPath("scale.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(strconv.Itoa(s)+"\n"), 0o644)
 }
 
 // toggleWindowScale alterna a janela entre 1x e 2x. A chamada vai para uma
@@ -358,7 +390,7 @@ func Run(p *player.Player) error {
 	ui.volDrag.val = 1.0
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
 	ui.eqOn = true
-	ui.mainScale, ui.eqScale, ui.plScale = 1, 1, 1
+	ui.mainScale, ui.eqScale, ui.plScale = loadMainScale(), 1, 1
 	ui.plWidth, ui.plHeight = unit.Dp(280), unit.Dp(240)
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
@@ -378,7 +410,7 @@ func Run(p *player.Player) error {
 	ui.winMain.Option(
 		app.Title("sfrega"),
 		app.Decorated(false),
-		app.Size(unit.Dp(275), unit.Dp(116)),
+		app.Size(unit.Dp(275*ui.mainScale), unit.Dp(116*ui.mainScale)),
 	)
 
 	// X11/muffin: aplica _MOTIF_WM_HINTS assim que a janela aparece

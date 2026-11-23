@@ -37,6 +37,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	}
 	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(254, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
 		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), unit.Dp(116))
+		saveMainScale(ui.mainScale)
 	}
 	if ui.spriteBtn(gtx, &ui.btnClose, "TITLEBAR", R(264, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.winMain.Perform(system.ActionClose)
@@ -133,6 +134,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 			h = unit.Dp(18)
 		}
 		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), h)
+		saveMainScale(ui.mainScale)
 		wmShadeFull("sfrega", shadePx(ui.mainScale, 116))
 	}
 }
