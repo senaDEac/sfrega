@@ -11,7 +11,6 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
-
 )
 
 // Coordenadas extraídas da skin base-2.91 (MAIN 275x116).

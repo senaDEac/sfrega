@@ -375,19 +375,19 @@ void sfrega_resize(const char *name, int w, int h)
 }
 
 /* Alterna _NET_WM_STATE_ABOVE (always on top) via client message EWMH. */
-void sfrega_ontop(const char *name, int on)
+int sfrega_ontop(const char *name, int on)
 {
     if (!g_dpy)
         g_dpy = open_display();
     if (!g_dpy)
-        return;
+        return 0;
     Display *dpy = g_dpy;
     Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
     Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
     Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
     Window win = find_by_name(dpy, name, ncl, nwn, u8);
     if (win == None)
-        return;
+        return 0;
 
     Atom state = XInternAtom(dpy, "_NET_WM_STATE", False);
     Atom above = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
@@ -403,6 +403,7 @@ void sfrega_ontop(const char *name, int on)
     XSendEvent(dpy, DefaultRootWindow(dpy), False,
                SubstructureRedirectMask | SubstructureNotifyMask, &ev);
     XFlush(dpy);
+    return 1;
 }
 
 /* Atualiza a altura "cheia" guardada de uma janela com shade (ex.: após

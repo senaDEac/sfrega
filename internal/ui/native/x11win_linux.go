@@ -64,7 +64,7 @@ func wmResize(name string, w, h int) {
 	C.sfrega_resize(cs, C.int(w), C.int(h))
 }
 
-func wmOntop(name string, on bool) {
+func wmOntop(name string, on bool) bool {
 	wmMu.Lock()
 	defer wmMu.Unlock()
 	cs := C.CString(name)
@@ -73,7 +73,7 @@ func wmOntop(name string, on bool) {
 	if on {
 		v = 1
 	}
-	C.sfrega_ontop(cs, v)
+	return C.sfrega_ontop(cs, v) != 0
 }
 
 func wmCenter(name string) bool {

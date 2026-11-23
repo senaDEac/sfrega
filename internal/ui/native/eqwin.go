@@ -48,10 +48,12 @@ func (ui *uiState) toggleEQ() {
 		)
 		ui.winEQ = w
 		ui.eqOpen = true
+		saveOpenWindows(true, ui.plOpen, ui.menuOpen)
 		go ui.eqLoop()
 		return
 	}
 	ui.eqOpen = false
+	saveOpenWindows(false, ui.plOpen, ui.menuOpen)
 	ui.winEQ.Perform(system.ActionClose)
 }
 
@@ -68,10 +70,12 @@ func (ui *uiState) togglePL() {
 		)
 		ui.winPL = w
 		ui.plOpen = true
+		saveOpenWindows(ui.eqOpen, true, ui.menuOpen)
 		go ui.plLoop()
 		return
 	}
 	ui.plOpen = false
+	saveOpenWindows(ui.eqOpen, false, ui.menuOpen)
 	ui.winPL.Perform(system.ActionClose)
 	ui.winPL = nil
 }
@@ -88,6 +92,8 @@ func (ui *uiState) eqLoop() {
 			ui.winEQ = nil
 			ui.eqOpen = false
 			ui.eqPresOpen = false
+			delete(ui.ontopDone, "Equalizador")
+			saveOpenWindows(false, ui.plOpen, ui.menuOpen)
 			ui.mu.Unlock()
 			return
 		case app.FrameEvent:

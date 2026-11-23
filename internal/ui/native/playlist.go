@@ -52,6 +52,8 @@ func (ui *uiState) plLoop() {
 			ui.mu.Lock()
 			ui.winPL = nil
 			ui.plMenuOpen = -1
+			delete(ui.ontopDone, "Playlist")
+			saveOpenWindows(ui.eqOpen, false, ui.menuOpen)
 			ui.mu.Unlock()
 			return
 		case app.FrameEvent:
@@ -100,10 +102,6 @@ func (ui *uiState) plTopBar(gtx layout.Context, winW int, R func(int, int, int, 
 		ui.spr(gtx, "PLEDIT", R(127, 21, 25, 20), R(x, 0, w, 20))
 	}
 	ui.spr(gtx, "PLEDIT", R(153, 21, 25, 20), R(winW-25, 0, 25, 20))
-
-	// título
-	ui.textAt(gtx, ui.fontMono, unit.Sp(8), "Playlist",
-		color.NRGBA{R: 0, G: 0xFF, B: 0, A: 0xFF}, image.Pt(30, 5))
 
 	dragArea(gtx, R(0, 0, winW-32, plTopH))
 	dragAreaX11(gtx, R(0, 0, winW-32, plTopH), &ui.shadePL)

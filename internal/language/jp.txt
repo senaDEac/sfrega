@@ -1,0 +1,10 @@
+lang.name=日本語
+menu.file=ファイル
+menu.file.exit=終了
+menu.ontop=ツイントップに表示
+menu.config=設定
+menu.about=情報
+about.title=sfrega
+about.body=sfrega — Winamp スタイルのミュージックプレーヤー。
+言語：Go で作成。Windows、Linux、macOS、Android、iOS に対応。
+about.close=閉じる

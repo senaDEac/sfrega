@@ -53,13 +53,18 @@ func Set(l string) {
 		return
 	}
 	m := map[string]string{}
+	last := ""
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 		if k, v, ok := strings.Cut(line, "="); ok {
-			m[strings.TrimSpace(k)] = strings.TrimSpace(v)
+			k = strings.TrimSpace(k)
+			m[k] = strings.TrimSpace(v)
+			last = k
+		} else if last != "" {
+			m[last] += "\n" + line
 		}
 	}
 	current, table = l, m
@@ -82,6 +87,21 @@ func T(key string) string {
 		return v
 	}
 	return key
+}
+
+// Name retorna o nome de exibição do idioma (chave lang.name do arquivo);
+// cai para o código se não houver.
+func Name(l string) string {
+	data, err := fs.ReadFile(l + ".txt")
+	if err != nil {
+		return l
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if k, v, ok := strings.Cut(line, "="); ok && strings.TrimSpace(k) == "lang.name" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return l
 }
 
 // Available retorna os idiomas embutidos (sem a extensão).

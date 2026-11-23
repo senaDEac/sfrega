@@ -37,6 +37,10 @@ import (
 )
 
 // Paleta Winamp 2.x (skin clássica cinza).
+
+// ontopWinNames são as janelas que seguem o flag always-on-top.
+var ontopWinNames = []string{"sfrega", "Equalizador", "Playlist", "Menu"}
+
 var (
 	colWindowTop   = color.NRGBA{R: 0xC0, G: 0xC0, B: 0xC0, A: 0xFF}
 	colWindowBot   = color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF}
@@ -65,21 +69,24 @@ var (
 
 // uiState concentra widgets e fontes.
 type uiState struct {
-	mu       sync.Mutex // protege winEQ/winPL
-	p        *player.Player
-	skin     *skins.Skin
-	shaper   *text.Shaper
-	fontUI   font.Font
-	fontBold font.Font
-	fontMono font.Font
+	mu           sync.Mutex // protege winEQ/winPL
+	p            *player.Player
+	skin         *skins.Skin
+	shaper       *text.Shaper
+	fontUI       font.Font
+	fontBold     font.Font
+	fontMono     font.Font
+	fontMenu     font.Font
+	fontMenuBold font.Font
 
 	// janelas
-	winMain  *app.Window
-	winEQ    *app.Window
-	winPL    *app.Window
-	winMenu  *app.Window
-	eqOpen   bool
-	plOpen   bool
+	winMain *app.Window
+	winEQ     *app.Window
+	winPL     *app.Window
+	winMenu   *app.Window
+	eqOpen    bool
+	plOpen    bool
+	menuOpen  bool
 
 	mainScale, eqScale, plScale int
 	plWidth, plHeight           unit.Dp
@@ -123,6 +130,8 @@ type uiState struct {
 
 	// menu suspenso do winshade (ícone de onda → janela Menu)
 	btnWave      uibtn
+	btnMenuMin   uibtn
+	btnMenuSize  uibtn
 	btnMenuClose uibtn
 	menuBtns     [10]uibtn
 	menuFile     bool
@@ -130,6 +139,13 @@ type uiState struct {
 	menuLang     bool
 	menuAbout    bool
 	alwaysOnTop  bool
+	menuScale    int
+	menuScroll   int
+	menuBarDown  bool
+	menuBarGrab  float32
+	menuWheelTag event.Tag
+	menuBarTag   event.Tag
+	ontopDone    map[string]bool
 
 	shuffle, repeat bool
 	marqueeX        int
@@ -140,6 +156,7 @@ type uiState struct {
 type uibtn struct {
 	tag  event.Tag
 	down bool
+	over bool
 }
 
 // beginScaledFrame configura o sistema de coordenadas lógico da janela e
@@ -217,6 +234,42 @@ func saveOntop(on bool) {
 		v = "1\n"
 	}
 	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadOpenWindows lê quais janelas secundárias estavam abertas.
+func loadOpenWindows() (eq, pl, menu bool) {
+	b, err := os.ReadFile(configPath("windows.txt"))
+	if err != nil {
+		return false, false, false
+	}
+	for _, f := range strings.Fields(string(b)) {
+		switch f {
+		case "eq":
+			eq = true
+		case "pl":
+			pl = true
+		case "menu":
+			menu = true
+		}
+	}
+	return
+}
+
+// saveOpenWindows grava quais janelas secundárias estão abertas.
+func saveOpenWindows(eq, pl, menu bool) {
+	var names []string
+	if eq {
+		names = append(names, "eq")
+	}
+	if pl {
+		names = append(names, "pl")
+	}
+	if menu {
+		names = append(names, "menu")
+	}
+	p := configPath("windows.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(strings.Join(names, " ")+"\n"), 0o644)
 }
 
 // toggleWindowScale alterna a janela entre 1x e 2x. A chamada vai para uma
@@ -377,7 +430,12 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 				clicked = true
 			}
 			b.down = false
-		case pointer.Cancel, pointer.Leave:
+		case pointer.Enter:
+			b.over = true
+		case pointer.Leave:
+			b.over = false
+			b.down = false
+		case pointer.Cancel:
 			b.down = false
 		}
 	}
@@ -427,16 +485,20 @@ func Run(p *player.Player) error {
 	faces, _ := loadFonts()
 	shaper := text.NewShaper(text.WithCollection(faces))
 	ui := &uiState{
-		p:          p,
-		skin:       skin,
-		shaper:     shaper,
-		fontUI:     font.Font{Typeface: "DejaVu Sans"},
-		fontBold:   font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
-		fontMono:   font.Font{Typeface: "DejaVu Sans Mono"},
-		plSel:      -1,
-		plMenuOpen: -1,
+		p:            p,
+		skin:         skin,
+		shaper:       shaper,
+		fontUI:       font.Font{Typeface: "DejaVu Sans"},
+		fontBold:     font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
+		fontMono:     font.Font{Typeface: "DejaVu Sans Mono"},
+		fontMenu:     font.Font{Typeface: "Liberation Sans"},
+		fontMenuBold: font.Font{Typeface: "Liberation Sans", Weight: font.Bold},
+		plSel:        -1,
+		plMenuOpen:   -1,
 	}
 	ui.volDrag.val = 1.0
+	ui.menuScale = 1
+	ui.ontopDone = map[string]bool{}
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
 	ui.eqOn = true
 	ui.mainScale, ui.eqScale, ui.plScale = loadMainScale(), 1, 1
@@ -474,6 +536,7 @@ func Run(p *player.Player) error {
 	go func() {
 		t := time.NewTicker(30 * time.Millisecond)
 		ontopTicks := 0
+		ontopPoll := 0
 		for range t.C {
 			wmNoDecorations()
 			wmRestoreGeometry()
@@ -488,6 +551,31 @@ func Run(p *player.Player) error {
 					ontopPending = false
 				}
 			}
+			ui.mu.Lock()
+			ontopPoll++
+			if ui.alwaysOnTop && ontopPoll%10 == 0 {
+				for _, n := range ontopWinNames {
+					if !ui.ontopDone[n] && wmOntop(n, true) {
+						ui.ontopDone[n] = true
+					}
+				}
+			}
+			ui.mu.Unlock()
+		}
+	}()
+
+	// reabre as janelas secundárias que estavam abertas na sessão anterior
+	go func() {
+		time.Sleep(700 * time.Millisecond)
+		eq, pl, menu := loadOpenWindows()
+		if eq {
+			ui.toggleEQ()
+		}
+		if pl {
+			ui.togglePL()
+		}
+		if menu {
+			ui.toggleMenu()
 		}
 	}()
 
@@ -501,6 +589,9 @@ func Run(p *player.Player) error {
 			}
 			if ui.winPL != nil {
 				ui.winPL.Invalidate()
+			}
+			if ui.winMenu != nil {
+				ui.winMenu.Invalidate()
 			}
 			ui.mu.Unlock()
 		}
