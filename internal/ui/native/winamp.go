@@ -19,6 +19,7 @@ import (
 func (ui *uiState) layoutMain(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
+	ui.shadeMain.arm(shadePx(ui.mainScale, 18))
 	if ui.shadeMain.on {
 		ui.shadeBar(gtx, R(0, 0, 275, 18))
 		return
@@ -30,8 +31,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, 222, 11)) // contend
 	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))         // option
 	dragArea(gtx, R(16, 0, 228, 11))
-	dragAreaX11(gtx, R(16, 0, 228, 11))
-	ui.shadeMain.area(gtx, R(16, 0, 228, 11), shadePx(ui.mainScale, 18))
+	dragAreaX11(gtx, R(16, 0, 228, 11), &ui.shadeMain)
 	if ui.spriteBtn(gtx, &ui.btnMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winMain)
 	}
@@ -69,8 +69,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1), color.NRGBA{R: 0x3A, G: 0x3E, B: 0x4A, A: 0xFF})
 
 	dragArea(gtx, image.Rect(2, 0, 273, 18))
-	dragAreaX11(gtx, image.Rect(2, 0, 273, 18))
-	ui.shadeMain.area(gtx, image.Rect(2, 0, 273, 18), shadePx(ui.mainScale, 18))
+	dragAreaX11(gtx, image.Rect(2, 0, 273, 18), &ui.shadeMain)
 
 	title := ui.p.TrackAt(ui.p.Index())
 	if title == "" {

@@ -140,6 +140,8 @@ func (ui *uiState) eqBtn4(gtx layout.Context, b *uibtn, dst image.Rectangle, n, 
 func (ui *uiState) layoutEQ(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
+	ui.shadeEQ.arm(shadePx(ui.eqScale, 14))
+
 	// fundo: EQ_WINDOW_BACKGROUND = EQMAIN(0,0,275,116)
 	ui.spr(gtx, "EQMAIN", R(0, 0, 275, 116), R(0, 0, 275, 116))
 
@@ -149,10 +151,8 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 
 	dragArea(gtx, R(16, 0, 44, 14))
 	dragArea(gtx, R(208, 0, 36, 14))
-	dragAreaX11(gtx, R(16, 0, 44, 14))
-	dragAreaX11(gtx, R(208, 0, 36, 14))
-	ui.shadeEQ.area(gtx, R(16, 0, 44, 14), shadePx(ui.eqScale, 14))
-	ui.shadeEQ.area(gtx, R(208, 0, 36, 14), shadePx(ui.eqScale, 14))
+	dragAreaX11(gtx, R(16, 0, 44, 14), &ui.shadeEQ)
+	dragAreaX11(gtx, R(208, 0, 36, 14), &ui.shadeEQ)
 	if ui.spriteBtn(gtx, &ui.btnEQMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winEQ)
 	}

@@ -81,6 +81,7 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 	botY := winH - plBotH
 
+	ui.shadePL.arm(shadePx(ui.plScale, plTopH))
 	ui.plTopBar(gtx, winW, R)
 	ui.plMiddle(gtx, winW, winH, botY, tracks)
 	ui.plBottom(gtx, winW, winH, botY, tracks)
@@ -105,8 +106,7 @@ func (ui *uiState) plTopBar(gtx layout.Context, winW int, R func(int, int, int, 
 		color.NRGBA{R: 0, G: 0xFF, B: 0, A: 0xFF}, image.Pt(30, 5))
 
 	dragArea(gtx, R(0, 0, winW-32, plTopH))
-	dragAreaX11(gtx, R(0, 0, winW-32, plTopH))
-	ui.shadePL.area(gtx, R(0, 0, winW-32, plTopH), shadePx(ui.plScale, plTopH))
+	dragAreaX11(gtx, R(0, 0, winW-32, plTopH), &ui.shadePL)
 	if ui.spriteBtn(gtx, &ui.btnPLMin, "TITLEBAR", R(winW-31, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winPL)
 	}
