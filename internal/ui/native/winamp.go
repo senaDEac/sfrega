@@ -71,8 +71,12 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y),
 		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
 
-	dragArea(gtx, R(0, 0, 200, 18))
-	dragAreaX11(gtx, R(0, 0, 200, 18), &ui.shadeMain)
+	// ---- decorações: ícone de onda + logotipo "winamp" (TITLEBAR.png topo) ----
+	ui.sprFit(gtx, "TITLEBAR", R(0, 0, 16, 14), R(2, 2, 14, 14))
+	ui.sprFit(gtx, "TITLEBAR", R(136, 4, 64, 8), R(18, 5, 64, 8))
+
+	dragArea(gtx, R(0, 0, 275, 18))
+	dragAreaX11(gtx, R(0, 0, 275, 18), &ui.shadeMain)
 
 	// ---- transporte compacto (CBUTTONS escalado p/ 14px) ----
 	type tb struct {
@@ -82,9 +86,9 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 		fn  func()
 	}
 	btns := []tb{
-		{&ui.btnPrev, 4, 0, func() { ui.p.Prev(); ui.p.Play() }},
-		{&ui.btnStop, 48, 69, func() { ui.p.Pause(); _ = ui.p.SeekFraction(0) }},
-		{&ui.btnNext, 64, 92, func() { ui.p.Next(); ui.p.Play() }},
+		{&ui.btnPrev, 84, 0, func() { ui.p.Prev(); ui.p.Play() }},
+		{&ui.btnStop, 116, 69, func() { ui.p.Pause(); _ = ui.p.SeekFraction(0) }},
+		{&ui.btnNext, 132, 92, func() { ui.p.Next(); ui.p.Play() }},
 	}
 	for _, b := range btns {
 		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 2, 14, 14),
@@ -92,12 +96,12 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 			b.fn()
 		}
 	}
-	// play/pause combinado em x=32
+	// play/pause combinado em x=100
 	playCol := 23
 	if ui.p.Playing() {
 		playCol = 46
 	}
-	if ui.spriteBtn(gtx, &ui.btnPlay, "CBUTTONS", R(32, 2, 14, 14),
+	if ui.spriteBtn(gtx, &ui.btnPlay, "CBUTTONS", R(100, 2, 14, 14),
 		R(playCol, 0, 23, 18), R(playCol, 18, 23, 18)) {
 		if ui.p.Playing() {
 			ui.p.Pause()
@@ -117,9 +121,9 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 			break
 		}
 	}
-	cs := clip.Rect(R(82, 1, 92, 16)).Push(gtx.Ops)
+	cs := clip.Rect(R(152, 1, 56, 16)).Push(gtx.Ops)
 	ui.textAt(gtx, ui.fontMono, unit.Sp(8), title,
-		color.NRGBA{R: 0xC8, G: 0xCE, B: 0xDC, A: 0xFF}, image.Pt(82, 5))
+		color.NRGBA{R: 0xC8, G: 0xCE, B: 0xDC, A: 0xFF}, image.Pt(152, 5))
 	cs.Pop()
 
 	// ---- tempo decorrido ----
@@ -129,23 +133,23 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	}
 	ui.textAt(gtx, ui.fontMono, unit.Sp(8),
 		fmt.Sprintf("%d:%02d", s/60, s%60),
-		color.NRGBA{R: 0x86, G: 0x8E, B: 0xA0, A: 0xFF}, image.Pt(176, 5))
+		color.NRGBA{R: 0x86, G: 0x8E, B: 0xA0, A: 0xFF}, image.Pt(210, 5))
 
 	// ---- volume (mini slider) ----
-	volR := R(196, 6, 34, 6)
+	volR := R(224, 6, 26, 6)
 	fillRect(gtx.Ops, volR, color.NRGBA{R: 0x18, G: 0x1C, B: 0x28, A: 0xFF})
-	vw := int(ui.volDrag.val * 34)
+	vw := int(ui.volDrag.val * 26)
 	if vw > 0 {
 		fillRect(gtx.Ops, image.Rect(volR.Min.X, volR.Min.Y, volR.Min.X+vw, volR.Max.Y),
 			color.NRGBA{R: 0x5E, G: 0xC8, B: 0x50, A: 0xFF})
 	}
-	ui.scrub(gtx, &ui.volDrag, R(196, 4, 34, 10))
+	ui.scrub(gtx, &ui.volDrag, R(224, 4, 26, 10))
 
 	// ---- EQ / PL ----
-	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(234, 3, 16, 12), ui.eqOpen,
+	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(252, 3, 12, 12), ui.eqOpen,
 		R(0, 62, 23, 11), R(46, 61, 23, 11), R(0, 73, 23, 11), R(46, 72, 23, 11),
 		func() { ui.toggleEQ() })
-	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(252, 3, 16, 12), ui.plOpen,
+	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(264, 3, 12, 12), ui.plOpen,
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
 		func() { ui.togglePL() })
 }
