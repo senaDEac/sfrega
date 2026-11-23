@@ -72,7 +72,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
 
 	// ---- decorações: ícone de onda + logotipo "winamp" (TITLEBAR.png topo) ----
-	ui.sprFit(gtx, "TITLEBAR", R(0, 27, 16, 16), R(2, 2, 14, 14))
+	ui.sprFit(gtx, "TITLEBAR", R(27, 0, 16, 16), R(2, 2, 14, 14))
 	ui.sprFit(gtx, "TITLEBAR", R(136, 4, 64, 8), R(18, 5, 64, 8))
 
 	dragArea(gtx, R(0, 0, 275, 18))
