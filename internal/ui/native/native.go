@@ -238,7 +238,7 @@ type shadeClk struct {
 	on   bool
 }
 
-// area registra a hit-area de shade. titlePx é a altura da titlebar em pixels.
+// area registra a hit-area de shade. titlePx é a altura da barra em pixels.
 func (sc *shadeClk) area(gtx layout.Context, r image.Rectangle, titlePx int) {
 	if r.Empty() || titlePx <= 0 {
 		return
@@ -270,12 +270,12 @@ func (sc *shadeClk) area(gtx layout.Context, r image.Rectangle, titlePx int) {
 	}
 }
 
-// shadePx converte a altura lógica da titlebar (~14px) para pixels na escala atual.
-func shadePx(scale int) int {
+// shadePx converte altura lógica da barra de shade para pixels na escala atual.
+func shadePx(scale, logical int) int {
 	if scale < 1 {
 		scale = 1
 	}
-	return 14 * scale
+	return logical * scale
 }
 
 // button registra hit-area, processa press/release e desenha via face.

@@ -19,6 +19,11 @@ import (
 func (ui *uiState) layoutMain(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
+	if ui.shadeMain.on {
+		ui.shadeBar(gtx, R(0, 0, 275, 18))
+		return
+	}
+
 	ui.spr(gtx, "MAIN", R(0, 0, 275, 116), R(0, 0, 275, 116))
 
 	// ---- titlebar ----
@@ -26,7 +31,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))         // option
 	dragArea(gtx, R(16, 0, 228, 11))
 	dragAreaX11(gtx, R(16, 0, 228, 11))
-	ui.shadeMain.area(gtx, R(16, 0, 228, 11), shadePx(ui.mainScale))
+	ui.shadeMain.area(gtx, R(16, 0, 228, 11), shadePx(ui.mainScale, 18))
 	if ui.spriteBtn(gtx, &ui.btnMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winMain)
 	}
@@ -51,6 +56,36 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	ui.posBar(gtx, R)
 	ui.transport(gtx, R)
 	ui.shuffleRepeat(gtx, R)
+}
+
+// shadeBar desenha a barra fina do modo "window shade" (estilo Winamp 5):
+// faixa cinza-azulada com bordas laranja e o título da faixa atual.
+func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
+	bg := color.NRGBA{R: 0x76, G: 0x7C, B: 0x8A, A: 0xFF}
+	edge := color.NRGBA{R: 0xD2, G: 0x8E, B: 0x52, A: 0xFF}
+	fillRect(gtx.Ops, r, bg)
+	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Min.X+2, r.Max.Y), edge)
+	fillRect(gtx.Ops, image.Rect(r.Max.X-2, r.Min.Y, r.Max.X, r.Max.Y), edge)
+	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1), color.NRGBA{R: 0x3A, G: 0x3E, B: 0x4A, A: 0xFF})
+
+	dragArea(gtx, image.Rect(2, 0, 273, 18))
+	dragAreaX11(gtx, image.Rect(2, 0, 273, 18))
+	ui.shadeMain.area(gtx, image.Rect(2, 0, 273, 18), shadePx(ui.mainScale, 18))
+
+	title := ui.p.TrackAt(ui.p.Index())
+	if title == "" {
+		title = "sfrega"
+	}
+	for i := len(title) - 1; i > 0; i-- {
+		if title[i] == '/' || title[i] == '\\' {
+			title = title[i+1:]
+			break
+		}
+	}
+	cs := clip.Rect(image.Rect(10, 0, 265, 18)).Push(gtx.Ops)
+	ui.textAt(gtx, ui.fontMono, unit.Sp(8), title,
+		color.NRGBA{R: 0x23, G: 0x26, B: 0x30, A: 0xFF}, image.Pt(10, 5))
+	cs.Pop()
 }
 
 // lcdContent desenha dígitos do tempo, título rolante e indicador play.
