@@ -47,3 +47,11 @@ func wmShadeFull(name string, h int) {
 	defer C.free(unsafe.Pointer(cs))
 	C.sfrega_shade_full(cs, C.int(h))
 }
+
+func wmShadeSet(name string, titleH, fullH int) bool {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	cs := C.CString(name)
+	defer C.free(unsafe.Pointer(cs))
+	return C.sfrega_shade_set(cs, C.int(titleH), C.int(fullH)) != 0
+}

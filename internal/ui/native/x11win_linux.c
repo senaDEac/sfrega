@@ -38,6 +38,8 @@ static const unsigned long motif_hints[5] = { 2 /*MWM_HINTS_DECORATIONS*/, 0, 0,
 
 static const char *window_names[] = { "sfrega", "Equalizador", "Playlist" };
 
+static Window find_by_name(Display *dpy, const char *want, Atom ncl, Atom nwn, Atom u8);
+
 /* Janela "nossa" já está sem frame quando o parent é o root
  * (muffin reparenta em frame só quando decorada). Stateless —
  * imune a reuso de XID. */
@@ -240,6 +242,53 @@ void sfrega_shade_toggle(int title_h)
     }
     free(name);
     XFlush(dpy);
+}
+
+/* Aplica shade numa janela pelo nome (usado no startup p/ restaurar o
+   estado shade persistido — não depende da posição do ponteiro).
+   Retorna 1 quando a janela foi encontrada/encontrada já na altura. */
+int sfrega_shade_set(const char *name, int title_h, int full_h)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return 0;
+    Display *dpy = g_dpy;
+
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Window w = find_by_name(dpy, name, ncl, nwn, u8);
+    if (w == None)
+        return 0;
+
+    XWindowAttributes attr;
+    if (!XGetWindowAttributes(dpy, w, &attr))
+        return 0;
+    if (attr.height <= title_h * 2) {
+        /* já está com altura de shade — marca estado p/ unshade futuro */
+        for (int i = 0; i < shades_n; i++)
+            if (strcmp(shades[i].name, name) == 0)
+                shades[i].shaded = 1;
+        return 1;
+    }
+
+    int idx = -1;
+    for (int i = 0; i < shades_n; i++)
+        if (strcmp(shades[i].name, name) == 0)
+            idx = i;
+    if (idx < 0) {
+        if (shades_n >= 8)
+            return 0;
+        idx = shades_n++;
+        snprintf(shades[idx].name, sizeof(shades[idx].name), "%s", name);
+    }
+    shades[idx].full_h = full_h;
+    shades[idx].shaded = 1;
+    /* Gio pode reverter o resize inicial — o caller repete até confirmar. */
+    XResizeWindow(dpy, w, attr.width, title_h);
+    XFlush(dpy);
+    return 0;
 }
 
 /* Atualiza a altura "cheia" guardada de uma janela com shade (ex.: após

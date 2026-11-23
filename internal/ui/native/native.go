@@ -174,6 +174,23 @@ func saveMainScale(s int) {
 	_ = os.WriteFile(p, []byte(strconv.Itoa(s)+"\n"), 0o644)
 }
 
+// loadShade lê se a janela principal deve abrir em modo shade.
+func loadShade() bool {
+	b, err := os.ReadFile(configPath("shade.txt"))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveShade grava o estado shade da janela principal.
+func saveShade(on bool) {
+	p := configPath("shade.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
 // toggleWindowScale alterna a janela entre 1x e 2x. A chamada vai para uma
 // goroutine porque Window.Option precisa retornar à thread de eventos.
 func toggleWindowScale(scale *int, w *app.Window, width, height unit.Dp) {
@@ -249,6 +266,9 @@ func dragAreaX11(gtx layout.Context, r image.Rectangle, sc *shadeClk) {
 			if e.Buttons == pointer.ButtonPrimary {
 				if sc != nil && sc.dblClick(e.Position) {
 					sc.on = !sc.on
+					if sc.onChange != nil {
+						sc.onChange(sc.on)
+					}
 					wmShadeToggle(sc.px)
 				} else {
 					dragActive = true
@@ -273,10 +293,11 @@ func dragAreaX11(gtx layout.Context, r image.Rectangle, sc *shadeClk) {
 // shadeClk detecta duplo-clique numa área de título (dentro de dragAreaX11)
 // e alterna o "winshade" (janela reduzida à altura da barra). Um por janela.
 type shadeClk struct {
-	last time.Time
-	x, y float32
-	on   bool
-	px   int // altura da barra de shade em pixels
+	last     time.Time
+	x, y     float32
+	on       bool
+	px       int // altura da barra de shade em pixels
+	onChange func(on bool)
 }
 
 // arm define a altura de shade em pixels (chamado a cada frame).
@@ -413,6 +434,11 @@ func Run(p *player.Player) error {
 		app.Size(unit.Dp(275*ui.mainScale), unit.Dp(116*ui.mainScale)),
 	)
 
+	// restaura estado shade persistido
+	ui.shadeMain.on = loadShade()
+	ui.shadeMain.onChange = func(on bool) { saveShade(on) }
+	shadePending := ui.shadeMain.on
+
 	// X11/muffin: aplica _MOTIF_WM_HINTS assim que a janela aparece
 	// em _NET_CLIENT_LIST — polling curto evita a piscada de titlebar.
 	go func() {
@@ -420,6 +446,10 @@ func Run(p *player.Player) error {
 		for range t.C {
 			wmNoDecorations()
 			wmRestoreGeometry()
+			if shadePending && wmShadeSet("sfrega",
+				shadePx(ui.mainScale, 18), shadePx(ui.mainScale, 116)) {
+				shadePending = false
+			}
 		}
 	}()
 
