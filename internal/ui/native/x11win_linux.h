@@ -10,5 +10,6 @@ int sfrega_shade_set(const char *name, int title_h, int full_h);
 void sfrega_resize(const char *name, int w, int h);
 void sfrega_ontop(const char *name, int on);
 int sfrega_center(const char *name);
+int sfrega_below(const char *name, const char *ref, int gap);
 
 #endif

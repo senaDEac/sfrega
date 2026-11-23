@@ -11,3 +11,4 @@ func wmShadeSet(string, int, int) bool { return false }
 func wmResize(string, int, int)        {}
 func wmOntop(string, bool)             {}
 func wmCenter(string) bool              { return false }
+func wmBelow(string, string, int) bool   { return false }

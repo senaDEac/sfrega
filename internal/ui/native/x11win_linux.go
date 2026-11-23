@@ -83,3 +83,13 @@ func wmCenter(name string) bool {
 	defer C.free(unsafe.Pointer(cs))
 	return C.sfrega_center(cs) != 0
 }
+
+func wmBelow(name, ref string, gap int) bool {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	cn := C.CString(name)
+	defer C.free(unsafe.Pointer(cn))
+	cr := C.CString(ref)
+	defer C.free(unsafe.Pointer(cr))
+	return C.sfrega_below(cn, cr, C.int(gap)) != 0
+}

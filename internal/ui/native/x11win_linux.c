@@ -318,6 +318,43 @@ int sfrega_center(const char *name)
     return 1;
 }
 
+/* Posiciona a janela `name` 50px abaixo de `ref`, centralizada
+ * horizontalmente em relação a ela. Retorna 1 se ambas encontradas. */
+int sfrega_below(const char *name, const char *ref, int gap)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return 0;
+    Display *dpy = g_dpy;
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Window w = find_by_name(dpy, name, ncl, nwn, u8);
+    Window r = find_by_name(dpy, ref, ncl, nwn, u8);
+    if (w == None || r == None)
+        return 0;
+    XWindowAttributes wa, ra;
+    if (!XGetWindowAttributes(dpy, w, &wa) || !XGetWindowAttributes(dpy, r, &ra))
+        return 0;
+    Window junk;
+    int rx, ry;
+    if (!XTranslateCoordinates(dpy, r, DefaultRootWindow(dpy), 0, 0, &rx, &ry, &junk))
+        return 0;
+    int x = rx + (ra.width - wa.width) / 2;
+    int y = ry + ra.height + gap;
+    /* mantém dentro da tela */
+    int dw = DisplayWidth(dpy, DefaultScreen(dpy));
+    int dh = DisplayHeight(dpy, DefaultScreen(dpy));
+    if (x < 0) x = 0;
+    if (x + wa.width > dw) x = dw - wa.width;
+    if (y + wa.height > dh) y = dh - wa.height;
+    if (y < 0) y = 0;
+    XMoveWindow(dpy, w, x, y);
+    XFlush(dpy);
+    return 1;
+}
+
 /* Redimensiona uma janela nossa pelo nome (usado p/ esticar a janela
    shade quando o menu suspenso está aberto). */
 void sfrega_resize(const char *name, int w, int h)

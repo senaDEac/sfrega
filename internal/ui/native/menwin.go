@@ -43,13 +43,13 @@ func (ui *uiState) toggleMenu() {
 	ui.winMenu = nil
 }
 
-// menuCenterLoop centraliza a janela assim que ela aparece no WM.
+// menuCenterLoop posiciona a janela 50px abaixo do player assim que ela
+// aparece no WM.
 func (ui *uiState) menuCenterLoop() {
 	for i := 0; i < 60; i++ {
-		if wmCenter("Menu") {
+		if wmBelow("Menu", "sfrega", 50) {
 			return
 		}
-		// dorme ~50ms via ticker simples
 		select {
 		case <-time.After(50 * time.Millisecond):
 		}
