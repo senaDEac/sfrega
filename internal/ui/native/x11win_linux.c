@@ -385,25 +385,44 @@ int sfrega_ontop(const char *name, int on)
     Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
     Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
     Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
-    Window win = find_by_name(dpy, name, ncl, nwn, u8);
-    if (win == None)
-        return 0;
-
     Atom state = XInternAtom(dpy, "_NET_WM_STATE", False);
     Atom above = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
-    XEvent ev;
-    memset(&ev, 0, sizeof(ev));
-    ev.xclient.type = ClientMessage;
-    ev.xclient.window = win;
-    ev.xclient.message_type = state;
-    ev.xclient.format = 32;
-    ev.xclient.data.l[0] = on ? 1 : 0; /* _NET_WM_STATE_ADD : REMOVE */
-    ev.xclient.data.l[1] = above;
-    ev.xclient.data.l[2] = 0;
-    XSendEvent(dpy, DefaultRootWindow(dpy), False,
-               SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+
+    /* aplica a TODAS as janelas com o nome (pode haver duplicatas/stale) */
+    Window root = DefaultRootWindow(dpy);
+    Atom actual;
+    int fmt;
+    unsigned long n = 0, after = 0;
+    unsigned char *data = NULL;
+    int sent = 0;
+    XGetWindowProperty(dpy, root, ncl, 0, 1024, False, AnyPropertyType,
+                       &actual, &fmt, &n, &after, &data);
+    if (data) {
+        Window *clients = (Window *)data;
+        for (unsigned long i = 0; i < n; i++) {
+            char *wname = window_name(dpy, clients[i], nwn, u8);
+            if (!wname || strcmp(wname, name) != 0) {
+                free(wname);
+                continue;
+            }
+            free(wname);
+            XEvent ev;
+            memset(&ev, 0, sizeof(ev));
+            ev.xclient.type = ClientMessage;
+            ev.xclient.window = clients[i];
+            ev.xclient.message_type = state;
+            ev.xclient.format = 32;
+            ev.xclient.data.l[0] = on ? 1 : 0;
+            ev.xclient.data.l[1] = above;
+            ev.xclient.data.l[2] = 0;
+            XSendEvent(dpy, root, False,
+                       SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+            sent++;
+        }
+        XFree(data);
+    }
     XFlush(dpy);
-    return 1;
+    return sent > 0;
 }
 
 /* Atualiza a altura "cheia" guardada de uma janela com shade (ex.: após

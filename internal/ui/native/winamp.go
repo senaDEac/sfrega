@@ -313,7 +313,7 @@ func (ui *uiState) transport(gtx layout.Context, R func(int, int, int, int) imag
 		{&ui.btnPlay, 39, 23, 23, func() { ui.p.Play() }},
 		{&ui.btnPause, 62, 46, 23, func() { ui.p.Pause() }},
 		{&ui.btnStop, 85, 69, 23, func() { ui.p.Pause(); _ = ui.p.SeekFraction(0) }},
-		{&ui.btnNext, 116, 92, 22, func() { ui.p.Next(); ui.p.Play() }},
+		{&ui.btnNext, 108, 92, 22, func() { ui.p.Next(); ui.p.Play() }},
 	}
 	for _, b := range btns {
 		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 88, b.w, 18),
@@ -335,7 +335,7 @@ func (ui *uiState) shuffleRepeat(gtx layout.Context, R func(int, int, int, int) 
 		R(0, 0, 28, 15), R(0, 15, 28, 15), R(0, 30, 28, 15), R(0, 45, 28, 15),
 		func() { ui.repeat = !ui.repeat }) {
 	}
-	if ui.eqplBtn(gtx, &ui.btnRep, "SHUFREP", R(210, 88, 47, 15), ui.shuffle,
+	if ui.eqplBtn(gtx, &ui.btnRep, "SHUFREP", R(192, 88, 47, 15), ui.shuffle,
 		R(28, 0, 47, 15), R(28, 15, 47, 15), R(28, 30, 47, 15), R(28, 45, 47, 15),
 		func() { ui.shuffle = !ui.shuffle }) {
 	}

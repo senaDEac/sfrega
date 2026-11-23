@@ -200,6 +200,19 @@ func (ui *uiState) layoutMenu(gtx layout.Context) {
 	}
 	needBar := totalH > availH
 
+	// linhas repassam a roda do mouse para o scroll do menu
+	for i := range ui.menuBtns {
+		ui.menuBtns[i].scrollFn = func(dy float32) {
+			ui.menuScroll -= int(dy)
+			if ui.menuScroll < 0 {
+				ui.menuScroll = 0
+			}
+			if ui.menuScroll > maxScroll {
+				ui.menuScroll = maxScroll
+			}
+		}
+	}
+
 	ui.menuWheel(gtx, R(2, contentTop, 271, availH), maxScroll)
 
 	cs := clip.Rect(R(2, contentTop, 271, availH)).Push(gtx.Ops)
@@ -329,8 +342,10 @@ func (ui *uiState) menuWheel(gtx layout.Context, r image.Rectangle, maxScroll in
 	cs.Pop()
 	for {
 		ev, ok := gtx.Event(pointer.Filter{
-			Target: &ui.menuWheelTag,
-			Kinds:  pointer.Scroll,
+			Target:  &ui.menuWheelTag,
+			Kinds:   pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
 		})
 		if !ok {
 			break
@@ -396,8 +411,10 @@ func (ui *uiState) menuScrollbar(gtx layout.Context, winW, top, availH, totalH, 
 	cs.Pop()
 	for {
 		ev, ok := gtx.Event(pointer.Filter{
-			Target: &ui.menuBarTag,
-			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+			Target:  &ui.menuBarTag,
+			Kinds:   pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel | pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
 		})
 		if !ok {
 			break
@@ -418,6 +435,14 @@ func (ui *uiState) menuScrollbar(gtx layout.Context, winW, top, availH, totalH, 
 		case pointer.Drag:
 			ui.menuScrollTo(e.Position.Y-ui.menuBarGrab,
 				float32(top), availH, thumbH, maxScroll)
+		case pointer.Scroll:
+			ui.menuScroll -= int(e.Scroll.Y)
+			if ui.menuScroll < 0 {
+				ui.menuScroll = 0
+			}
+			if ui.menuScroll > maxScroll {
+				ui.menuScroll = maxScroll
+			}
 		case pointer.Release, pointer.Cancel:
 			ui.menuBarDown = false
 		}

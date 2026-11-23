@@ -28,9 +28,6 @@ import (
 //go:embed 00/*.png 00/VISCOLOR.TXT
 var baseFS embed.FS
 
-//go:embed *.wsz
-var wszFS embed.FS
-
 // Skin contém os bitmaps de uma skin do Winamp.
 type Skin struct {
 	imgs  map[string]*image.RGBA
@@ -61,6 +58,7 @@ func skinDirs() []string {
 	dirs = append(dirs,
 		filepath.Join(home, ".local", "share", "sfrega", "skins"),
 		"skins",
+		"internal",
 		"internal/skins",
 	)
 	return dirs
@@ -81,13 +79,6 @@ func WszNames() []string {
 			}
 		}
 	}
-	if ents, err := wszFS.ReadDir("."); err == nil {
-		for _, e := range ents {
-			if strings.HasSuffix(e.Name(), ".wsz") {
-				seen[strings.TrimSuffix(e.Name(), ".wsz")] = true
-			}
-		}
-	}
 	out := make([]string, 0, len(seen))
 	for n := range seen {
 		out = append(out, n)
@@ -96,8 +87,8 @@ func WszNames() []string {
 	return out
 }
 
-// OpenWsz carrega uma skin de um arquivo .wsz (diretórios de runtime
-// primeiro, embed como fallback). Aceita nome com ou sem extensão.
+// OpenWsz carrega uma skin de um arquivo .wsz nos diretórios de runtime.
+// Aceita nome com ou sem extensão.
 func OpenWsz(name string) (*Skin, error) {
 	file := name
 	if !strings.HasSuffix(strings.ToLower(file), ".wsz") {
@@ -108,11 +99,7 @@ func OpenWsz(name string) (*Skin, error) {
 			return openWszData(file, data)
 		}
 	}
-	data, err := wszFS.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-	return openWszData(file, data)
+	return nil, fmt.Errorf("wsz não encontrado: %s", file)
 }
 
 func openWszData(name string, data []byte) (*Skin, error) {

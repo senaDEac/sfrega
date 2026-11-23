@@ -38,11 +38,15 @@ func langDirs() []string {
 	home, _ := os.UserHomeDir()
 	var dirs []string
 	if x := os.Getenv("XDG_DATA_HOME"); x != "" {
-		dirs = append(dirs, filepath.Join(x, "sfrega", "lang"))
+		dirs = append(dirs,
+			filepath.Join(x, "sfrega", "lang"),
+			filepath.Join(x, "sfrega", "language"))
 	}
 	dirs = append(dirs,
 		filepath.Join(home, ".local", "share", "sfrega", "lang"),
+		filepath.Join(home, ".local", "share", "sfrega", "language"),
 		"internal/language",
+		"language",
 		"lang",
 	)
 	return dirs

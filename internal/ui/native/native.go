@@ -157,9 +157,10 @@ type uiState struct {
 
 // uibtn é um botão simples via pointer events (sem macro do Clickable).
 type uibtn struct {
-	tag  event.Tag
-	down bool
-	over bool
+	tag      event.Tag
+	down     bool
+	over     bool
+	scrollFn func(dy float32) // opcional: roda do mouse sobre o botão
 }
 
 // beginScaledFrame configura o sistema de coordenadas lógico da janela e
@@ -458,8 +459,10 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 	clicked := false
 	for {
 		ev, ok := gtx.Event(pointer.Filter{
-			Target: &b.tag,
-			Kinds:  pointer.Press | pointer.Release | pointer.Drag | pointer.Move | pointer.Cancel | pointer.Enter | pointer.Leave,
+			Target:  &b.tag,
+			Kinds:   pointer.Press | pointer.Release | pointer.Drag | pointer.Move | pointer.Cancel | pointer.Enter | pointer.Leave | pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
 		})
 		if !ok {
 			break
@@ -483,6 +486,10 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 			b.down = false
 		case pointer.Cancel:
 			b.down = false
+		case pointer.Scroll:
+			if b.scrollFn != nil {
+				b.scrollFn(e.Scroll.Y)
+			}
 		}
 	}
 	off := op.Offset(r.Min).Push(gtx.Ops)
