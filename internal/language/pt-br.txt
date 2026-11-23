@@ -1,0 +1,12 @@
+menu.file=Arquivo
+menu.file.exit=Sair
+menu.ontop=Sempre no topo
+menu.config=Configuração
+menu.config.lang=Idioma
+menu.lang.en=English
+menu.lang.pt-br=Português (Brasil)
+menu.about=Sobre
+about.title=sfrega
+about.body=sfrega — um tocador de música estilo Winamp.
+Escrito em Go, roda em Windows, Linux, macOS, Android e iOS.
+about.close=Fechar

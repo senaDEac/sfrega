@@ -38,6 +38,9 @@ static const unsigned long motif_hints[5] = { 2 /*MWM_HINTS_DECORATIONS*/, 0, 0,
 
 static const char *window_names[] = { "sfrega", "Equalizador", "Playlist" };
 
+/* janelas que recebem undecorate (inclui Menu, que não tem geometria salva) */
+static const char *ui_names[] = { "sfrega", "Equalizador", "Playlist", "Menu" };
+
 static Window find_by_name(Display *dpy, const char *want, Atom ncl, Atom nwn, Atom u8);
 
 /* Janela "nossa" já está sem frame quando o parent é o root
@@ -122,8 +125,8 @@ void sfrega_no_decorations(void)
             continue;
 
         int match = 0;
-        for (size_t j = 0; j < sizeof(window_names) / sizeof(window_names[0]); j++)
-            if (strcmp(name, window_names[j]) == 0)
+        for (size_t j = 0; j < sizeof(ui_names) / sizeof(ui_names[0]); j++)
+            if (strcmp(name, ui_names[j]) == 0)
                 match = 1;
         free(name);
         if (!match || !has_frame(dpy, w))
@@ -289,6 +292,80 @@ int sfrega_shade_set(const char *name, int title_h, int full_h)
     XResizeWindow(dpy, w, attr.width, title_h);
     XFlush(dpy);
     return 0;
+}
+
+/* Centraliza uma janela nossa pelo nome na tela. Retorna 1 se encontrou. */
+int sfrega_center(const char *name)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return 0;
+    Display *dpy = g_dpy;
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Window win = find_by_name(dpy, name, ncl, nwn, u8);
+    if (win == None)
+        return 0;
+    XWindowAttributes attr;
+    if (!XGetWindowAttributes(dpy, win, &attr))
+        return 0;
+    int x = (DisplayWidth(dpy, DefaultScreen(dpy)) - attr.width) / 2;
+    int y = (DisplayHeight(dpy, DefaultScreen(dpy)) - attr.height) / 2;
+    XMoveWindow(dpy, win, x, y);
+    XFlush(dpy);
+    return 1;
+}
+
+/* Redimensiona uma janela nossa pelo nome (usado p/ esticar a janela
+   shade quando o menu suspenso está aberto). */
+void sfrega_resize(const char *name, int w, int h)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return;
+    Display *dpy = g_dpy;
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Window win = find_by_name(dpy, name, ncl, nwn, u8);
+    if (win == None)
+        return;
+    XResizeWindow(dpy, win, w, h);
+    XFlush(dpy);
+}
+
+/* Alterna _NET_WM_STATE_ABOVE (always on top) via client message EWMH. */
+void sfrega_ontop(const char *name, int on)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return;
+    Display *dpy = g_dpy;
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Window win = find_by_name(dpy, name, ncl, nwn, u8);
+    if (win == None)
+        return;
+
+    Atom state = XInternAtom(dpy, "_NET_WM_STATE", False);
+    Atom above = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
+    XEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = win;
+    ev.xclient.message_type = state;
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = on ? 1 : 0; /* _NET_WM_STATE_ADD : REMOVE */
+    ev.xclient.data.l[1] = above;
+    ev.xclient.data.l[2] = 0;
+    XSendEvent(dpy, DefaultRootWindow(dpy), False,
+               SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+    XFlush(dpy);
 }
 
 /* Atualiza a altura "cheia" guardada de uma janela com shade (ex.: após

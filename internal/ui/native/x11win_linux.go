@@ -55,3 +55,31 @@ func wmShadeSet(name string, titleH, fullH int) bool {
 	defer C.free(unsafe.Pointer(cs))
 	return C.sfrega_shade_set(cs, C.int(titleH), C.int(fullH)) != 0
 }
+
+func wmResize(name string, w, h int) {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	cs := C.CString(name)
+	defer C.free(unsafe.Pointer(cs))
+	C.sfrega_resize(cs, C.int(w), C.int(h))
+}
+
+func wmOntop(name string, on bool) {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	cs := C.CString(name)
+	defer C.free(unsafe.Pointer(cs))
+	v := C.int(0)
+	if on {
+		v = 1
+	}
+	C.sfrega_ontop(cs, v)
+}
+
+func wmCenter(name string) bool {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	cs := C.CString(name)
+	defer C.free(unsafe.Pointer(cs))
+	return C.sfrega_center(cs) != 0
+}

@@ -1,0 +1,12 @@
+menu.file=File
+menu.file.exit=Exit
+menu.ontop=Always on top
+menu.config=Config
+menu.config.lang=Language
+menu.lang.en=English
+menu.lang.pt-br=Português (Brasil)
+menu.about=About
+about.title=sfrega
+about.body=sfrega — a Winamp-style music player.
+Written in Go, runs on Windows, Linux, macOS, Android and iOS.
+about.close=Close

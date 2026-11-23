@@ -74,11 +74,12 @@ type uiState struct {
 	fontMono font.Font
 
 	// janelas
-	winMain *app.Window
-	winEQ   *app.Window
-	winPL   *app.Window
-	eqOpen  bool
-	plOpen  bool
+	winMain  *app.Window
+	winEQ    *app.Window
+	winPL    *app.Window
+	winMenu  *app.Window
+	eqOpen   bool
+	plOpen   bool
 
 	mainScale, eqScale, plScale int
 	plWidth, plHeight           unit.Dp
@@ -119,6 +120,16 @@ type uiState struct {
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
 	shadeMain, shadeEQ, shadePL shadeClk
+
+	// menu suspenso do winshade (ícone de onda → janela Menu)
+	btnWave      uibtn
+	btnMenuClose uibtn
+	menuBtns     [10]uibtn
+	menuFile     bool
+	menuCfg      bool
+	menuLang     bool
+	menuAbout    bool
+	alwaysOnTop  bool
 
 	shuffle, repeat bool
 	marqueeX        int
@@ -183,6 +194,23 @@ func loadShade() bool {
 // saveShade grava o estado shade da janela principal.
 func saveShade(on bool) {
 	p := configPath("shade.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadOntop lê se a janela principal deve abrir sempre no topo.
+func loadOntop() bool {
+	b, err := os.ReadFile(configPath("ontop.txt"))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveOntop grava o estado always-on-top da janela principal.
+func saveOntop(on bool) {
+	p := configPath("ontop.txt")
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	v := "0\n"
 	if on {
@@ -438,17 +466,27 @@ func Run(p *player.Player) error {
 	ui.shadeMain.on = loadShade()
 	ui.shadeMain.onChange = func(on bool) { saveShade(on) }
 	shadePending := ui.shadeMain.on
+	ui.alwaysOnTop = loadOntop()
+	ontopPending := ui.alwaysOnTop
 
 	// X11/muffin: aplica _MOTIF_WM_HINTS assim que a janela aparece
 	// em _NET_CLIENT_LIST — polling curto evita a piscada de titlebar.
 	go func() {
 		t := time.NewTicker(30 * time.Millisecond)
+		ontopTicks := 0
 		for range t.C {
 			wmNoDecorations()
 			wmRestoreGeometry()
 			if shadePending && wmShadeSet("sfrega",
 				shadePx(ui.mainScale, 18), shadePx(ui.mainScale, 116)) {
 				shadePending = false
+			}
+			if ontopPending && ontopTicks < 40 {
+				wmOntop("sfrega", true)
+				ontopTicks++
+				if ontopTicks >= 40 {
+					ontopPending = false
+				}
 			}
 		}
 	}()

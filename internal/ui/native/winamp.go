@@ -11,6 +11,7 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
+
 )
 
 // Coordenadas extraídas da skin base-2.91 (MAIN 275x116).
@@ -71,12 +72,17 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y),
 		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
 
-	// ---- decorações: ícone de onda + logotipo "winamp" (TITLEBAR.png topo) ----
-	ui.sprFit(gtx, "TITLEBAR", R(27, 0, 16, 16), R(2, 2, 14, 14))
+	// ---- decorações: ícone de onda (menu) + logotipo "winamp" ----
 	ui.sprFit(gtx, "TITLEBAR", R(144, 5, 40, 6), R(18, 5, 42, 7))
 
 	dragArea(gtx, R(0, 0, 275, 18))
 	dragAreaX11(gtx, R(0, 0, 275, 18), &ui.shadeMain)
+
+	// botão do menu — depois do drag p/ receber os cliques
+	if ui.spriteBtn(gtx, &ui.btnWave, "TITLEBAR", R(2, 2, 14, 14),
+		R(27, 0, 16, 16), R(27, 0, 16, 16)) {
+		ui.toggleMenu()
+	}
 
 	// ---- transporte: prev, play, pause, stop, next, eject (CBUTTONS 12px) ----
 	type tb struct {
@@ -143,6 +149,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 		R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.winMain.Perform(system.ActionClose)
 	}
+
 }
 
 // lcdContent desenha dígitos do tempo, título rolante e indicador play.
