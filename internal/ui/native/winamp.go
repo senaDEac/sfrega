@@ -99,35 +99,35 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 			b.fn()
 		}
 	}
-	if ui.spriteBtn(gtx, &ui.btnEject, "CBUTTONS", R(141, 3, 12, 12),
+	if ui.spriteBtn(gtx, &ui.btnEject, "CBUTTONS", R(135, 3, 12, 12),
 		R(114, 0, 22, 16), R(114, 16, 22, 16)) {
 		ui.p.Pause()
 		_ = ui.p.SeekFraction(0)
 	}
 
 	// ---- VU spectrum (placeholder: retângulo preto) ----
-	fillRect(gtx.Ops, R(158, 5, 36, 8), color.NRGBA{A: 0xFF})
+	fillRect(gtx.Ops, R(151, 5, 32, 8), color.NRGBA{A: 0xFF})
 
 	// ---- volume (mini slider) ----
-	volR := R(196, 6, 32, 6)
+	volR := R(186, 6, 28, 6)
 	fillRect(gtx.Ops, volR, color.NRGBA{R: 0x18, G: 0x1C, B: 0x28, A: 0xFF})
-	vw := int(ui.volDrag.val * 32)
+	vw := int(ui.volDrag.val * 28)
 	if vw > 0 {
 		fillRect(gtx.Ops, image.Rect(volR.Min.X, volR.Min.Y, volR.Min.X+vw, volR.Max.Y),
 			color.NRGBA{R: 0x5E, G: 0xC8, B: 0x50, A: 0xFF})
 	}
-	ui.scrub(gtx, &ui.volDrag, R(196, 4, 32, 10))
+	ui.scrub(gtx, &ui.volDrag, R(186, 4, 28, 10))
 
 	// ---- EQ / PL ----
-	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(230, 4, 12, 10), ui.eqOpen,
+	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(217, 4, 12, 10), ui.eqOpen,
 		R(0, 62, 23, 11), R(46, 61, 23, 11), R(0, 73, 23, 11), R(46, 72, 23, 11),
 		func() { ui.toggleEQ() })
-	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(242, 4, 12, 10), ui.plOpen,
+	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(231, 4, 12, 10), ui.plOpen,
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
 		func() { ui.togglePL() })
 
 	// ---- 2x/1x (mesmo sprite do botão size da titlebar) ----
-	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(261, 3, 12, 12),
+	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(247, 3, 12, 12),
 		R(0, 18, 9, 9), R(9, 18, 9, 9)) {
 		h := unit.Dp(116)
 		if ui.shadeMain.on {
@@ -136,6 +136,12 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), h)
 		saveMainScale(ui.mainScale)
 		wmShadeFull("sfrega", shadePx(ui.mainScale, 116))
+	}
+
+	// ---- fechar ----
+	if ui.spriteBtn(gtx, &ui.btnClose, "TITLEBAR", R(261, 3, 12, 12),
+		R(18, 0, 9, 9), R(18, 9, 9, 9)) {
+		ui.winMain.Perform(system.ActionClose)
 	}
 }
 
