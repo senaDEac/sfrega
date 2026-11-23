@@ -29,3 +29,9 @@ func wmRestoreGeometry() {
 	defer wmMu.Unlock()
 	C.sfrega_geo_restore()
 }
+
+func wmShadeToggle(titleH int) {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	C.sfrega_shade_toggle(C.int(titleH))
+}

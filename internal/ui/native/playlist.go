@@ -106,6 +106,7 @@ func (ui *uiState) plTopBar(gtx layout.Context, winW int, R func(int, int, int, 
 
 	dragArea(gtx, R(0, 0, winW-32, plTopH))
 	dragAreaX11(gtx, R(0, 0, winW-32, plTopH))
+	ui.shadePL.area(gtx, R(0, 0, winW-32, plTopH), shadePx(ui.plScale))
 	if ui.spriteBtn(gtx, &ui.btnPLMin, "TITLEBAR", R(winW-31, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winPL)
 	}

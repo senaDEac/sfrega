@@ -26,6 +26,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))         // option
 	dragArea(gtx, R(16, 0, 228, 11))
 	dragAreaX11(gtx, R(16, 0, 228, 11))
+	ui.shadeMain.area(gtx, R(16, 0, 228, 11), shadePx(ui.mainScale))
 	if ui.spriteBtn(gtx, &ui.btnMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winMain)
 	}

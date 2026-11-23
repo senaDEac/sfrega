@@ -6,6 +6,7 @@ package native
 import (
 	"image"
 	"image/color"
+	"math"
 	"os"
 	"sync"
 	"time"
@@ -110,6 +111,8 @@ type uiState struct {
 	plSel                                         int
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
+
+	shadeMain, shadeEQ, shadePL shadeClk
 
 	shuffle, repeat bool
 	marqueeX        int
@@ -224,6 +227,55 @@ func dragAreaX11(gtx layout.Context, r image.Rectangle) {
 			/* Cancel: mantém ativo — o C encerra ao soltar o botão. */
 		}
 	}
+}
+
+// shadeClk detecta duplo-clique numa área de título e alterna o "winshade"
+// (janela reduzida à altura da barra). Um por janela.
+type shadeClk struct {
+	tag  event.Tag
+	last time.Time
+	x, y float32
+	on   bool
+}
+
+// area registra a hit-area de shade. titlePx é a altura da titlebar em pixels.
+func (sc *shadeClk) area(gtx layout.Context, r image.Rectangle, titlePx int) {
+	if r.Empty() || titlePx <= 0 {
+		return
+	}
+	clipStack := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &sc.tag)
+	clipStack.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &sc.tag,
+			Kinds:  pointer.Press,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok || e.Buttons != pointer.ButtonPrimary {
+			continue
+		}
+		now := time.Now()
+		dbl := now.Sub(sc.last) < 400*time.Millisecond &&
+			math.Abs(float64(e.Position.X-sc.x)) < 8 &&
+			math.Abs(float64(e.Position.Y-sc.y)) < 8
+		sc.last, sc.x, sc.y = now, e.Position.X, e.Position.Y
+		if dbl {
+			sc.on = !sc.on
+			wmShadeToggle(titlePx)
+		}
+	}
+}
+
+// shadePx converte a altura lógica da titlebar (~14px) para pixels na escala atual.
+func shadePx(scale int) int {
+	if scale < 1 {
+		scale = 1
+	}
+	return 14 * scale
 }
 
 // button registra hit-area, processa press/release e desenha via face.

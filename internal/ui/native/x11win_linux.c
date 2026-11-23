@@ -154,6 +154,94 @@ out:
         XFree(clients);
 }
 
+/* ---------- winshade (duplo-clique na titlebar) ---------- */
+
+struct shade_ent { char name[32]; int full_h; int shaded; };
+static struct shade_ent shades[8];
+static int shades_n;
+
+static Window find_client_win(Display *dpy)
+{
+    Window root, child;
+    int rx, ry, wx, wy;
+    unsigned int mask;
+    if (!XQueryPointer(dpy, DefaultRootWindow(dpy), &root, &child,
+                       &rx, &ry, &wx, &wy, &mask) || child == None)
+        return None;
+    Atom wm_state = XInternAtom(dpy, "WM_STATE", False);
+    for (int depth = 0; depth < 8; depth++) {
+        Atom actual;
+        int fmt;
+        unsigned long n, after;
+        unsigned char *prop = NULL;
+        if (XGetWindowProperty(dpy, child, wm_state, 0, 1, False,
+                               wm_state, &actual, &fmt, &n, &after,
+                               &prop) == Success && prop != NULL) {
+            XFree(prop);
+            return child;
+        }
+        Window jr, jp;
+        Window *children = NULL;
+        unsigned int nc = 0;
+        if (!XQueryTree(dpy, child, &jr, &jp, &children, &nc) || nc == 0)
+            return child;
+        Window next = children[0];
+        XFree(children);
+        child = next;
+    }
+    return child;
+}
+
+void sfrega_shade_toggle(int title_h)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return;
+    Display *dpy = g_dpy;
+
+    Window w = find_client_win(dpy);
+    if (w == None)
+        return;
+
+    XWindowAttributes attr;
+    if (!XGetWindowAttributes(dpy, w, &attr))
+        return;
+
+    /* chave por nome de janela: imune a reuso de XID (EQ/PL são recriadas) */
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    char *name = window_name(dpy, w, nwn, u8);
+    if (!name)
+        name = window_name(dpy, w, XInternAtom(dpy, "WM_NAME", False), u8);
+    if (!name)
+        return;
+
+    int idx = -1;
+    for (int i = 0; i < shades_n; i++)
+        if (strcmp(shades[i].name, name) == 0)
+            idx = i;
+
+    if (idx >= 0) {
+        if (shades[idx].shaded) {
+            XResizeWindow(dpy, w, attr.width, shades[idx].full_h);
+            shades[idx].shaded = 0;
+        } else {
+            shades[idx].full_h = attr.height;
+            XResizeWindow(dpy, w, attr.width, title_h);
+            shades[idx].shaded = 1;
+        }
+    } else if (attr.height > title_h * 2 && shades_n < 8) {
+        snprintf(shades[shades_n].name, sizeof(shades[shades_n].name), "%s", name);
+        shades[shades_n].full_h = attr.height;
+        shades[shades_n].shaded = 1;
+        shades_n++;
+        XResizeWindow(dpy, w, attr.width, title_h);
+    }
+    free(name);
+    XFlush(dpy);
+}
+
 /* ---------- geometria (posição das janelas) ---------- */
 
 static void geo_path(char *buf, size_t len)
