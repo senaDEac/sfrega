@@ -20,9 +20,9 @@ import (
 func (ui *uiState) layoutMain(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
-	ui.shadeMain.arm(shadePx(ui.mainScale, 22))
+	ui.shadeMain.arm(shadePx(ui.mainScale, 18))
 	if ui.shadeMain.on {
-		ui.shadeBar(gtx, R(0, 0, 275, 22))
+		ui.shadeBar(gtx, R(0, 0, 275, 18))
 		return
 	}
 
@@ -64,15 +64,11 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
-	bg := color.NRGBA{R: 0x2D, G: 0x32, B: 0x42, A: 0xFF}
-	fillRect(gtx.Ops, r, bg)
-	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1),
-		color.NRGBA{R: 0x5A, G: 0x62, B: 0x78, A: 0xFF})
-	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y),
-		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
+	// fundo: 3ª titlebar da folha TITLEBAR.png (faixa y30-44)
+	ui.sprFit(gtx, "TITLEBAR", R(0, 30, 344, 44), r)
 
-	dragArea(gtx, R(0, 0, 200, 22))
-	dragAreaX11(gtx, R(0, 0, 200, 22), &ui.shadeMain)
+	dragArea(gtx, R(0, 0, 200, 18))
+	dragAreaX11(gtx, R(0, 0, 200, 18), &ui.shadeMain)
 
 	// ---- transporte compacto (CBUTTONS escalado p/ 14px) ----
 	type tb struct {
@@ -87,7 +83,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 		{&ui.btnNext, 64, 92, func() { ui.p.Next(); ui.p.Play() }},
 	}
 	for _, b := range btns {
-		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 4, 14, 14),
+		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 2, 14, 14),
 			R(b.col, 0, 23, 18), R(b.col, 18, 23, 18)) {
 			b.fn()
 		}
@@ -97,7 +93,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	if ui.p.Playing() {
 		playCol = 46
 	}
-	if ui.spriteBtn(gtx, &ui.btnPlay, "CBUTTONS", R(32, 4, 14, 14),
+	if ui.spriteBtn(gtx, &ui.btnPlay, "CBUTTONS", R(32, 2, 14, 14),
 		R(playCol, 0, 23, 18), R(playCol, 18, 23, 18)) {
 		if ui.p.Playing() {
 			ui.p.Pause()
@@ -117,9 +113,9 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 			break
 		}
 	}
-	cs := clip.Rect(R(82, 2, 92, 18)).Push(gtx.Ops)
+	cs := clip.Rect(R(82, 1, 92, 16)).Push(gtx.Ops)
 	ui.textAt(gtx, ui.fontMono, unit.Sp(8), title,
-		color.NRGBA{R: 0xC8, G: 0xCE, B: 0xDC, A: 0xFF}, image.Pt(82, 7))
+		color.NRGBA{R: 0xC8, G: 0xCE, B: 0xDC, A: 0xFF}, image.Pt(82, 5))
 	cs.Pop()
 
 	// ---- tempo decorrido ----
@@ -129,23 +125,23 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	}
 	ui.textAt(gtx, ui.fontMono, unit.Sp(8),
 		fmt.Sprintf("%d:%02d", s/60, s%60),
-		color.NRGBA{R: 0x86, G: 0x8E, B: 0xA0, A: 0xFF}, image.Pt(176, 7))
+		color.NRGBA{R: 0x86, G: 0x8E, B: 0xA0, A: 0xFF}, image.Pt(176, 5))
 
 	// ---- volume (mini slider) ----
-	volR := R(196, 8, 34, 6)
+	volR := R(196, 6, 34, 6)
 	fillRect(gtx.Ops, volR, color.NRGBA{R: 0x18, G: 0x1C, B: 0x28, A: 0xFF})
 	vw := int(ui.volDrag.val * 34)
 	if vw > 0 {
 		fillRect(gtx.Ops, image.Rect(volR.Min.X, volR.Min.Y, volR.Min.X+vw, volR.Max.Y),
 			color.NRGBA{R: 0x5E, G: 0xC8, B: 0x50, A: 0xFF})
 	}
-	ui.scrub(gtx, &ui.volDrag, R(196, 6, 34, 10))
+	ui.scrub(gtx, &ui.volDrag, R(196, 4, 34, 10))
 
 	// ---- EQ / PL ----
-	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(234, 5, 16, 11), ui.eqOpen,
+	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(234, 3, 16, 12), ui.eqOpen,
 		R(0, 62, 23, 11), R(46, 61, 23, 11), R(0, 73, 23, 11), R(46, 72, 23, 11),
 		func() { ui.toggleEQ() })
-	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(252, 5, 16, 11), ui.plOpen,
+	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(252, 3, 16, 12), ui.plOpen,
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
 		func() { ui.togglePL() })
 }

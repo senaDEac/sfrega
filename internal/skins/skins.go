@@ -19,7 +19,7 @@ import (
 	"sync"
 )
 
-//go:embed base-2.91/*.png base-2.91/VISCOLOR.TXT
+//go:embed 00/*.png 00/VISCOLOR.TXT
 var baseFS embed.FS
 
 // Skin contém os bitmaps de uma skin do Winamp.
@@ -32,7 +32,7 @@ type Skin struct {
 
 // OpenEmbedded carrega uma skin embutida no binário (ex.: "base-2.91").
 func OpenEmbedded(name string) (*Skin, error) {
-	return loadFS(baseFS, path.Join("base-2.91", name))
+	return loadFS(baseFS, path.Join("00", name))
 }
 
 // OpenDir carrega uma skin de um diretório contendo PNGs + VISCOLOR.TXT.
