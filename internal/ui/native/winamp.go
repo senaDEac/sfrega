@@ -64,8 +64,12 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
-	// fundo: 3ª titlebar da folha TITLEBAR.png (faixa y30-44)
-	ui.sprFit(gtx, "TITLEBAR", R(0, 30, 344, 44), r)
+	bg := color.NRGBA{R: 0x2D, G: 0x32, B: 0x42, A: 0xFF}
+	fillRect(gtx.Ops, r, bg)
+	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1),
+		color.NRGBA{R: 0x5A, G: 0x62, B: 0x78, A: 0xFF})
+	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y),
+		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
 
 	dragArea(gtx, R(0, 0, 200, 18))
 	dragAreaX11(gtx, R(0, 0, 200, 18), &ui.shadeMain)
