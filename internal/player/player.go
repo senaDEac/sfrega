@@ -3,8 +3,12 @@
 package player
 
 import (
+	"bufio"
 	"errors"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,6 +96,8 @@ type Player struct {
 	mu       sync.Mutex
 	tracks   []string
 	index    int
+	listFile string        // playlist persistida em m3u ("" = desativado)
+	lib      *trackLibrary // metadados por faixa (plays/rating/tags)
 	dec      *audio.Decoder
 	rb       *audio.RingBuffer
 	dev      *audio.Device
@@ -139,6 +145,61 @@ func (p *Player) emit(e Event) {
 	}
 }
 
+// SetPlaylistFile define o arquivo m3u onde a playlist é persistida
+// a cada mutação ("" desativa).
+func (p *Player) SetPlaylistFile(path string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.listFile = path
+	if path != "" {
+		p.lib = newTrackLibrary(filepath.Join(filepath.Dir(path), "library.json"))
+	} else {
+		p.lib = nil
+	}
+}
+
+// saveTracksLocked grava a playlist em p.listFile (formato m3u).
+func (p *Player) saveTracksLocked() {
+	if p.listFile == "" {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(p.listFile), 0o755)
+	var b strings.Builder
+	b.WriteString("#EXTM3U\n")
+	for _, t := range p.tracks {
+		b.WriteString(t + "\n")
+	}
+	_ = os.WriteFile(p.listFile, []byte(b.String()), 0o644)
+}
+
+// LoadPlaylist lê um arquivo m3u e retorna as faixas (ignora comentários).
+func LoadPlaylist(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var out []string
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		l := strings.TrimSpace(sc.Text())
+		if l == "" || strings.HasPrefix(l, "#") {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// PlaylistFilePath retorna o caminho padrão de persistência da playlist.
+func PlaylistFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "/tmp"
+	}
+	return filepath.Join(home, ".config", "sfrega", "playlist.m3u")
+}
+
 // SetTracks define a playlist.
 func (p *Player) SetTracks(tracks []string) {
 	p.mu.Lock()
@@ -148,6 +209,8 @@ func (p *Player) SetTracks(tracks []string) {
 	if len(tracks) > 0 {
 		p.index = 0
 	}
+	p.ensureMetaLocked()
+	p.saveTracksLocked()
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
 }
 
@@ -162,7 +225,43 @@ func (p *Player) AddTracks(tracks []string) {
 	if p.index < 0 {
 		p.index = 0
 	}
+	p.ensureMetaLocked()
+	p.saveTracksLocked()
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
+}
+
+// ensureMetaLocked cria entradas de metadados (com hashtags) para faixas novas.
+func (p *Player) ensureMetaLocked() {
+	if p.lib == nil {
+		return
+	}
+	for _, t := range p.tracks {
+		p.lib.ensure(t)
+	}
+	p.lib.flush()
+}
+
+// TrackMeta retorna os metadados persistidos da faixa (nil se sem biblioteca).
+func (p *Player) TrackMeta(path string) *TrackMeta {
+	p.mu.Lock()
+	lib := p.lib
+	p.mu.Unlock()
+	if lib == nil {
+		return nil
+	}
+	return lib.get(path)
+}
+
+// SetRating define a nota (0..5) da faixa.
+func (p *Player) SetRating(path string, r int) {
+	p.mu.Lock()
+	lib := p.lib
+	p.mu.Unlock()
+	if lib == nil {
+		return
+	}
+	lib.setRating(path, r)
+	lib.flush()
 }
 
 func (p *Player) currentTitle() string {
@@ -324,6 +423,7 @@ func (p *Player) RemoveAt(i int) {
 	if len(p.tracks) == 0 {
 		p.index = -1
 		p.resetLocked()
+		p.saveTracksLocked()
 		return
 	}
 	if i < p.index {
@@ -336,6 +436,7 @@ func (p *Player) RemoveAt(i int) {
 			p.decoded.Store(0)
 		}
 	}
+	p.saveTracksLocked()
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
 }
 
@@ -356,6 +457,7 @@ func (p *Player) Move(from, to int) {
 	} else if from > p.index && to <= p.index {
 		p.index++
 	}
+	p.saveTracksLocked()
 }
 
 // Play inicia a faixa atual.
@@ -480,6 +582,10 @@ func (p *Player) openCurrentLocked() error {
 	}
 	p.decoded.Store(0)
 	p.decoded.Store(0)
+	if p.lib != nil {
+		p.lib.addPlay(path)
+		p.lib.flush()
+	}
 	p.trackDone = make(chan struct{})
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: path,
 		Duration: time.Duration(dec.LengthFrames()) * time.Second / time.Duration(rate)})
@@ -669,4 +775,7 @@ func (p *Player) Close() {
 	defer p.mu.Unlock()
 	p.closeTrackLocked()
 	p.rb.Destroy()
+	if p.lib != nil {
+		p.lib.flush()
+	}
 }

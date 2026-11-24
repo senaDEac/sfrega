@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+	"time"
 
 	"gioui.org/app"
 	"gioui.org/io/event"
@@ -367,8 +369,12 @@ func (ui *uiState) plResize(gtx layout.Context, r image.Rectangle, winW, winH in
 			if scale < 1 {
 				scale = 1
 			}
-			go wmResizeDrag("Playlist", winW*scale, winH*scale,
-				300*scale, 140*scale)
+			go func() {
+				wmResizeDrag("Playlist", winW*scale, winH*scale,
+					300*scale, 140*scale)
+				time.Sleep(150 * time.Millisecond)
+				ui.savePLSize()
+			}()
 		}
 	}
 }
@@ -414,6 +420,22 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 	name := filepath.Base(tracks[i])
 	if sel {
 		name = "> " + name
+	}
+	if m := ui.p.TrackMeta(tracks[i]); m != nil {
+		var sb strings.Builder
+		if m.Rating > 0 {
+			fmt.Fprintf(&sb, "%d/5 ", m.Rating)
+		}
+		if m.Plays > 0 {
+			fmt.Fprintf(&sb, "x%d ", m.Plays)
+		}
+		for j, t := range m.Tags {
+			if j == 2 {
+				break
+			}
+			fmt.Fprintf(&sb, "#%s ", t)
+		}
+		name += "  " + strings.TrimSpace(sb.String())
 	}
 	c := colPLText
 	if cur {

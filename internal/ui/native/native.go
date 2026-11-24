@@ -91,6 +91,7 @@ type uiState struct {
 
 	mainScale, eqScale, plScale int
 	plWidth, plHeight           unit.Dp
+	plSizeW, plSizeH            int // tamanho lógico persistido (0 = padrão)
 
 	// widgets main
 	btnPrev, btnPlay, btnPause, btnStop, btnNext uibtn
@@ -240,6 +241,30 @@ func saveOntop(on bool) {
 		v = "1\n"
 	}
 	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadPLSize lê o tamanho lógico persistido da janela Playlist (0,0 = padrão).
+func loadPLSize() (int, int) {
+	b, err := os.ReadFile(configPath("plsize.txt"))
+	if err != nil {
+		return 0, 0
+	}
+	var w, h int
+	if n, _ := fmt.Sscanf(string(b), "%d %d", &w, &h); n != 2 || w <= 0 || h <= 0 {
+		return 0, 0
+	}
+	return w, h
+}
+
+// savePLSize grava o tamanho lógico da janela Playlist.
+func (ui *uiState) savePLSize() {
+	w, h := int(ui.plWidth), int(ui.plHeight)
+	if w <= 0 || h <= 0 {
+		return
+	}
+	p := configPath("plsize.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(fmt.Sprintf("%d %d\n", w, h)), 0o644)
 }
 
 // loadOpenWindows lê quais janelas secundárias estavam abertas.
@@ -561,6 +586,10 @@ func Run(p *player.Player) error {
 	ui.eqOn = true
 	ui.mainScale, ui.eqScale, ui.plScale = loadMainScale(), 1, 1
 	ui.plWidth, ui.plHeight = unit.Dp(340), unit.Dp(240)
+	ui.plSizeW, ui.plSizeH = loadPLSize()
+	if ui.plSizeW > 0 && ui.plSizeH > 0 {
+		ui.plWidth, ui.plHeight = unit.Dp(ui.plSizeW), unit.Dp(ui.plSizeH)
+	}
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }

@@ -1,0 +1,154 @@
+package player
+
+import (
+	"encoding/json"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"sync"
+)
+
+// TrackMeta são os metadados persistidos de uma faixa.
+type TrackMeta struct {
+	Plays  int      `json:"plays"`
+	Rating int      `json:"rating"` // 0..5
+	Tags   []string `json:"tags"`
+}
+
+// trackLibrary persiste metadados por caminho de faixa em JSON.
+type trackLibrary struct {
+	mu    sync.Mutex
+	path  string
+	meta  map[string]*TrackMeta
+	dirty bool
+}
+
+type libraryFile struct {
+	Version int                   `json:"version"`
+	Tracks  map[string]*TrackMeta `json:"tracks"`
+}
+
+// newTrackLibrary carrega (ou cria) o arquivo de biblioteca.
+func newTrackLibrary(path string) *trackLibrary {
+	l := &trackLibrary{path: path, meta: map[string]*TrackMeta{}}
+	if b, err := os.ReadFile(path); err == nil {
+		var f libraryFile
+		if json.Unmarshal(b, &f) == nil && f.Tracks != nil {
+			l.meta = f.Tracks
+		}
+	}
+	return l
+}
+
+// ensure retorna o meta da faixa, criando com hashtags aleatórias se novo.
+func (l *trackLibrary) ensure(path string) *TrackMeta {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	m, ok := l.meta[path]
+	if !ok {
+		m = &TrackMeta{Tags: randomTags()}
+		l.meta[path] = m
+		l.dirty = true
+	}
+	return m
+}
+
+// get retorna cópia do meta (nil se não existe).
+func (l *trackLibrary) get(path string) *TrackMeta {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if m, ok := l.meta[path]; ok {
+		cp := *m
+		cp.Tags = append([]string(nil), m.Tags...)
+		return &cp
+	}
+	return nil
+}
+
+// setRating atualiza a nota (0..5) da faixa.
+func (l *trackLibrary) setRating(path string, r int) {
+	if r < 0 {
+		r = 0
+	}
+	if r > 5 {
+		r = 5
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	m, ok := l.meta[path]
+	if !ok {
+		m = &TrackMeta{Tags: randomTags()}
+		l.meta[path] = m
+	}
+	m.Rating = r
+	l.dirty = true
+}
+
+// addPlay incrementa o contador de reproduções.
+func (l *trackLibrary) addPlay(path string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	m, ok := l.meta[path]
+	if !ok {
+		m = &TrackMeta{Tags: randomTags()}
+		l.meta[path] = m
+	}
+	m.Plays++
+	l.dirty = true
+}
+
+// flush grava no disco se houver mudanças. Seguro chamar sempre.
+func (l *trackLibrary) flush() {
+	l.mu.Lock()
+	if !l.dirty {
+		l.mu.Unlock()
+		return
+	}
+	l.dirty = false
+	f := libraryFile{Version: 1, Tracks: l.meta}
+	l.mu.Unlock()
+
+	b, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(l.path), 0o755)
+	tmp := l.path + ".tmp"
+	if os.WriteFile(tmp, b, 0o644) == nil {
+		_ = os.Rename(tmp, l.path)
+	}
+}
+
+// randomTags gera de 1 a 3 hashtags aleatórias.
+func randomTags() []string {
+	n := 1 + rand.Intn(3)
+	seen := map[string]bool{}
+	out := make([]string, 0, n)
+	for len(out) < n {
+		t := randomTagName()
+		if !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+var tagA = []string{
+	"neon", "velvet", "midnight", "crimson", "hollow", "solar",
+	"umber", "frost", "ember", "static", "lucid", "drift",
+	"onyx", "prism", "rust", "sable", "tide", "vivid",
+	"willow", "zephyr", "cipher", "delta", "echo", "flux",
+}
+
+var tagB = []string{
+	"falcon", "otter", "lynx", "heron", "viper", "badger",
+	"condor", "newt", "ibex", "marten", "pika", "quail",
+	"rook", "snipe", "tapir", "urchin", "vole", "walrus",
+	"yak", "zebu", "asp", "bass", "cod", "elm",
+}
+
+func randomTagName() string {
+	return tagA[rand.Intn(len(tagA))] + "-" + tagB[rand.Intn(len(tagB))] +
+		"-" + string(rune('a'+rand.Intn(26))) + string(rune('a'+rand.Intn(26)))
+}

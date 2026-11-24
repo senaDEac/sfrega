@@ -42,18 +42,25 @@ func main() {
 	addr := flag.String("addr", ":8080", "endereço do servidor web")
 	flag.Parse()
 	args := flag.Args()
-	if len(args) == 0 {
-		// sem argumentos: abre a GUI com playlist vazia
-		// (janelas EQ/PL e transporte ficam disponíveis)
-		args = defaultMusicDirs()
-	}
 	var tracks []string
-	for _, a := range args {
-		a = fileURIToPath(a)
-		if st, err := os.Stat(a); err == nil && st.IsDir() {
-			tracks = append(tracks, collect(a)...)
-		} else if err == nil {
-			tracks = append(tracks, a)
+	if len(args) == 0 {
+		// sem argumentos: restaura a playlist persistida; se vazia,
+		// cai no scan dos diretórios de música comuns
+		if saved := player.LoadPlaylist(player.PlaylistFilePath()); len(saved) > 0 {
+			tracks = saved
+		} else {
+			for _, d := range defaultMusicDirs() {
+				tracks = append(tracks, collect(d)...)
+			}
+		}
+	} else {
+		for _, a := range args {
+			a = fileURIToPath(a)
+			if st, err := os.Stat(a); err == nil && st.IsDir() {
+				tracks = append(tracks, collect(a)...)
+			} else if err == nil {
+				tracks = append(tracks, a)
+			}
 		}
 	}
 	if len(tracks) == 0 && !*webMode {
@@ -69,6 +76,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer p.Close()
+	p.SetPlaylistFile(player.PlaylistFilePath())
 	if len(tracks) > 0 {
 		p.SetTracks(tracks)
 		if err := p.Play(); err != nil {
