@@ -22,6 +22,7 @@ import (
 )
 
 var plResTag event.Tag
+var plShadeResTag event.Tag
 
 // Cores do PLEDIT.TXT da skin base-2.91.
 var (
@@ -215,8 +216,11 @@ func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int
 		}
 	}
 
-	dragArea(gtx, R(0, 0, winW-32, 18))
-	dragAreaX11(gtx, R(0, 0, winW-32, 18), &ui.shadePL)
+	// área de move exclui a zona de resize (winW-60..winW-33)
+	dragArea(gtx, R(0, 0, winW-61, 18))
+	dragArea(gtx, R(winW-32, 0, 1, 18))
+	dragAreaX11(gtx, R(0, 0, winW-61, 18), &ui.shadePL)
+	dragAreaX11(gtx, R(winW-32, 0, 1, 18), &ui.shadePL)
 	if ui.spriteBtn(gtx, &ui.btnPLMin, "TITLEBAR", R(winW-31, 4, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.plWin())
 	}
@@ -227,6 +231,45 @@ func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int
 	}
 	if ui.spriteBtn(gtx, &ui.btnPLClose, "TITLEBAR", R(winW-11, 4, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
 		ui.closePL()
+	}
+
+	ui.plShadeResize(gtx, winW)
+}
+
+// plShadeResize registra a área do triângulo no fim do campo do nome
+// (parte final do sprite da capa direita) para arrastar a largura da janela.
+func (ui *uiState) plShadeResize(gtx layout.Context, winW int) {
+	// cobre a última decoração do campo do nome (capa+triângulo) e ~10px
+	// à esquerda dela, até perto dos botões
+	r := image.Rect(winW-60, 3, winW-33, 15)
+	clipStack := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plShadeResTag)
+	clipStack.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &plShadeResTag,
+			Kinds:  pointer.Press,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok || e.Kind != pointer.Press || e.Buttons != pointer.ButtonPrimary {
+			continue
+		}
+		scale := ui.plScale
+		if scale < 1 {
+			scale = 1
+		}
+		w0, h0 := winW*scale, ui.shadePL.px
+		if h0 <= 0 {
+			h0 = 18 * scale
+		}
+		go func() {
+			wmResizeWDrag("Playlist", w0, h0, 300*scale)
+			time.Sleep(150 * time.Millisecond)
+			ui.savePLWidth()
+		}()
 	}
 }
 

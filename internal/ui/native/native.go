@@ -284,6 +284,22 @@ func (ui *uiState) savePLSize() {
 	_ = os.WriteFile(p, []byte(fmt.Sprintf("%d %d\n", w, h)), 0o644)
 }
 
+// savePLWidth grava só a largura da Playlist, preservando a altura salva
+// (usado no resize pela barra de shade, onde a altura lógica é a da barra).
+func (ui *uiState) savePLWidth() {
+	w := int(ui.plWidth)
+	if w <= 0 {
+		return
+	}
+	_, h := loadPLSize()
+	if h <= 0 {
+		h = 240
+	}
+	p := configPath("plsize.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(fmt.Sprintf("%d %d\n", w, h)), 0o644)
+}
+
 // loadOpenWindows lê quais janelas secundárias estavam abertas.
 func loadOpenWindows() (eq, pl, menu bool) {
 	b, err := os.ReadFile(configPath("windows.txt"))

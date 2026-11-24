@@ -415,6 +415,43 @@ void sfrega_resize_drag(const char *name, int w0, int h0, int minw, int minh)
     }
 }
 
+/* Idem sfrega_resize_drag, mas redimensiona só a largura (altura fixa). */
+void sfrega_resize_w_drag(const char *name, int w0, int h0, int minw)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return;
+    Display *dpy = g_dpy;
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Window win = find_by_name(dpy, name, ncl, nwn, u8);
+    if (win == None)
+        return;
+
+    Window root, child;
+    int rx, ry, wx, wy;
+    unsigned int mask;
+    if (!XQueryPointer(dpy, DefaultRootWindow(dpy), &root, &child,
+                       &rx, &ry, &wx, &wy, &mask))
+        return;
+    int x0 = rx;
+
+    for (;;) {
+        if (!XQueryPointer(dpy, DefaultRootWindow(dpy), &root, &child,
+                           &rx, &ry, &wx, &wy, &mask))
+            break;
+        if (!(mask & Button1Mask))
+            break;
+        int w = w0 + (rx - x0);
+        if (w < minw) w = minw;
+        XResizeWindow(dpy, win, w, h0);
+        XFlush(dpy);
+        usleep(4000);
+    }
+}
+
 /* Alterna _NET_WM_STATE_ABOVE (always on top) via client message EWMH. */
 int sfrega_ontop(const char *name, int on)
 {
