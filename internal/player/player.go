@@ -371,6 +371,11 @@ func (p *Player) SetBalance(b float32) {
 		b = 1
 	}
 	p.pan.Store(math.Float32bits(b))
+	p.mu.Lock()
+	if p.dev != nil {
+		p.dev.SetPan(b)
+	}
+	p.mu.Unlock()
 }
 
 func (p *Player) Balance() float32 { return math.Float32frombits(p.pan.Load()) }
@@ -576,6 +581,7 @@ func (p *Player) openCurrentLocked() error {
 		return err
 	}
 	dev.SetVolume(p.Volume())
+	dev.SetPan(p.Balance())
 	p.dec = dec
 	p.dev = dev
 	if !dev.Start() {
@@ -627,14 +633,7 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 			eq = eq2
 		}
 		preamp = p.Preamp()
-		pan := p.Balance()
 		if channels == 2 {
-			gl, gr := 1.0, 1.0
-			if pan < 0 {
-				gr = float64(1 + pan)
-			} else {
-				gl = float64(1 - pan)
-			}
 			for i := 0; i < samples; i += 2 {
 				l := float64(chunk[i])
 				r := float64(chunk[i+1])
@@ -642,8 +641,8 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 					l = eq.filters[b][0].process(l)
 					r = eq.filters[b][1].process(r)
 				}
-				chunk[i] = float32(l * float64(preamp) * gl)
-				chunk[i+1] = float32(r * float64(preamp) * gr)
+				chunk[i] = float32(l * float64(preamp))
+				chunk[i+1] = float32(r * float64(preamp))
 			}
 		} else {
 			for i := 0; i < samples; i++ {

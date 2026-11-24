@@ -136,6 +136,7 @@ struct ma_dev {
     ma_device device;
     ma_rb_t* rb;
     volatile float volume;
+    volatile float pan; /* -1 esquerda .. +1 direita */
     uint32_t channels;
 };
 
@@ -151,8 +152,22 @@ static void dev_data_cb(ma_device* pDevice, void* pOutput, const void* pInput,
         uint64_t got = rb_read(d->rb, out, samples);
         (void)got; /* remainder stays silent */
     }
+    float pan = d->pan;
+    float gl = 1.0f, gr = 1.0f;
+    if (pan < 0.0f) {
+        gr = 1.0f + pan;
+    } else {
+        gl = 1.0f - pan;
+    }
     float g = d->volume;
-    for (ma_uint64 i = 0; i < samples; i++) out[i] *= g;
+    if (channels == 2) {
+        for (ma_uint64 i = 0; i < samples; i += 2) {
+            out[i]     *= g * gl;
+            out[i + 1] *= g * gr;
+        }
+    } else {
+        for (ma_uint64 i = 0; i < samples; i++) out[i] *= g;
+    }
 }
 
 ma_dev_t* dev_open(uint32_t sample_rate, uint32_t channels, ma_rb_t* rb) {
@@ -161,6 +176,7 @@ ma_dev_t* dev_open(uint32_t sample_rate, uint32_t channels, ma_rb_t* rb) {
     d->rb = rb;
     d->channels = channels;
     d->volume = 1.0f;
+    d->pan = 0.0f;
     ma_device_config config = ma_device_config_init(ma_device_type_playback);
     config.playback.format = ma_format_f32;
     config.playback.channels = channels;
@@ -183,6 +199,13 @@ void dev_set_volume(ma_dev_t* d, float v) {
     d->volume = v;
 }
 float dev_get_volume(ma_dev_t* d) { return d ? d->volume : 0.0f; }
+
+void dev_set_pan(ma_dev_t* d, float p) {
+    if (!d) return;
+    if (p < -1.0f) p = -1.0f;
+    if (p > 1.0f) p = 1.0f;
+    d->pan = p;
+}
 
 void dev_close(ma_dev_t* d) {
     if (!d) return;

@@ -167,6 +167,17 @@ func (d *Device) SetVolume(v float32) {
 
 func (d *Device) Volume() float32 { return float32(C.dev_get_volume(d.c)) }
 
+// SetPan define o balanço -1 (esquerda) .. +1 (direita), aplicado na saída.
+func (d *Device) SetPan(p float32) {
+	if p < -1 {
+		p = -1
+	}
+	if p > 1 {
+		p = 1
+	}
+	C.dev_set_pan(d.c, C.float(p))
+}
+
 func (d *Device) Close() {
 	if d.c != nil {
 		C.dev_stop(d.c)

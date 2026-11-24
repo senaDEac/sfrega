@@ -35,6 +35,7 @@ bool          dev_start(ma_dev_t* d);
 void          dev_stop(ma_dev_t* d);
 void          dev_set_volume(ma_dev_t* d, float volume); /* 0.0 - 1.0 */
 float         dev_get_volume(ma_dev_t* d);
+void          dev_set_pan(ma_dev_t* d, float pan); /* -1 esquerda .. +1 direita */
 void          dev_close(ma_dev_t* d);
 
 #ifdef __cplusplus
