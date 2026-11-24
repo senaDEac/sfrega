@@ -3,6 +3,7 @@ package native
 import (
 	"image"
 	"image/color"
+	"time"
 
 	"gioui.org/app"
 	"gioui.org/f32"
@@ -87,6 +88,19 @@ func (ui *uiState) togglePL() {
 		ui.plOpen = true
 		saveOpenWindows(ui.eqOpen, true, ui.menuOpen)
 		go ui.plLoop()
+		if loadPLShade() {
+			ui.shadePL.on = true
+			titleH := shadePx(ui.plScale, 18)
+			fullH := int(ui.plHeight) * ui.plScale
+			go func() {
+				for i := 0; i < 60; i++ {
+					time.Sleep(50 * time.Millisecond)
+					if wmShadeSet("Playlist", titleH, fullH) {
+						return
+					}
+				}
+			}()
+		}
 		return
 	}
 	ui.plOpen = false

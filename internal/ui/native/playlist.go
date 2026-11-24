@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gioui.org/app"
@@ -104,10 +105,129 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 	botY := winH - plBotH
 
-	ui.shadePL.arm(shadePx(ui.plScale, plTopH))
+	ui.shadePL.arm(shadePx(ui.plScale, 18))
+	if ui.shadePL.on {
+		ui.plShadeBar(gtx, winW, R)
+		return
+	}
 	ui.plTopBar(gtx, winW, R)
 	ui.plMiddle(gtx, winW, winH, botY, tracks)
 	ui.plBottom(gtx, winW, winH, botY, tracks)
+}
+
+// textCell retorna o retângulo do glifo de c no TEXT.png (fonte 5x6 do
+// Winamp, case-folded; faixa verde = primeiro mapa).
+func textCell(c byte) image.Rectangle {
+	uc := c
+	if uc >= 'a' && uc <= 'z' {
+		uc -= 'a' - 'A'
+	}
+	switch {
+	case uc >= 'A' && uc <= 'Z':
+		i := int(uc - 'A')
+		return image.Rect(i*5, 0, i*5+5, 6)
+	case uc >= '0' && uc <= '9':
+		i := int(uc - '0')
+		return image.Rect(i*5, 6, i*5+5, 12)
+	}
+	punct := map[byte]int{
+		'.': 10, ':': 11, '(': 12, ')': 13, '-': 14, '\'': 15, '!': 16,
+		'_': 17, '+': 18, '\\': 19, '/': 20, '[': 21, ']': 22, '~': 23,
+		'&': 24, '%': 25, ',': 26, '=': 27, '$': 28, '#': 29,
+	}
+	if i, ok := punct[uc]; ok {
+		return image.Rect(i*5, 6, i*5+5, 12)
+	}
+	switch uc {
+	case '"':
+		return image.Rect(130, 0, 135, 6)
+	case '@':
+		return image.Rect(135, 0, 140, 6)
+	case '?':
+		return image.Rect(15, 12, 20, 18)
+	case '*':
+		return image.Rect(20, 12, 25, 18)
+	}
+	return image.Rect(150, 0, 155, 6) // espaço/em branco
+}
+
+var textGlyphCache sync.Map // image.Rectangle -> *image.RGBA
+
+// textGlyph retorna o glifo do TEXT.png com fundo preto tornado transparente.
+func (ui *uiState) textGlyph(src image.Rectangle) *image.RGBA {
+	if v, ok := textGlyphCache.Load(src); ok {
+		return v.(*image.RGBA)
+	}
+	img := ui.skin.Load().Spr("TEXT", src)
+	if img == nil {
+		return nil
+	}
+	out := image.NewRGBA(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			c := img.RGBAAt(x, y)
+			if c.R+c.G+c.B > 30 {
+				out.SetRGBA(x, y, c)
+			}
+		}
+	}
+	textGlyphCache.Store(src, out)
+	return out
+}
+
+// plTextBmp desenha txt com a fonte bitmap TEXT.png a partir de (x,y),
+// avançando 5px por caractere até o limite maxX.
+func (ui *uiState) plTextBmp(gtx layout.Context, txt string, x, y, maxX int) {
+	pen := x
+	for i := 0; i < len(txt) && pen+5 <= maxX; i++ {
+		if g := ui.textGlyph(textCell(txt[i])); g != nil {
+			blit(gtx, g, image.Rect(pen, y, pen+5, y+6))
+		}
+		pen += 5
+	}
+}
+
+// plShadeBar desenha a playlist recolhida: linha única na altura do shade
+// do player (18px), começando com a decoração/título "Playlist".
+func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int, int) image.Rectangle) {
+	bar := R(0, 0, winW, 18)
+	fillRect(gtx.Ops, bar, color.NRGBA{R: 0x2D, G: 0x32, B: 0x42, A: 0xFF})
+	fillRect(gtx.Ops, image.Rect(bar.Min.X, bar.Min.Y, bar.Max.X, bar.Min.Y+1),
+		color.NRGBA{R: 0x5A, G: 0x62, B: 0x78, A: 0xFF})
+	fillRect(gtx.Ops, image.Rect(bar.Min.X, bar.Max.Y-1, bar.Max.X, bar.Max.Y),
+		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
+
+	// decoração PLEDIT (0,0-15,15) + nome "Playlist" (75,0-122,15) em sequência
+	ui.sprFit(gtx, "PLEDIT", image.Rect(0, 0, 16, 16), R(2, 1, 16, 16))
+	ui.sprFit(gtx, "PLEDIT", image.Rect(75, 0, 123, 16), R(20, 1, 48, 16))
+
+	// caixa do nome da música: capa esq. + meio elástico + capa dir.
+	// sprites PLEDIT: (73,43-77,55), (72,58-96,71), (120,42-129,55)
+	bx0, bx1, by, bh := 74, winW-40, 2, 14
+	if bx1 > bx0+10 {
+		ui.sprFit(gtx, "PLEDIT", image.Rect(73, 43, 78, 55), R(bx0, by, 5, bh))
+		ui.sprFit(gtx, "PLEDIT", image.Rect(72, 58, 97, 71), R(bx0+5, by, bx1-bx0-15, bh))
+		ui.sprFit(gtx, "PLEDIT", image.Rect(120, 42, 130, 55), R(bx1-10, by, 10, bh))
+		if idx := ui.p.Index(); idx >= 0 {
+			if t := ui.p.TrackAt(idx); t != "" {
+				ui.plTextBmp(gtx, filepath.Base(t), bx0+7, by+4, bx1-12)
+			}
+		}
+	}
+
+	dragArea(gtx, R(0, 0, winW-32, 18))
+	dragAreaX11(gtx, R(0, 0, winW-32, 18), &ui.shadePL)
+	if ui.spriteBtn(gtx, &ui.btnPLMin, "TITLEBAR", R(winW-31, 4, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
+		minimizeWindow(ui.plWin())
+	}
+	if ui.spriteBtn(gtx, &ui.btnPLSize, "TITLEBAR", R(winW-21, 4, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
+		if w := ui.plWin(); w != nil {
+			toggleWindowScale(&ui.plScale, w, ui.plWidth, ui.plHeight)
+		}
+	}
+	if ui.spriteBtn(gtx, &ui.btnPLClose, "TITLEBAR", R(winW-11, 4, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
+		ui.closePL()
+	}
 }
 
 // plTopBar desenha a barra superior de 20px com tiles PLEDIT.
