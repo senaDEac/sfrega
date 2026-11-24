@@ -527,10 +527,11 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 
 // fader é um slider vertical/horizontal arrastável.
 type fader struct {
-	tag    event.Tag
-	val    float32 // 0..1
-	active bool
-	commit func(float32)
+	tag           event.Tag
+	val           float32 // 0..1
+	active        bool
+	releaseCommit bool // commita só no release (ex.: seek)
+	commit        func(float32)
 }
 
 func loadFonts() ([]text.FontFace, error) {
@@ -593,6 +594,7 @@ func Run(p *player.Player) error {
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
+	ui.posDrag.releaseCommit = true
 	ui.preampSlide.val = 0.5
 	ui.preampSlide.commit = func(v float32) {
 		// -12..+12 dB
@@ -996,7 +998,11 @@ func (ui *uiState) scrub(gtx layout.Context, f *fader, r image.Rectangle) {
 		if !ok {
 			continue
 		}
-		if e.Kind == pointer.Press || e.Kind == pointer.Drag {
+		switch e.Kind {
+		case pointer.Press:
+			f.active = true
+			fallthrough
+		case pointer.Drag:
 			t := (float32(e.Position.X) - float32(r.Min.X)) / float32(r.Dx())
 			if t < 0 {
 				t = 0
@@ -1005,8 +1011,13 @@ func (ui *uiState) scrub(gtx layout.Context, f *fader, r image.Rectangle) {
 				t = 1
 			}
 			f.val = t
-			if f.commit != nil {
+			if f.commit != nil && !f.releaseCommit {
 				f.commit(t)
+			}
+		case pointer.Release:
+			f.active = false
+			if f.releaseCommit && f.commit != nil {
+				f.commit(f.val)
 			}
 		}
 	}

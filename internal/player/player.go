@@ -289,6 +289,7 @@ func (p *Player) PlayIndex(i int) error {
 	p.index = i
 	if p.dec != nil {
 		p.closeTrackLocked()
+		p.rb.Clear()
 		p.decoded.Store(0)
 	}
 	if err := p.openCurrentLocked(); err != nil {
@@ -401,6 +402,7 @@ func (p *Player) SeekFraction(f float64) error {
 	if !p.dec.SeekFrame(int64(float64(total) * f)) {
 		return errors.New("player: seek falhou")
 	}
+	p.rb.Clear()
 	p.decoded.Store(uint64(int64(float64(total) * f)))
 	return nil
 }
@@ -524,6 +526,7 @@ func (p *Player) Prev() {
 func (p *Player) playNextLocked() {
 	wasPlaying := p.playing.Load()
 	p.closeTrackLocked()
+	p.rb.Clear()
 	p.decoded.Store(0)
 	if wasPlaying {
 		p.playing.Store(false)
@@ -537,6 +540,7 @@ func (p *Player) playNextLocked() {
 
 func (p *Player) resetLocked() {
 	p.closeTrackLocked()
+	p.rb.Clear()
 	p.playing.Store(false)
 	p.decoded.Store(0)
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})

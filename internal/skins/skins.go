@@ -30,10 +30,10 @@ var baseFS embed.FS
 
 // Skin contém os bitmaps de uma skin do Winamp.
 type Skin struct {
-	imgs  map[string]*image.RGBA
-	vis   []color.NRGBA
-	mu    sync.Mutex
-	spr   map[string]*image.RGBA // cache de recortes
+	imgs map[string]*image.RGBA
+	vis  []color.NRGBA
+	mu   sync.Mutex
+	spr  map[string]*image.RGBA // cache de recortes
 }
 
 // OpenEmbedded carrega uma skin embutida no binário (ex.: "base-2.91").

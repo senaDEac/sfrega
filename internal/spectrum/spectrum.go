@@ -12,10 +12,10 @@ const (
 
 // Analyzer mantém estado do espectro (janela + suavização).
 type Analyzer struct {
-	window   [FFTSize]float32
-	fftBuf   []complex128
-	prev     [Bands]float32
-	smooth   float32
+	window [FFTSize]float32
+	fftBuf []complex128
+	prev   [Bands]float32
+	smooth float32
 }
 
 // New cria um Analyzer com janela de Hann.

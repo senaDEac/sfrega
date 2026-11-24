@@ -300,10 +300,12 @@ func (ui *uiState) posBar(gtx layout.Context, R func(int, int, int, int) image.R
 	if frac > 1 {
 		frac = 1
 	}
-	tx := 16 + int(frac*219)
+	if !ui.posDrag.active {
+		ui.posDrag.val = float32(frac)
+	}
+	tx := 16 + int(float32(ui.posDrag.val)*219)
 	ui.spr(gtx, "POSBAR", R(248, 0, 29, 10), R(tx, 73, 29, 10))
-	ui.posDrag.val = float32(frac)
-	ui.scrub(gtx, &ui.posDrag, R(16, 64, 248, 10))
+	ui.scrub(gtx, &ui.posDrag, R(16, 64, 248, 20))
 }
 
 // transport desenha prev/play/pause/stop/next/eject (CBUTTONS.png).
