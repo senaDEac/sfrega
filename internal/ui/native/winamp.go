@@ -293,7 +293,7 @@ func (ui *uiState) posBar(gtx layout.Context, R func(int, int, int, int) image.R
 		frac = 1
 	}
 	tx := 16 + int(frac*219)
-	ui.spr(gtx, "POSBAR", R(248, 0, 29, 10), R(tx, 63, 29, 10))
+	ui.spr(gtx, "POSBAR", R(248, 0, 29, 10), R(tx, 73, 29, 10))
 	ui.posDrag.val = float32(frac)
 	ui.scrub(gtx, &ui.posDrag, R(16, 64, 248, 10))
 }
@@ -331,7 +331,7 @@ func (ui *uiState) shuffleRepeat(gtx layout.Context, R func(int, int, int, int) 
 	// repeat em x=0 (28px), shuffle em x=28 (47px); y: 0 norm,15 pressed,30 sel,45 sel+pressed
 	if ui.eqplBtn(gtx, &ui.btnShuf, "SHUFREP", R(164, 88, 28, 15), ui.repeat,
 		R(0, 0, 28, 15), R(0, 15, 28, 15), R(0, 30, 28, 15), R(0, 45, 28, 15),
-		func() { ui.repeat = !ui.repeat }) {
+		func() { ui.repeat = !ui.repeat; ui.p.SetRepeat(ui.repeat) }) {
 	}
 	if ui.eqplBtn(gtx, &ui.btnRep, "SHUFREP", R(192, 88, 47, 15), ui.shuffle,
 		R(28, 0, 47, 15), R(28, 15, 47, 15), R(28, 30, 47, 15), R(28, 45, 47, 15),

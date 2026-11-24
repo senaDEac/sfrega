@@ -91,6 +91,11 @@ func (rb *RingBuffer) Available() uint64 {
 	return uint64(C.rb_available(rb.c))
 }
 
+// Clear esvazia o buffer imediatamente.
+func (rb *RingBuffer) Clear() {
+	C.rb_clear(rb.c)
+}
+
 func (rb *RingBuffer) Destroy() {
 	if rb.c != nil {
 		C.rb_destroy(rb.c)

@@ -98,6 +98,7 @@ type Player struct {
 	analyzer *spectrum.Analyzer
 
 	playing   atomic.Bool
+	repeat    atomic.Bool
 	volume    atomic.Uint32 // float32 bits
 	eq        atomic.Value  // *eqState
 	preamp    atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
@@ -201,6 +202,12 @@ func (p *Player) PlayIndex(i int) error {
 func (p *Player) Index() int    { return p.index }
 func (p *Player) Count() int    { return len(p.tracks) }
 func (p *Player) Playing() bool { return p.playing.Load() }
+
+// SetRepeat liga/desliga o repeat da playlist.
+func (p *Player) SetRepeat(on bool) { p.repeat.Store(on) }
+
+// Repeat retorna o estado do repeat.
+func (p *Player) Repeat() bool { return p.repeat.Load() }
 
 // Volume retorna 0..1.
 func (p *Player) Volume() float32 { return math.Float32frombits(p.volume.Load()) }
@@ -372,6 +379,7 @@ func (p *Player) Play() error {
 
 func (p *Player) Pause() {
 	if p.playing.CompareAndSwap(true, false) {
+		p.rb.Clear()
 		p.emit(Event{Kind: "state-change", Playing: false, Volume: p.Volume()})
 	}
 }
@@ -499,6 +507,7 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 		frames := dec.ReadPCM(chBuf, decodeChunkFrames)
 		if frames == 0 {
 			p.emit(Event{Kind: "eof", Index: p.index})
+			p.autoAdvance()
 			return
 		}
 		samples := int(frames) * int(channels)
@@ -551,6 +560,25 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 	}
 }
 
+// autoAdvance decide o que fazer ao fim da faixa: próxima faixa, wrap
+// com repeat, ou volta ao início pausado.
+func (p *Player) autoAdvance() {
+	p.mu.Lock()
+	n := len(p.tracks)
+	hasNext := p.index+1 < n
+	rep := p.repeat.Load()
+	p.mu.Unlock()
+	switch {
+	case hasNext:
+		p.Next()
+	case rep && n > 0:
+		_ = p.PlayIndex(0)
+	default:
+		_ = p.SeekFrame(0)
+		p.Pause()
+	}
+}
+
 // playedFrames estima frames já tocados = decodificados - buffer restante.
 func (p *Player) playedFrames(rate, channels uint32) uint64 {
 	dec := p.decoded.Load()
@@ -586,6 +614,7 @@ func (p *Player) SeekFrame(frame int64) error {
 	if !p.dec.SeekFrame(frame) {
 		return errors.New("player: seek falhou")
 	}
+	p.rb.Clear()
 	p.decoded.Store(uint64(frame))
 	return nil
 }

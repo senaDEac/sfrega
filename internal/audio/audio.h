@@ -26,6 +26,7 @@ ma_rb_t*      rb_create(uint64_t capacity_samples);
 uint64_t      rb_write(ma_rb_t* rb, const float* data, uint64_t samples);
 uint64_t      rb_read(ma_rb_t* rb, float* data, uint64_t samples);
 uint64_t      rb_available(ma_rb_t* rb);
+void          rb_clear(ma_rb_t* rb);
 void          rb_destroy(ma_rb_t* rb);
 
 /* Device */

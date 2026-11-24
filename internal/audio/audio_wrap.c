@@ -116,6 +116,13 @@ uint64_t rb_available(ma_rb_t* rb) {
     return n;
 }
 
+void rb_clear(ma_rb_t* rb) {
+    if (!rb) return;
+    ma_mutex_lock(&rb->mutex);
+    rb->rpos = rb->wpos = rb->count = 0;
+    ma_mutex_unlock(&rb->mutex);
+}
+
 void rb_destroy(ma_rb_t* rb) {
     if (!rb) return;
     ma_mutex_uninit(&rb->mutex);
