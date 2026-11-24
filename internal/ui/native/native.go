@@ -98,6 +98,7 @@ type uiState struct {
 	btnOpt                                       uibtn
 	btnEQ, btnPL                                 uibtn
 	btnShuf, btnRep                              uibtn
+	btnGenex, btnGenex2                          uibtn
 	volDrag, balDrag, posDrag                    fader
 
 	// widgets EQ

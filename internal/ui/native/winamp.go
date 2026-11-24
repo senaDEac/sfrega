@@ -221,18 +221,11 @@ func (ui *uiState) txtMat(gtx layout.Context, c color.NRGBA) op.CallOp {
 	return m.Stop()
 }
 
-// infoRight desenha indicador mono/stereo.
+// infoRight desenha indicador stereo.
 func (ui *uiState) infoRight(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
-	channels := ui.p.Channels()
-	monoSrc, stSrc := R(29, 12, 27, 12), R(0, 12, 29, 12)
-	if channels == 1 {
-		monoSrc = R(29, 0, 27, 12)
-	} else if channels > 1 {
-		stSrc = R(0, 0, 29, 12)
-	}
-	ui.spr(gtx, "MONOSTER", monoSrc, R(212, 37, 27, 12))
-	ui.spr(gtx, "MONOSTER", stSrc, R(239, 37, 29, 12))
+	stSrc := R(0, 12, 29, 12) // stereo sempre no estado desligado
+	ui.spr(gtx, "MONOSTER", stSrc, R(187, 41, 29, 12))
 }
 
 // volBal desenha sliders de volume e balance com thumbs da skin.
@@ -254,6 +247,12 @@ func (ui *uiState) eqplBtns(gtx layout.Context, R func(int, int, int, int) image
 	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(242, 49, 23, 11), ui.plOpen,
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
 		func() { ui.togglePL() })
+
+	// botões GENEX (solto/pressionado) acima do EQ e do PL, sem função
+	ui.spriteBtn(gtx, &ui.btnGenex, "GENEX", R(219, 36, 23, 11),
+		R(0, 0, 48, 16), R(0, 16, 48, 15))
+	ui.spriteBtn(gtx, &ui.btnGenex2, "GENEX", R(242, 36, 23, 11),
+		R(0, 0, 48, 16), R(0, 16, 48, 15))
 }
 
 // eqplBtn desenha botão de 4 estados: normal/pressed/selected/sel+pressed.
