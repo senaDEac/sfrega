@@ -80,7 +80,7 @@ func (ui *uiState) togglePL() {
 		w.Option(
 			app.Title("Playlist"),
 			app.Decorated(false),
-			app.Size(unit.Dp(280), unit.Dp(240)),
+			app.Size(unit.Dp(340), unit.Dp(240)),
 		)
 		ui.winPL = w
 		ui.plOpen = true

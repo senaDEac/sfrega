@@ -141,8 +141,23 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	ui.spr(gtx, "PLEDIT", R(0, 42, 12, 29), R(0, plTopH, 12, midH))
 	ui.spr(gtx, "PLEDIT", R(31, 42, 20, 29), R(winW-20, plTopH, 20, midH))
 
+	// fundo preto do miolo inteiro (inclui a fileira dos botões GENEX)
+	fillRect(gtx.Ops, image.Rect(12, plTopH+1, winW-23, botY-3), colPLBg)
+
+	// 6 botões GENEX abaixo da linha de título, com rótulos da skin GEN
+	gbtns := []*uibtn{&ui.btnPLG1, &ui.btnPLG2, &ui.btnPLG3,
+		&ui.btnPLG4, &ui.btnPLG5, &ui.btnPLG6}
+	labels := []string{"GENERO", "MUSICAS", "ARTISTA", "PASTAS", "ALBUNS", "LISTA"}
+	dark := color.NRGBA{R: 0x10, G: 0x10, B: 0x18, A: 0xFF}
+	for i, gb := range gbtns {
+		bx := 14 + i*47
+		ui.spriteBtn(gtx, gb, "GENEX", R(bx, plTopH+3, 45, 11),
+			R(0, 0, 48, 16), R(0, 16, 48, 15))
+		ui.genText(gtx, labels[i], R(bx, plTopH+3, 45, 11), dark)
+	}
+
 	// fundo da lista
-	listR := image.Rect(12, plTopH+3, winW-23, botY-3)
+	listR := image.Rect(12, plTopH+16, winW-23, botY-3)
 	fillRect(gtx.Ops, listR, colPLBg)
 
 	loff := op.Offset(listR.Min).Push(gtx.Ops)

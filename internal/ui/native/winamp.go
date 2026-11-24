@@ -248,11 +248,20 @@ func (ui *uiState) eqplBtns(gtx layout.Context, R func(int, int, int, int) image
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
 		func() { ui.togglePL() })
 
-	// botões GENEX (solto/pressionado) acima do EQ e do PL, sem função
+	// botões GENEX (solto/pressionado) acima do EQ e do PL, sem função;
+	// letras da skin GEN: "RD" sobre o EQ, "VD" sobre o PL
 	ui.spriteBtn(gtx, &ui.btnGenex, "GENEX", R(219, 36, 23, 11),
 		R(0, 0, 48, 16), R(0, 16, 48, 15))
 	ui.spriteBtn(gtx, &ui.btnGenex2, "GENEX", R(242, 36, 23, 11),
 		R(0, 0, 48, 16), R(0, 16, 48, 15))
+	ltrR := image.Rect(125, 89, 130, 95)
+	ltrD := image.Rect(25, 89, 29, 95)
+	ltrV := image.Rect(153, 89, 158, 95)
+	dark := color.NRGBA{R: 0x10, G: 0x10, B: 0x18, A: 0xFF}
+	ui.sprGlyph(gtx, "GEN", ltrR, R(225, 38, 5, 6), dark)
+	ui.sprGlyph(gtx, "GEN", ltrD, R(231, 38, 4, 6), dark)
+	ui.sprGlyph(gtx, "GEN", ltrV, R(248, 38, 5, 6), dark)
+	ui.sprGlyph(gtx, "GEN", ltrD, R(254, 38, 4, 6), dark)
 }
 
 // eqplBtn desenha botão de 4 estados: normal/pressed/selected/sel+pressed.

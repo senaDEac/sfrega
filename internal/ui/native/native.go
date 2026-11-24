@@ -114,18 +114,19 @@ type uiState struct {
 	eqPresetBtns                    [6]uibtn
 
 	// widgets playlist
-	plList                                        widget.List
-	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite uibtn
-	btnPLClose, btnPLMin, btnPLSize               uibtn
-	btnPLClear                                    uibtn
-	btnPLShade                                    uibtn
-	btnPLMAdd, btnPLMRem, btnPLMSel               uibtn
-	btnPLMMisc, btnPLMList                        uibtn
-	btnPLPrev, btnPLPlay, btnPLPause              uibtn
-	btnPLStop, btnPLNext, btnPLEject              uibtn
-	plMenuClicks                                  [5][]uibtn
-	plMenuOpen                                    int
-	plSel                                         int
+	plList                                               widget.List
+	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite        uibtn
+	btnPLClose, btnPLMin, btnPLSize                      uibtn
+	btnPLClear                                           uibtn
+	btnPLShade                                           uibtn
+	btnPLMAdd, btnPLMRem, btnPLMSel                      uibtn
+	btnPLMMisc, btnPLMList                               uibtn
+	btnPLPrev, btnPLPlay, btnPLPause                     uibtn
+	btnPLStop, btnPLNext, btnPLEject                     uibtn
+	btnPLG1, btnPLG2, btnPLG3, btnPLG4, btnPLG5, btnPLG6 uibtn
+	plMenuClicks                                         [5][]uibtn
+	plMenuOpen                                           int
+	plSel                                                int
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
@@ -559,7 +560,7 @@ func Run(p *player.Player) error {
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
 	ui.eqOn = true
 	ui.mainScale, ui.eqScale, ui.plScale = loadMainScale(), 1, 1
-	ui.plWidth, ui.plHeight = unit.Dp(280), unit.Dp(240)
+	ui.plWidth, ui.plHeight = unit.Dp(340), unit.Dp(240)
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
@@ -822,6 +823,87 @@ func (ui *uiState) spr(gtx layout.Context, name string, src, dst image.Rectangle
 		return
 	}
 	blit(gtx, img, dst)
+}
+
+// sprGlyph desenha um glifo do bitmap name recolorido: pixels claros
+// viram a cor c, o restante fica transparente.
+func (ui *uiState) sprGlyph(gtx layout.Context, name string, src, dst image.Rectangle, c color.NRGBA) {
+	img := ui.skin.Load().Spr(name, src)
+	if img == nil {
+		return
+	}
+	b := img.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			p := img.RGBAAt(b.Min.X+x, b.Min.Y+y)
+			if p.R > 180 && p.G > 180 && p.B > 180 {
+				out.Set(x, y, c)
+			}
+		}
+	}
+	blit(gtx, out, dst)
+}
+
+// genGlyphSrc devolve o retângulo do glifo A-Z na faixa inferior do GEN.png.
+func genGlyphSrc(r rune) image.Rectangle {
+	if r >= 'a' && r <= 'z' {
+		r -= 'a' - 'A'
+	}
+	i := int(r - 'A')
+	if i < 0 || i > 25 {
+		return image.Rectangle{}
+	}
+	x0 := [...]int{1, 9, 17, 24, 32, 39, 46, 54, 61, 66, 73, 80, 87, 95, 102, 110, 117, 125, 132, 139, 146, 153, 160, 169, 176, 183}[i]
+	x1 := [...]int{7, 14, 22, 30, 37, 43, 51, 59, 63, 69, 78, 84, 94, 100, 107, 115, 123, 130, 137, 144, 150, 158, 167, 174, 181, 188}[i]
+	return image.Rect(x0, 89, x1, 95)
+}
+
+// genText desenha s com os glifos A-Z do GEN.png recoloridos em c,
+// em tamanho fixo; se exceder dst, as letras excedentes são cortadas.
+func (ui *uiState) genText(gtx layout.Context, s string, dst image.Rectangle, c color.NRGBA) {
+	const gh = 6
+	var glyphs []*image.RGBA
+	w := 0
+	for _, r := range s {
+		src := genGlyphSrc(r)
+		if src.Empty() {
+			continue
+		}
+		g := ui.skin.Load().Spr("GEN", src)
+		if g == nil {
+			continue
+		}
+		b := g.Bounds()
+		out := image.NewRGBA(image.Rect(0, 0, b.Dx(), gh))
+		for y := 0; y < b.Dy() && y < gh; y++ {
+			for x := 0; x < b.Dx(); x++ {
+				p := g.RGBAAt(b.Min.X+x, b.Min.Y+y)
+				if p.R > 180 && p.G > 180 && p.B > 180 {
+					out.Set(x, y, c)
+				}
+			}
+		}
+		glyphs = append(glyphs, out)
+		w += b.Dx() + 1
+	}
+	if len(glyphs) == 0 {
+		return
+	}
+	w--
+	inner := image.Rect(dst.Min.X+1, dst.Min.Y+1, dst.Max.X-1, dst.Max.Y-1)
+	cs := clip.Rect(inner).Push(gtx.Ops)
+	defer cs.Pop()
+	x := dst.Min.X + (dst.Dx()-w)/2
+	if x < inner.Min.X {
+		x = inner.Min.X
+	}
+	y := dst.Min.Y + (dst.Dy()-gh)/2
+	for _, g := range glyphs {
+		gw := g.Bounds().Dx()
+		blit(gtx, g, image.Rect(x, y, x+gw, y+gh))
+		x += gw + 1
+	}
 }
 
 // blit desenha src preenchendo dst.
