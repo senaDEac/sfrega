@@ -1027,7 +1027,7 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 // anexadas à playlist e a janela Playlist é exibida.
 func (ui *uiState) eject() {
 	go func() {
-		files := pickAudioFiles()
+		files := ui.dialogWrap(pickAudioFiles)
 		if len(files) == 0 {
 			return
 		}
@@ -1037,6 +1037,49 @@ func (ui *uiState) eject() {
 		ui.mu.Unlock()
 		if !open {
 			ui.togglePL()
+		}
+	}()
+}
+
+// dialogWrap desativa o always-on-top das janelas sfrega durante um
+// diálogo nativo (senão o zenity/kdialog abre atrás) e restaura depois.
+func (ui *uiState) dialogWrap(fn func() []string) []string {
+	if !ui.alwaysOnTop {
+		return fn()
+	}
+	for _, n := range ontopWinNames {
+		wmOntop(n, false)
+	}
+	time.Sleep(400 * time.Millisecond)
+	defer func() {
+		ui.mu.Lock()
+		ui.ontopDone = map[string]bool{}
+		ui.mu.Unlock()
+		for _, n := range ontopWinNames {
+			wmOntop(n, true)
+		}
+	}()
+	return fn()
+}
+
+// addPicked abre diálogo de arquivos (dir=false) ou de pasta com
+// recursão (dir=true) e anexa as faixas à playlist.
+func (ui *uiState) addPicked(dir bool) {
+	go func() {
+		var files []string
+		if dir {
+			pick := func() []string {
+				if d := pickAudioDir(); d != "" {
+					return audioFilesInDir(d)
+				}
+				return nil
+			}
+			files = ui.dialogWrap(pick)
+		} else {
+			files = ui.dialogWrap(pickAudioFiles)
+		}
+		if len(files) > 0 {
+			ui.p.AddTracks(files)
 		}
 	}()
 }

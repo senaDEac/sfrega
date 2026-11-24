@@ -213,7 +213,9 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 
 	menus := []menuDef{
 		{&ui.btnPLMAdd, 0, 149, []plMenuItem{
-			{0, 111, nil}, {0, 130, nil}, {0, 149, nil},
+			{0, 111, nil},
+			{0, 130, func() { ui.addPicked(true) }},
+			{0, 149, func() { ui.addPicked(false) }},
 		}},
 		{&ui.btnPLMRem, 54, 149, []plMenuItem{
 			{54, 111, clearAll}, {54, 130, nil}, {54, 149, removeSel}, {54, 168, nil},

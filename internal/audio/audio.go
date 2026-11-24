@@ -12,11 +12,14 @@ import "C"
 
 import (
 	"errors"
+	"sync"
 	"unsafe"
 )
 
 // Decoder decodifica um arquivo de áudio para PCM float intercalado.
+// miniaudio não é thread-safe: todos os acessos passam por mu.
 type Decoder struct {
+	mu   sync.Mutex
 	c    *C.ma_dec_t
 	path string
 }
@@ -32,10 +35,31 @@ func OpenDecoder(path string) (*Decoder, error) {
 	return &Decoder{c: c, path: path}, nil
 }
 
-func (d *Decoder) LengthFrames() uint64   { return uint64(C.dec_get_length_pcm(d.c)) }
-func (d *Decoder) Channels() uint32       { return uint32(C.dec_get_channels(d.c)) }
-func (d *Decoder) SampleRate() uint32     { return uint32(C.dec_get_sample_rate(d.c)) }
-func (d *Decoder) Path() string           { return d.path }
+func (d *Decoder) LengthFrames() uint64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.c == nil {
+		return 0
+	}
+	return uint64(C.dec_get_length_pcm(d.c))
+}
+func (d *Decoder) Channels() uint32 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.c == nil {
+		return 0
+	}
+	return uint32(C.dec_get_channels(d.c))
+}
+func (d *Decoder) SampleRate() uint32 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.c == nil {
+		return 0
+	}
+	return uint32(C.dec_get_sample_rate(d.c))
+}
+func (d *Decoder) Path() string { return d.path }
 
 // ReadPCM lê até frames frames para buf (float32 intercalado).
 // Retorna frames efetivamente lidos (0 = fim).
@@ -43,14 +67,26 @@ func (d *Decoder) ReadPCM(buf []float32, frames uint64) uint64 {
 	if len(buf) == 0 || frames == 0 {
 		return 0
 	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.c == nil {
+		return 0
+	}
 	return uint64(C.dec_read_f32(d.c, (*C.float)(unsafe.Pointer(&buf[0])), C.uint64_t(frames)))
 }
 
 func (d *Decoder) SeekFrame(frame int64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.c == nil {
+		return false
+	}
 	return bool(C.dec_seek_pcm(d.c, C.int64_t(frame)))
 }
 
 func (d *Decoder) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.c != nil {
 		C.dec_close(d.c)
 		d.c = nil
@@ -117,7 +153,7 @@ func OpenDevice(sampleRate, channels uint32, rb *RingBuffer) (*Device, error) {
 }
 
 func (d *Device) Start() bool { return bool(C.dev_start(d.c)) }
-func (d *Device) Stop()        { C.dev_stop(d.c) }
+func (d *Device) Stop()       { C.dev_stop(d.c) }
 
 func (d *Device) SetVolume(v float32) {
 	if v < 0 {

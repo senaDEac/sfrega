@@ -1,6 +1,7 @@
 package native
 
 import (
+	"io/fs"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -44,16 +45,75 @@ var audioExts = map[string]bool{
 	".aac": true, ".wma": true, ".opus": true, ".aiff": true, ".ape": true,
 }
 
-// pickLinux tenta zenity e depois kdialog.
+// pickAudioDir abre o diálogo nativo de seleção de pasta e retorna o
+// caminho escolhido ("" se cancelado).
+func pickAudioDir() string {
+	var out []byte
+	var err error
+	switch runtime.GOOS {
+	case "linux":
+		out, err = pickDirLinux()
+	case "windows":
+		out, err = pickDirWindows()
+	case "darwin":
+		out, err = pickDirDarwin()
+	default:
+		return ""
+	}
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func pickDirLinux() ([]byte, error) {
+	if _, err := exec.LookPath("kdialog"); err == nil {
+		return exec.Command("kdialog", "--getexistingdirectory", ".").Output()
+	}
+	if _, err := exec.LookPath("zenity"); err == nil {
+		return exec.Command("zenity", "--file-selection", "--directory").Output()
+	}
+	return nil, exec.ErrNotFound
+}
+
+func pickDirWindows() ([]byte, error) {
+	ps := `Add-Type -AssemblyName System.Windows.Forms;` +
+		`$d=New-Object System.Windows.Forms.FolderBrowserDialog;` +
+		`if($d.ShowDialog() -eq 'OK'){$d.SelectedPath}`
+	return exec.Command("powershell", "-NoProfile", "-Command", ps).Output()
+}
+
+func pickDirDarwin() ([]byte, error) {
+	return exec.Command("osascript", "-e",
+		`POSIX path of (choose folder with prompt "sfrega")`).Output()
+}
+
+// audioFilesInDir lista recursivamente os arquivos de áudio sob root.
+func audioFilesInDir(root string) []string {
+	var res []string
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() && audioExts[strings.ToLower(filepath.Ext(p))] {
+			res = append(res, p)
+		}
+		return nil
+	})
+	return res
+}
+
+// pickLinux tenta kdialog e depois zenity (zenity 4.x depende do portal
+// xdg e pode falhar silenciosamente em algumas sessões).
 func pickLinux() ([]byte, error) {
 	filter := "Audio|*.mp3 *.wav *.flac *.ogg *.m4a *.aac *.wma *.opus *.aiff *.ape"
-	if _, err := exec.LookPath("zenity"); err == nil {
-		return exec.Command("zenity", "--file-selection", "--multiple",
-			"--separator=\n", "--file-filter", filter).Output()
-	}
 	if _, err := exec.LookPath("kdialog"); err == nil {
 		return exec.Command("kdialog", "--getopenfilename", ".",
 			filter, "--multiple", "--separate-output").Output()
+	}
+	if _, err := exec.LookPath("zenity"); err == nil {
+		return exec.Command("zenity", "--file-selection", "--multiple",
+			"--separator=\n", "--file-filter", filter).Output()
 	}
 	return nil, exec.ErrNotFound
 }
