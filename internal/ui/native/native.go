@@ -81,13 +81,13 @@ type uiState struct {
 	fontMenuBold font.Font
 
 	// janelas
-	winMain *app.Window
-	winEQ     *app.Window
-	winPL     *app.Window
-	winMenu   *app.Window
-	eqOpen    bool
-	plOpen    bool
-	menuOpen  bool
+	winMain  *app.Window
+	winEQ    *app.Window
+	winPL    *app.Window
+	winMenu  *app.Window
+	eqOpen   bool
+	plOpen   bool
+	menuOpen bool
 
 	mainScale, eqScale, plScale int
 	plWidth, plHeight           unit.Dp
@@ -938,4 +938,22 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 		ci := int((1 - v) * 17)
 		fillRect(gtx.Ops, bar, ui.skin.Load().VisColor(ci))
 	}
+}
+
+// eject abre o diálogo nativo de arquivos; as faixas escolhidas são
+// anexadas à playlist e a janela Playlist é exibida.
+func (ui *uiState) eject() {
+	go func() {
+		files := pickAudioFiles()
+		if len(files) == 0 {
+			return
+		}
+		ui.p.AddTracks(files)
+		ui.mu.Lock()
+		open := ui.plOpen
+		ui.mu.Unlock()
+		if !open {
+			ui.togglePL()
+		}
+	}()
 }

@@ -108,8 +108,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	}
 	if ui.spriteBtn(gtx, &ui.btnEject, "CBUTTONS", R(135, 3, 12, 12),
 		R(114, 0, 22, 16), R(114, 16, 22, 16)) {
-		ui.p.Pause()
-		_ = ui.p.SeekFraction(0)
+		ui.eject()
 	}
 
 	// ---- VU spectrum (placeholder: retângulo preto) ----
@@ -323,8 +322,7 @@ func (ui *uiState) transport(gtx layout.Context, R func(int, int, int, int) imag
 	}
 	if ui.spriteBtn(gtx, &ui.btnEject, "CBUTTONS", R(136, 89, 22, 16),
 		R(114, 0, 22, 16), R(114, 16, 22, 16)) {
-		ui.p.Pause()
-		_ = ui.p.SeekFraction(0)
+		ui.eject()
 	}
 }
 

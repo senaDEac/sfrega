@@ -123,7 +123,7 @@ func New(rate uint32, channels uint32) (*Player, error) {
 		analyzer: spectrum.New(),
 	}
 	p.volume.Store(math.Float32bits(1.0))
-	p.preamp.Store(math.Float32bits(0))
+	p.preamp.Store(math.Float32bits(1))
 	p.pan.Store(math.Float32bits(0))
 	p.eq.Store(eqFromGains([10]float64{}, 44100))
 	return p, nil
@@ -145,6 +145,20 @@ func (p *Player) SetTracks(tracks []string) {
 	p.tracks = append([]string(nil), tracks...)
 	p.index = -1
 	if len(tracks) > 0 {
+		p.index = 0
+	}
+	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
+}
+
+// AddTracks anexa faixas ao fim da playlist sem interromper a reprodução.
+func (p *Player) AddTracks(tracks []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(tracks) == 0 {
+		return
+	}
+	p.tracks = append(p.tracks, tracks...)
+	if p.index < 0 {
 		p.index = 0
 	}
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
