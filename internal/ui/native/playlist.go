@@ -9,11 +9,16 @@ import (
 	"sort"
 
 	"gioui.org/app"
+	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/clip"
 	"gioui.org/unit"
 )
+
+var plResTag event.Tag
 
 // Cores do PLEDIT.TXT da skin base-2.91.
 var (
@@ -329,6 +334,59 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 	// setas de scroll (decorativas)
 	ui.plScrollArrow(gtx, winW-15, botY+2, true)
 	ui.plScrollArrow(gtx, winW-15, botY+8, false)
+
+	// orelha de redimensionamento (canto inferior direito)
+	ui.plResize(gtx, image.Rect(winW-16, botY+20, winW-2, botY+36), winW, winH)
+}
+
+// plResize registra drag na orelha do canto inferior direito e
+// redimensiona a janela via X11 (wmResize).
+func (ui *uiState) plResize(gtx layout.Context, r image.Rectangle, winW, winH int) {
+	if r.Empty() {
+		return
+	}
+	clipStack := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plResTag)
+	clipStack.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &plResTag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			if e.Buttons == pointer.ButtonPrimary {
+				ui.plResDrag = true
+				ui.plResX0, ui.plResY0 = e.Position.X, e.Position.Y
+				ui.plResW0, ui.plResH0 = winW, winH
+			}
+		case pointer.Drag:
+			if ui.plResDrag {
+				nw := ui.plResW0 + int(e.Position.X-ui.plResX0)
+				nh := ui.plResH0 + int(e.Position.Y-ui.plResY0)
+				if nw < 300 {
+					nw = 300
+				}
+				if nh < 140 {
+					nh = 140
+				}
+				scale := ui.plScale
+				if scale < 1 {
+					scale = 1
+				}
+				wmResize("Playlist", nw*scale, nh*scale)
+			}
+		case pointer.Release, pointer.Cancel:
+			ui.plResDrag = false
+		}
+	}
 }
 
 // plScrollArrow desenha seta up/down 8x5.
