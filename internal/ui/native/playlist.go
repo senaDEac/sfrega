@@ -351,7 +351,7 @@ func (ui *uiState) plResize(gtx layout.Context, r image.Rectangle, winW, winH in
 	for {
 		ev, ok := gtx.Event(pointer.Filter{
 			Target: &plResTag,
-			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+			Kinds:  pointer.Press,
 		})
 		if !ok {
 			break
@@ -360,31 +360,13 @@ func (ui *uiState) plResize(gtx layout.Context, r image.Rectangle, winW, winH in
 		if !ok {
 			continue
 		}
-		switch e.Kind {
-		case pointer.Press:
-			if e.Buttons == pointer.ButtonPrimary {
-				ui.plResDrag = true
-				ui.plResX0, ui.plResY0 = e.Position.X, e.Position.Y
-				ui.plResW0, ui.plResH0 = winW, winH
+		if e.Kind == pointer.Press && e.Buttons == pointer.ButtonPrimary {
+			scale := ui.plScale
+			if scale < 1 {
+				scale = 1
 			}
-		case pointer.Drag:
-			if ui.plResDrag {
-				nw := ui.plResW0 + int(e.Position.X-ui.plResX0)
-				nh := ui.plResH0 + int(e.Position.Y-ui.plResY0)
-				if nw < 300 {
-					nw = 300
-				}
-				if nh < 140 {
-					nh = 140
-				}
-				scale := ui.plScale
-				if scale < 1 {
-					scale = 1
-				}
-				wmResize("Playlist", nw*scale, nh*scale)
-			}
-		case pointer.Release, pointer.Cancel:
-			ui.plResDrag = false
+			go wmResizeDrag("Playlist", winW*scale, winH*scale,
+				300*scale, 140*scale)
 		}
 	}
 }

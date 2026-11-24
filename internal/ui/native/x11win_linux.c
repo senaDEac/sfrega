@@ -374,6 +374,47 @@ void sfrega_resize(const char *name, int w, int h)
     XFlush(dpy);
 }
 
+/* Drag de resize contínuo: faz polling de XQueryPointer até o botão
+ * ser solto, redimensionando a janela a cada iteração. Roda em goroutine
+ * Go separada para não bloquear o loop de eventos do Gio (repaint). */
+void sfrega_resize_drag(const char *name, int w0, int h0, int minw, int minh)
+{
+    if (!g_dpy)
+        g_dpy = open_display();
+    if (!g_dpy)
+        return;
+    Display *dpy = g_dpy;
+    Atom ncl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
+    Window win = find_by_name(dpy, name, ncl, nwn, u8);
+    if (win == None)
+        return;
+
+    Window root, child;
+    int rx, ry, wx, wy;
+    unsigned int mask;
+    if (!XQueryPointer(dpy, DefaultRootWindow(dpy), &root, &child,
+                       &rx, &ry, &wx, &wy, &mask))
+        return;
+    int x0 = rx, y0 = ry;
+
+    for (;;) {
+        if (!XQueryPointer(dpy, DefaultRootWindow(dpy), &root, &child,
+                           &rx, &ry, &wx, &wy, &mask))
+            break;
+        if (!(mask & Button1Mask))
+            break;
+        int w = w0 + (rx - x0);
+        int h = h0 + (ry - y0);
+        if (w < minw) w = minw;
+        if (h < minh) h = minh;
+        XResizeWindow(dpy, win, w, h);
+        XFlush(dpy);
+        usleep(4000);
+    }
+}
+
 /* Alterna _NET_WM_STATE_ABOVE (always on top) via client message EWMH. */
 int sfrega_ontop(const char *name, int on)
 {

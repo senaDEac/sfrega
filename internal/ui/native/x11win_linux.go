@@ -64,6 +64,14 @@ func wmResize(name string, w, h int) {
 	C.sfrega_resize(cs, C.int(w), C.int(h))
 }
 
+func wmResizeDrag(name string, w0, h0, minw, minh int) {
+	wmMu.Lock()
+	defer wmMu.Unlock()
+	cs := C.CString(name)
+	defer C.free(unsafe.Pointer(cs))
+	C.sfrega_resize_drag(cs, C.int(w0), C.int(h0), C.int(minw), C.int(minh))
+}
+
 func wmOntop(name string, on bool) bool {
 	wmMu.Lock()
 	defer wmMu.Unlock()
