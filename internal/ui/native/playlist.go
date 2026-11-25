@@ -555,6 +555,24 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 		ui.plPosBar(gtx, barR)
 	}
 
+	// caixa LCD com a quantidade de faixas visíveis
+	if ui.plCount > 0 {
+		bx, by := plMenuX+4*29+4, botY+9
+		box := image.Rect(bx, by, bx+64, by+16)
+		if box.Max.X+8 < barR.Min.X {
+			fillRect(gtx.Ops, box, color.NRGBA{R: 0, G: 0, B: 0, A: 0xFF})
+			fillRect(gtx.Ops, image.Rect(box.Min.X+1, box.Min.Y+1, box.Max.X-1, box.Min.Y+2), colLCDTop)
+			fillRect(gtx.Ops, image.Rect(box.Min.X+1, box.Max.Y-2, box.Max.X-1, box.Max.Y-1), colLCDBot)
+			s := fmt.Sprintf("%d", ui.plCount)
+			x := box.Max.X - 5 - len(s)*10
+			for i, ch := range s {
+				d := int(ch - '0')
+				ui.spr(gtx, "NUMBERS", image.Rect(d*9, 0, d*9+9, 13),
+					image.Rect(x+i*10, by+2, x+i*10+9, by+15))
+			}
+		}
+	}
+
 	// setas de scroll (decorativas)
 	ui.plScrollArrow(gtx, winW-15, botY+2, true)
 	ui.plScrollArrow(gtx, winW-15, botY+8, false)
