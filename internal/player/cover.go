@@ -15,7 +15,7 @@ import (
 	"golang.org/x/image/webp"
 )
 
-const coverSize = 15
+const coverSize = 40
 
 // saveCover grava a imagem embutida em covers/<hash>.<ext> e retorna o
 // nome do arquivo ("-" quando não há arte ou o diretório não existe).
@@ -55,7 +55,7 @@ func coverExt(b []byte) string {
 	return ""
 }
 
-// TrackCover retorna a capa da faixa i como thumb 15x15 (nil se não houver).
+// TrackCover retorna a capa da faixa i redimensionada (nil se não houver).
 // Seguro para a thread de UI: só lê cache e arquivos pequenos sob demanda.
 func (p *Player) TrackCover(i int) image.Image {
 	p.mu.Lock()

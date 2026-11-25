@@ -25,6 +25,7 @@ import (
 var plResTag event.Tag
 var plShadeResTag event.Tag
 var plWheelTag event.Tag
+var plArtistWheelTag event.Tag
 
 // plWheel rola a lista com a roda do mouse (mesmo padrão do menuWindow).
 func (ui *uiState) plWheel(gtx layout.Context, r image.Rectangle) {
@@ -49,6 +50,29 @@ func (ui *uiState) plWheel(gtx layout.Context, r image.Rectangle) {
 	}
 }
 
+// plArtistWheel rola a fileira de artistas na área vazia do painel.
+func (ui *uiState) plArtistWheel(gtx layout.Context, r image.Rectangle) {
+	cs := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plArtistWheelTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target:  &plArtistWheelTag,
+			Kinds:   pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		ui.plArtistScrollAcc += e.Scroll.Y
+	}
+}
+
 // Cores do PLEDIT.TXT da skin base-2.91.
 var (
 	colPLBg      = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xFF}
@@ -57,6 +81,7 @@ var (
 	colPLSelBg   = color.NRGBA{R: 0x00, G: 0x00, B: 0xC6, A: 0xFF} // SelectedBG=#0000C6
 	colPLSelText = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
 	colPLFile    = color.NRGBA{R: 0x40, G: 0xD0, B: 0x40, A: 0xFF} // fallback sem metadados
+	colPLCurBg   = color.NRGBA{R: 0x00, G: 0x00, B: 0x8C, A: 0xFF} // fundo azul da faixa tocando
 )
 
 // Layout da janela playlist conforme WebAmp/PLEDIT:
@@ -293,12 +318,34 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					saveGenreSel("")
 				}
 				saveGenreOpen(ui.plGenreOpen)
+				// só uma fileira de sub-botões por vez
+				ui.plArtistOpen = false
+				ui.plArtistSel = ""
+				saveArtistSel("")
+				saveArtistOpen(false)
 			}
-			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha a fileira de gêneros
+			if i == 2 { // ARTISTA: abre/fecha a fileira de artistas
+				ui.plArtistOpen = !ui.plArtistOpen
+				if !ui.plArtistOpen {
+					ui.plArtistSel = ""
+					saveArtistSel("")
+				}
+				saveArtistOpen(ui.plArtistOpen)
+				// só uma fileira de sub-botões por vez
 				ui.plGenreOpen = false
 				ui.plGenreSel = ""
 				saveGenreSel("")
 				saveGenreOpen(false)
+			}
+			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha as fileiras
+				ui.plGenreOpen = false
+				ui.plGenreSel = ""
+				saveGenreSel("")
+				saveGenreOpen(false)
+				ui.plArtistOpen = false
+				ui.plArtistSel = ""
+				saveArtistSel("")
+				saveArtistOpen(false)
 			}
 			if ui.plGenSel == i {
 				ui.plGenSel = -1
@@ -308,7 +355,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			saveGenSel(ui.plGenSel)
 		}
 		lc := dark
-		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") {
+		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") || (i == 2 && ui.plArtistSel != "") {
 			ui.btnTextB(gtx, labels[i], dst, genGreen)
 		} else {
 			ui.btnText(gtx, labels[i], dst, lc)
@@ -351,8 +398,108 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		genreH = 13
 	}
 
+	// fileira de artistas abaixo dos botões GENEX (ARTISTA abre/fecha)
+	// um artista por linha, ordenado, com scroll próprio
+	artistH := 0
+	if ui.plArtistOpen {
+		artists := ui.p.Artists()
+		sort.Slice(artists, func(a, b int) bool {
+			return strings.ToLower(artists[a]) < strings.ToLower(artists[b])
+		})
+		for len(ui.plArtistBtns) < len(artists) {
+			ui.plArtistBtns = append(ui.plArtistBtns, uibtn{})
+		}
+		areaTop := plTopH + 16 + genreH
+		avail := botY - 3 - areaTop
+		contentH := len(artists) * 13
+		maxH := avail - 30 // reserva ~2 linhas para a lista de músicas
+		if maxH < 13 {
+			maxH = avail
+		}
+		if maxH < 0 {
+			maxH = 0
+		}
+		artistH = contentH
+		if artistH > maxH {
+			artistH = maxH
+		}
+		ui.plArtistMax = float32(contentH - artistH)
+		if ui.plArtistMax < 0 {
+			ui.plArtistMax = 0
+		}
+		if ui.plArtistScroll > ui.plArtistMax {
+			ui.plArtistScroll = ui.plArtistMax
+		}
+		if ui.plArtistScroll < 0 {
+			ui.plArtistScroll = 0
+		}
+		if !ui.plArtistDrag.active && ui.plArtistMax > 0 {
+			ui.plArtistDrag.val = ui.plArtistScroll / ui.plArtistMax
+		}
+		panel := image.Rect(12, areaTop, winW-23, areaTop+artistH)
+		fillRect(gtx.Ops, panel, colPLBg)
+		cs := clip.Rect(panel).Push(gtx.Ops)
+		off := op.Offset(image.Pt(0, -int(ui.plArtistScroll))).Push(gtx.Ops)
+		for ai, a := range artists {
+			ry := areaTop + ai*13
+			rowR := image.Rect(14, ry, winW-27, ry+13)
+			selA := ui.plArtistSel == a
+			if selA {
+				fillRect(gtx.Ops, rowR, colPLSelBg)
+			}
+			ac := colPLText
+			if selA {
+				ac = colPLSelText
+			}
+			ui.textAt(gtx, ui.fontUI, unit.Sp(9), a, ac, image.Pt(16, ry+2))
+			ui.plArtistBtns[ai].scrollFn = func(dy float32) { ui.plArtistScrollAcc += dy }
+			if ui.button(gtx, &ui.plArtistBtns[ai], rowR, func(gtx layout.Context, down bool) {}) {
+				if ui.plArtistSel == a {
+					ui.plArtistSel = ""
+				} else {
+					ui.plArtistSel = a
+				}
+				saveArtistSel(ui.plArtistSel)
+			}
+		}
+		off.Pop()
+		cs.Pop()
+		ui.plArtistWheel(gtx, panel)
+		// aplica o scroll acumulado pela roda (botões e área vazia)
+		if ui.plArtistScrollAcc != 0 {
+			ui.plArtistScroll -= ui.plArtistScrollAcc
+			if ui.plArtistScroll > ui.plArtistMax {
+				ui.plArtistScroll = ui.plArtistMax
+			}
+			if ui.plArtistScroll < 0 {
+				ui.plArtistScroll = 0
+			}
+			ui.plArtistScrollAcc = 0
+		}
+		// scrollbar quando o conteúdo excede a área visível
+		if contentH > artistH && artistH > 0 {
+			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+artistH-1)
+			fillRect(gtx.Ops, track, colPLBg)
+			thumbH := artistH * artistH / contentH
+			if thumbH < 12 {
+				thumbH = 12
+			}
+			if thumbH > artistH-2 {
+				thumbH = artistH - 2
+			}
+			frac := float32(0)
+			if ui.plArtistMax > 0 {
+				frac = ui.plArtistScroll / ui.plArtistMax
+			}
+			thumbY := areaTop + 1 + int(frac*float32(artistH-2-thumbH))
+			fillRect(gtx.Ops, image.Rect(winW-20, thumbY, winW-16, thumbY+thumbH),
+				color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF})
+			ui.scrub(gtx, &ui.plArtistDrag, track)
+		}
+	}
+
 	// fundo da lista
-	listR := image.Rect(12, plTopH+16+genreH, winW-23, botY-3)
+	listR := image.Rect(12, plTopH+16+genreH+artistH, winW-23, botY-3)
 	fillRect(gtx.Ops, listR, colPLBg)
 
 	ui.plWheel(gtx, listR)
@@ -362,6 +509,29 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	lgtx.Constraints.Min = image.Point{}
 	lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
 	order := ui.p.TracksForGenre(ui.plGenreSel)
+	if ui.plArtistSel != "" {
+		aset := make(map[int]bool)
+		for _, i := range ui.p.TracksForArtist(ui.plArtistSel) {
+			aset[i] = true
+		}
+		var f []int
+		for _, i := range order {
+			if aset[i] {
+				f = append(f, i)
+			}
+		}
+		order = f
+	}
+	// ordem alfabética pelo nome de exibição
+	names := make(map[int]string, len(order))
+	for _, i := range order {
+		n, _ := ui.p.TrackTitle(i)
+		if n == "" {
+			n = filepath.Base(tracks[i])
+		}
+		names[i] = strings.ToLower(n)
+	}
+	sort.Slice(order, func(a, b int) bool { return names[order[a]] < names[order[b]] })
 	ui.plCount = len(order)
 	ui.plList.Axis = layout.Vertical
 	ui.plList.Layout(lgtx, len(order), func(gtx layout.Context, i int) layout.Dimensions {
@@ -685,6 +855,9 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 	r := image.Rect(0, 0, w, h)
 	cur := i == ui.p.Index()
 	sel := i == ui.plSel
+	if cur {
+		fillRect(gtx.Ops, r, colPLCurBg)
+	}
 	if sel {
 		fillRect(gtx.Ops, r, colPLSelBg)
 	}

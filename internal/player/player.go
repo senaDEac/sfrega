@@ -125,6 +125,8 @@ type Player struct {
 	coverCache map[string]image.Image // thumbs por nome de capa
 	genreMu    sync.Mutex
 	genresList []string // gêneros distintos (preenchido pelo warmTags)
+	artistMu   sync.Mutex
+	artistsList []string // artistas distintos (preenchido pelo warmTags)
 }
 
 // tagPeek retorna o tag em cache sem ler o arquivo (seguro para a UI).
@@ -193,6 +195,7 @@ func (p *Player) warmTags(paths []string) {
 				return
 			case <-tk.C:
 				p.computeGenres(cp)
+				p.computeArtists(cp)
 			}
 		}
 	}()
@@ -204,6 +207,7 @@ func (p *Player) warmTags(paths []string) {
 		wg.Wait()
 		close(done)
 		p.computeGenres(cp)
+		p.computeArtists(cp)
 		p.saveTags()
 	}()
 }
@@ -222,6 +226,65 @@ func (p *Player) computeGenres(paths []string) {
 	p.genreMu.Lock()
 	p.genresList = genres
 	p.genreMu.Unlock()
+}
+
+// computeArtists recalcula a lista de artistas distintos na ordem das faixas.
+func (p *Player) computeArtists(paths []string) {
+	seen := map[string]bool{}
+	var artists []string
+	for _, path := range paths {
+		t, _ := p.tagPeek(path)
+		if t.Artist != "" && !seen[t.Artist] {
+			seen[t.Artist] = true
+			artists = append(artists, t.Artist)
+		}
+	}
+	p.artistMu.Lock()
+	p.artistsList = artists
+	p.artistMu.Unlock()
+}
+
+// Artists retorna os artistas distintos das faixas (cache do warmTags).
+func (p *Player) Artists() []string {
+	p.artistMu.Lock()
+	defer p.artistMu.Unlock()
+	return append([]string(nil), p.artistsList...)
+}
+
+// TracksForArtist retorna os índices das faixas do artista ("" = todas).
+func (p *Player) TracksForArtist(artist string) []int {
+	p.mu.Lock()
+	n := len(p.tracks)
+	p.mu.Unlock()
+	if artist == "" {
+		out := make([]int, n)
+		for i := range out {
+			out[i] = i
+		}
+		return out
+	}
+	var out []int
+	for i := 0; i < n; i++ {
+		if p.trackArtist(i) == artist {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// trackArtist retorna o artista do metadado da faixa i ("" se não houver).
+func (p *Player) trackArtist(i int) string {
+	p.mu.Lock()
+	var path string
+	if i >= 0 && i < len(p.tracks) {
+		path = p.tracks[i]
+	}
+	p.mu.Unlock()
+	if path == "" {
+		return ""
+	}
+	t, _ := p.tagPeek(path)
+	return t.Artist
 }
 
 // TrackTitle retorna o nome de exibição da faixa i: título do metadado
