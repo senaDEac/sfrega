@@ -128,6 +128,7 @@ type uiState struct {
 	plMenuClicks                                         [5][]uibtn
 	plMenuOpen                                           int
 	plSel                                                int
+	plScrollAcc                                          float32
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 

@@ -23,6 +23,30 @@ import (
 
 var plResTag event.Tag
 var plShadeResTag event.Tag
+var plWheelTag event.Tag
+
+// plWheel rola a lista com a roda do mouse (mesmo padrão do menuWindow).
+func (ui *uiState) plWheel(gtx layout.Context, r image.Rectangle) {
+	cs := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plWheelTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target:  &plWheelTag,
+			Kinds:   pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		ui.plList.ScrollBy(e.Scroll.Y / plRowH)
+	}
+}
 
 // Cores do PLEDIT.TXT da skin base-2.91.
 var (
@@ -330,6 +354,8 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	listR := image.Rect(12, plTopH+16, winW-23, botY-3)
 	fillRect(gtx.Ops, listR, colPLBg)
 
+	ui.plWheel(gtx, listR)
+
 	loff := op.Offset(listR.Min).Push(gtx.Ops)
 	lgtx := gtx
 	lgtx.Constraints.Min = image.Point{}
@@ -339,9 +365,35 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		return ui.plRow(gtx, i, tracks, listR.Dx())
 	})
 	loff.Pop()
+	if ui.plScrollAcc != 0 {
+		ui.plList.ScrollBy(ui.plScrollAcc / plRowH)
+		ui.plScrollAcc = 0
+	}
 
-	// handle da scrollbar (decorativo)
-	ui.spr(gtx, "PLEDIT", R(52, 53, 8, 18), R(winW-17, plTopH+6, 8, 18))
+	// indicador da scrollbar acompanha a posição de scroll da lista
+	pos := ui.plList.Position
+	availH := listR.Dy()
+	totalH := int(pos.Length)
+	if totalH < availH {
+		totalH = availH
+	}
+	maxS := totalH - availH
+	thumbY := plTopH + 6
+	if maxS > 0 {
+		sc := float32(pos.First)*plRowH + float32(pos.Offset)
+		f := sc / float32(maxS)
+		if f < 0 {
+			f = 0
+		} else if f > 1 {
+			f = 1
+		}
+		trackH := botY - 3 - thumbY
+		thumbY += int(f * float32(trackH-18))
+		if thumbY+18 > botY-3 {
+			thumbY = botY - 3 - 18
+		}
+	}
+	ui.spr(gtx, "PLEDIT", R(52, 53, 8, 18), R(winW-17, thumbY, 8, 18))
 }
 
 // plBottom desenha o rodapé de 38px: menus à esquerda, transporte à direita.
@@ -611,6 +663,10 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 	for len(ui.plRowClicks) <= i {
 		ui.plRowClicks = append(ui.plRowClicks, uibtn{})
 	}
+	// a roda do mouse é consumida pelo botão da linha (ui.button filtra
+	// Scroll); acumula o delta e aplica após o Layout para não corromper
+	// a iteração do List
+	ui.plRowClicks[i].scrollFn = func(dy float32) { ui.plScrollAcc += dy }
 	if ui.button(gtx, &ui.plRowClicks[i], r, func(gtx layout.Context, down bool) {}) {
 		ui.plSel = i
 		ui.p.PlayIndex(i)
