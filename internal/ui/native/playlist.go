@@ -56,6 +56,7 @@ var (
 	colPLCur     = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // Current=#FFFFFF
 	colPLSelBg   = color.NRGBA{R: 0x00, G: 0x00, B: 0xC6, A: 0xFF} // SelectedBG=#0000C6
 	colPLSelText = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+	colPLFile    = color.NRGBA{R: 0x40, G: 0xD0, B: 0x40, A: 0xFF} // fallback sem metadados
 )
 
 // Layout da janela playlist conforme WebAmp/PLEDIT:
@@ -569,7 +570,10 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 	if sel {
 		fillRect(gtx.Ops, r, colPLSelBg)
 	}
-	name := filepath.Base(tracks[i])
+	name, hasMeta := ui.p.TrackTitle(i)
+	if name == "" {
+		name = filepath.Base(tracks[i])
+	}
 	if sel {
 		name = "> " + name
 	}
@@ -590,6 +594,9 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 		name += "  " + strings.TrimSpace(sb.String())
 	}
 	c := colPLText
+	if !hasMeta {
+		c = colPLFile // sem metadados: nome do arquivo em verde claro
+	}
 	if cur {
 		c = colPLCur
 	}

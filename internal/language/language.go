@@ -30,7 +30,7 @@ func configPath() string {
 	if err != nil {
 		home = "/tmp"
 	}
-	return filepath.Join(home, ".config", "sfrega", "lang.txt")
+	return filepath.Join(home, ".local", "share", "sfrega", "configs", "lang.txt")
 }
 
 // langDirs retorna os diretórios de idiomas em runtime (sem rebuild).

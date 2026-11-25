@@ -114,6 +114,67 @@ type Player struct {
 	trackDone chan struct{} // cancelado ao trocar de faixa
 	events    chan Event
 	lastBands atomic.Value // [spectrum.Bands]float32
+	tagMu     sync.Mutex
+	tagCache  map[string]tagInfo // cache de metadados de áudio por path
+}
+
+// tagForPath retorna os metadados de áudio da faixa (com cache).
+func (p *Player) tagForPath(path string) tagInfo {
+	p.tagMu.Lock()
+	if t, ok := p.tagCache[path]; ok {
+		p.tagMu.Unlock()
+		return t
+	}
+	p.tagMu.Unlock()
+	t := readAudioTag(path)
+	p.tagMu.Lock()
+	if p.tagCache == nil {
+		p.tagCache = map[string]tagInfo{}
+	}
+	p.tagCache[path] = t
+	p.tagMu.Unlock()
+	return t
+}
+
+// warmTags pré-carrega tags das faixas em background.
+// Não pode ser chamado com p.mu segurado.
+func (p *Player) warmTags(paths []string) {
+	cp := append([]string(nil), paths...)
+	go func() {
+		for _, path := range cp {
+			p.tagForPath(path)
+		}
+	}()
+}
+
+// TrackTitle retorna o nome de exibição da faixa i: título do metadado
+// (ou "Artista - Título") quando existe; senão o nome do arquivo.
+// hasMeta indica se o nome veio de metadados (para destaque na UI).
+func (p *Player) TrackTitle(i int) (name string, hasMeta bool) {
+	p.mu.Lock()
+	var path string
+	if i >= 0 && i < len(p.tracks) {
+		path = p.tracks[i]
+	}
+	p.mu.Unlock()
+	if path == "" {
+		return "", false
+	}
+	t := p.tagForPath(path)
+	return displayNameCached(t, path), t.Title != "" || t.Artist != ""
+}
+
+func displayNameCached(t tagInfo, path string) string {
+	if t.Title != "" && t.Artist != "" {
+		return t.Artist + " - " + t.Title
+	}
+	if t.Title != "" {
+		return t.Title
+	}
+	if t.Artist != "" {
+		return t.Artist
+	}
+	return filepath.Base(path)
 }
 
 // New cria um Player. rate/channels são do dispositivo de saída.
@@ -197,7 +258,7 @@ func PlaylistFilePath() string {
 	if err != nil {
 		home = "/tmp"
 	}
-	return filepath.Join(home, ".config", "sfrega", "playlist.m3u")
+	return filepath.Join(home, ".local", "share", "sfrega", "configs", "playlist.m3u")
 }
 
 // SetTracks define a playlist.
@@ -212,6 +273,7 @@ func (p *Player) SetTracks(tracks []string) {
 	p.ensureMetaLocked()
 	p.saveTracksLocked()
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
+	p.warmTags(tracks)
 }
 
 // AddTracks anexa faixas ao fim da playlist sem interromper a reprodução.
@@ -228,6 +290,7 @@ func (p *Player) AddTracks(tracks []string) {
 	p.ensureMetaLocked()
 	p.saveTracksLocked()
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
+	p.warmTags(tracks)
 }
 
 // ensureMetaLocked cria entradas de metadados (com hashtags) para faixas novas.

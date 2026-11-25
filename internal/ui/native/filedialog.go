@@ -106,12 +106,14 @@ func audioFilesInDir(root string) []string {
 // pickLinux tenta kdialog e depois zenity (zenity 4.x depende do portal
 // xdg e pode falhar silenciosamente em algumas sessões).
 func pickLinux() ([]byte, error) {
-	filter := "Audio|*.mp3 *.wav *.flac *.ogg *.m4a *.aac *.wma *.opus *.aiff *.ape"
+	exts := "*.mp3 *.wav *.flac *.ogg *.m4a *.aac *.wma *.opus *.aiff *.ape"
 	if _, err := exec.LookPath("kdialog"); err == nil {
+		filter := "Audio (" + exts + ")|" + exts
 		return exec.Command("kdialog", "--getopenfilename", ".",
 			filter, "--multiple", "--separate-output").Output()
 	}
 	if _, err := exec.LookPath("zenity"); err == nil {
+		filter := "Audio|" + exts
 		return exec.Command("zenity", "--file-selection", "--multiple",
 			"--separator=\n", "--file-filter", filter).Output()
 	}

@@ -181,13 +181,13 @@ func beginScaledFrame(gtx layout.Context, scale int, logical image.Point) layout
 	return gtx
 }
 
-// configPath retorna ~/.config/sfrega/<name>.
+// configPath retorna ~/.local/share/sfrega/configs/<name>.
 func configPath(name string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "/tmp"
 	}
-	return filepath.Join(home, ".config", "sfrega", name)
+	return filepath.Join(home, ".local", "share", "sfrega", "configs", name)
 }
 
 // loadMainScale lê a escala persistida da janela principal (1 ou 2).
