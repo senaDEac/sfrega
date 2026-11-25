@@ -1,6 +1,7 @@
 package player
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"os"
 	"strings"
@@ -12,6 +13,8 @@ type tagInfo struct {
 	Title  string
 	Artist string
 	Genre  string
+	Art    []byte `json:"-"` // imagem embutida (só em memória)
+	Cover  string // nome do arquivo de capa em covers/ ("-" = sem arte)
 }
 
 // readAudioTag extrai título/artista do arquivo de áudio.
@@ -48,7 +51,7 @@ func readAudioTag(path string) tagInfo {
 	n, _ := f.ReadAt(head, 0)
 	head = head[:n]
 	head = append(head, tail...)
-	if t := id3v2(head); t.Title != "" || t.Artist != "" || t.Genre != "" {
+	if t := id3v2(head); t.Title != "" || t.Artist != "" || t.Genre != "" || t.Art != nil {
 		return t
 	}
 	if t := id3v1(head); t.Title != "" || t.Artist != "" {
@@ -147,11 +150,12 @@ func id3v2(d []byte) tagInfo {
 			if !hasTitle {
 				t.Title = textEnc(d[pos+10 : fend])
 			}
+		case "APIC":
+			if t.Art == nil {
+				t.Art = apicFrame(d[pos+10 : fend])
+			}
 		}
 		pos = fend
-		if hasTitle && t.Artist != "" && t.Genre != "" {
-			break
-		}
 	}
 	return t
 }
@@ -297,6 +301,10 @@ func vorbisComment(d []byte) tagInfo {
 					t.Artist = v
 				case "GENRE":
 					t.Genre = genreName(v)
+				case "METADATA_BLOCK_PICTURE":
+					if t.Art == nil {
+						t.Art = vorbisPicture(v)
+					}
 				}
 			}
 		}
@@ -306,4 +314,71 @@ func vorbisComment(d []byte) tagInfo {
 		}
 	}
 	return t
+}
+
+// apicFrame extrai os bytes da imagem do frame APIC do ID3v2.
+// Layout: <enc><mime><0><picType><desc><0><imagedata>
+func apicFrame(b []byte) []byte {
+	if len(b) < 4 {
+		return nil
+	}
+	enc := b[0]
+	// terminador de string conforme o encoding (0/3 = 1 byte, 1/2 = 2 bytes)
+	term := 1
+	if enc == 1 || enc == 2 {
+		term = 2
+	}
+	i := 1
+	// pula MIME
+	for i+term <= len(b) {
+		if term == 1 && b[i] == 0 || term == 2 && b[i] == 0 && b[i+1] == 0 {
+			break
+		}
+		i++
+	}
+	i += term // fim do mime
+	if i >= len(b) {
+		return nil
+	}
+	i++ // picture type (1 byte)
+	// pula descrição
+	for i+term <= len(b) {
+		if term == 1 && b[i] == 0 || term == 2 && b[i] == 0 && b[i+1] == 0 {
+			break
+		}
+		i++
+	}
+	i += term
+	if i >= len(b) {
+		return nil
+	}
+	return b[i:]
+}
+
+// vorbisPicture decodifica METADATA_BLOCK_PICTURE (base64) e retorna
+// os bytes da imagem embutida.
+func vorbisPicture(s string) []byte {
+	raw, err := base64.StdEncoding.DecodeString(s)
+	if err != nil || len(raw) < 8 {
+		return nil
+	}
+	p := 4 // tipo MIME length + mime + description len + description + dims
+	mlen := int(binary.LittleEndian.Uint32(raw[p:]))
+	p += 4 + mlen
+	if p+4 > len(raw) {
+		return nil
+	}
+	dlen := int(binary.LittleEndian.Uint32(raw[p:]))
+	p += 4 + dlen
+	// w,h,depth,colors = 16 bytes
+	p += 16
+	if p+4 > len(raw) {
+		return nil
+	}
+	sz := int(binary.LittleEndian.Uint32(raw[p:]))
+	p += 4
+	if p+sz > len(raw) {
+		return nil
+	}
+	return raw[p : p+sz]
 }

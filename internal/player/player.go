@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"image"
 	"math"
 	"os"
 	"path/filepath"
@@ -119,6 +120,9 @@ type Player struct {
 	lastBands  atomic.Value // [spectrum.Bands]float32
 	tagMu      sync.Mutex
 	tagCache   map[string]tagInfo // cache de metadados de áudio por path
+	artDir     string             // diretório das capas extraídas (covers/)
+	coverMu    sync.Mutex
+	coverCache map[string]image.Image // thumbs 15x15 por nome de capa
 	genreMu    sync.Mutex
 	genresList []string // gêneros distintos (preenchido pelo warmTags)
 }
@@ -161,7 +165,21 @@ func (p *Player) warmTags(paths []string) {
 		go func() {
 			defer wg.Done()
 			for path := range jobs {
-				p.tagForPath(path)
+				t := p.tagForPath(path)
+				if t.Cover == "" {
+					art := t.Art
+					if len(art) == 0 {
+						art = readAudioTag(path).Art // tag do cache: relê p/ arte
+					}
+					cov := p.saveCover(path, art)
+					p.tagMu.Lock()
+					if c, ok := p.tagCache[path]; ok {
+						c.Cover = cov
+						c.Art = nil
+						p.tagCache[path] = c
+					}
+					p.tagMu.Unlock()
+				}
 			}
 		}()
 	}
@@ -364,10 +382,13 @@ func (p *Player) SetPlaylistFile(path string) {
 		dir := filepath.Dir(path)
 		p.lib = newTrackLibrary(filepath.Join(dir, "library.json"))
 		p.tagsFile = filepath.Join(dir, "tags.json")
+		p.artDir = filepath.Join(dir, "covers")
+		_ = os.MkdirAll(p.artDir, 0o755)
 		p.loadTags()
 	} else {
 		p.lib = nil
 		p.tagsFile = ""
+		p.artDir = ""
 	}
 }
 

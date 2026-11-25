@@ -66,7 +66,7 @@ var (
 const (
 	plTopH  = 20
 	plBotH  = 38
-	plRowH  = 13
+	plRowH  = 15
 	plMenuX = 14 // primeiro menu button x (pitch 29)
 )
 
@@ -721,7 +721,10 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 	if sel {
 		c = colPLSelText
 	}
-	ui.textAt(gtx, ui.fontUI, unit.Sp(9), name, c, image.Pt(4, 1))
+	if img := ui.p.TrackCover(i); img != nil {
+		blit(gtx, img, image.Rect(1, 0, 16, 15))
+	}
+	ui.textAt(gtx, ui.fontUI, unit.Sp(9), name, c, image.Pt(19, 2))
 	for len(ui.plRowClicks) <= i {
 		ui.plRowClicks = append(ui.plRowClicks, uibtn{})
 	}
