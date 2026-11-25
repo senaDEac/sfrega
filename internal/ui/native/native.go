@@ -132,6 +132,8 @@ type uiState struct {
 	plGenreOpen                                          bool
 	plGenreSel                                           string
 	plGenreBtns                                          []uibtn
+	plGenSel                                             int // botão GENEX selecionado (-1 = nenhum)
+	plCount                                              int // faixas visíveis (após filtro)
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
@@ -245,6 +247,59 @@ func savePLShade(on bool) {
 		v = "1\n"
 	}
 	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadGenreOpen lê se a fileira de gêneros da Playlist abre expandida.
+func loadGenreOpen() bool {
+	b, err := os.ReadFile(configPath("genreopen.txt"))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveGenreOpen grava o estado da fileira de gêneros.
+func saveGenreOpen(on bool) {
+	p := configPath("genreopen.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadGenreSel lê o gênero selecionado persistido ("" = todos).
+func loadGenreSel() string {
+	b, err := os.ReadFile(configPath("genre.txt"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// saveGenreSel grava o gênero selecionado na Playlist.
+func saveGenreSel(g string) {
+	p := configPath("genre.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(g), 0o644)
+}
+
+// loadGenSel lê o botão GENEX selecionado persistido (-1 = nenhum).
+func loadGenSel() int {
+	b, err := os.ReadFile(configPath("gensex.txt"))
+	if err != nil {
+		return -1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		return -1
+	}
+	return n
+}
+
+// saveGenSel grava o botão GENEX selecionado (-1 = nenhum).
+func saveGenSel(i int) {
+	p := configPath("gensex.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(strconv.Itoa(i)), 0o644)
 }
 
 // loadOntop lê se a janela principal deve abrir sempre no topo.
@@ -616,6 +671,9 @@ func Run(p *player.Player) error {
 		fontMenuBold: font.Font{Typeface: "Liberation Sans", Weight: font.Bold},
 		plSel:        -1,
 		plMenuOpen:   -1,
+		plGenreOpen:  loadGenreOpen(),
+		plGenreSel:   loadGenreSel(),
+		plGenSel:     loadGenSel(),
 	}
 	ui.volDrag.val = 1.0
 	ui.skin.Store(skin)

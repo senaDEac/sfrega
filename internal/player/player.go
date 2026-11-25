@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -295,15 +296,61 @@ func New(rate uint32, channels uint32) (*Player, error) {
 	p.preamp.Store(math.Float32bits(1))
 	p.pan.Store(math.Float32bits(0))
 	p.eq.Store(eqFromGains([10]float64{}, 44100))
+	go p.resumeLoop()
 	return p, nil
 }
 
 func (p *Player) Events() <-chan Event { return p.events }
 
 func (p *Player) emit(e Event) {
+	// persiste a última faixa tocada (Title carrega o path) para retomada
+	if e.Kind == "track-change" && e.Title != "" && p.listFile != "" {
+		_ = os.WriteFile(p.resumePath(), []byte(e.Title), 0o644)
+	}
 	select {
 	case p.events <- e:
 	default:
+	}
+}
+
+// resumePath retorna o arquivo que guarda a última faixa + posição.
+func (p *Player) resumePath() string {
+	return filepath.Join(filepath.Dir(p.listFile), "resume.txt")
+}
+
+// saveResume grava path + fração de posição da faixa atual.
+func (p *Player) saveResume() {
+	if p.listFile == "" {
+		return
+	}
+	p.mu.Lock()
+	if p.index < 0 || p.index >= len(p.tracks) {
+		p.mu.Unlock()
+		return
+	}
+	data := p.tracks[p.index]
+	if p.dec != nil {
+		if dur := p.dec.LengthFrames(); dur > 0 {
+			if frac := float64(p.playedFrames(p.dec.SampleRate(), p.dec.Channels())) / float64(dur); frac > 0.001 {
+				data += "\n" + strconv.FormatFloat(frac, 'g', -1, 64)
+			}
+		}
+	}
+	p.mu.Unlock()
+	_ = os.WriteFile(p.resumePath(), []byte(data), 0o644)
+}
+
+// resumeLoop grava a posição periodicamente (sobrevive a kill -9/SIGTERM).
+func (p *Player) resumeLoop() {
+	tk := time.NewTicker(5 * time.Second)
+	defer tk.Stop()
+	for {
+		select {
+		case <-p.done:
+			return
+		case <-tk.C:
+			p.saveResume()
+		}
 	}
 }
 
@@ -508,6 +555,7 @@ func (p *Player) PlayIndex(i int) error {
 		return err
 	}
 	p.playing.Store(true)
+	p.emit(Event{Kind: "track-change", Index: i, Title: p.currentTitle()})
 	return nil
 }
 
@@ -986,6 +1034,7 @@ func (p *Player) Stats() (decoded, buffered, played uint64) {
 // Close libera recursos.
 func (p *Player) Close() {
 	close(p.done)
+	p.saveResume() // antes do lock; decoder ainda vivo
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.closeTrackLocked()

@@ -280,17 +280,39 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		language.T("pl.btn.albums"), language.T("pl.btn.list"),
 	}
 	dark := color.NRGBA{R: 0x10, G: 0x10, B: 0x18, A: 0xFF}
+	genGreen := color.NRGBA{R: 0x80, G: 0x00, B: 0x20, A: 0xFF} // bordeaux
 	for i, gb := range gbtns {
 		bx := 14 + i*47
 		dst := R(bx, plTopH+3, 45, 11)
 		if ui.spriteBtn(gtx, gb, "GENEX", dst,
-			R(0, 0, 48, 16), R(0, 16, 48, 15)) && i == 0 {
-			ui.plGenreOpen = !ui.plGenreOpen
-			if !ui.plGenreOpen {
-				ui.plGenreSel = ""
+			R(0, 0, 48, 16), R(0, 16, 48, 15)) {
+			if i == 0 {
+				ui.plGenreOpen = !ui.plGenreOpen
+				if !ui.plGenreOpen {
+					ui.plGenreSel = ""
+					saveGenreSel("")
+				}
+				saveGenreOpen(ui.plGenreOpen)
 			}
+			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha a fileira de gêneros
+				ui.plGenreOpen = false
+				ui.plGenreSel = ""
+				saveGenreSel("")
+				saveGenreOpen(false)
+			}
+			if ui.plGenSel == i {
+				ui.plGenSel = -1
+			} else {
+				ui.plGenSel = i
+			}
+			saveGenSel(ui.plGenSel)
 		}
-		ui.btnText(gtx, labels[i], dst, dark)
+		lc := dark
+		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") {
+			ui.btnTextB(gtx, labels[i], dst, genGreen)
+		} else {
+			ui.btnText(gtx, labels[i], dst, lc)
+		}
 	}
 
 	// fileira de gêneros abaixo dos botões GENEX (GENRE abre/fecha)
@@ -317,10 +339,11 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 				} else {
 					ui.plGenreSel = g
 				}
+				saveGenreSel(ui.plGenreSel)
 			}
 			gc := dark
 			if ui.plGenreSel == g {
-				gc = color.NRGBA{R: 0xE2, G: 0x00, B: 0x00, A: 0xFF}
+				gc = genGreen
 			}
 			ui.btnTextB(gtx, g, dst, gc)
 			x += gw + 2
@@ -339,6 +362,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	lgtx.Constraints.Min = image.Point{}
 	lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
 	order := ui.p.TracksForGenre(ui.plGenreSel)
+	ui.plCount = len(order)
 	ui.plList.Axis = layout.Vertical
 	ui.plList.Layout(lgtx, len(order), func(gtx layout.Context, i int) layout.Dimensions {
 		return ui.plRow(gtx, order[i], tracks, listR.Dx())
@@ -525,6 +549,27 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 				if it.fn != nil {
 					it.fn()
 				}
+			}
+		}
+	}
+
+	// fundo preto estilo LCD ao lado direito do botão MISC
+	lcdR := image.Rect(plMenuX+4*29+4, botY+9, plMenuX+4*29+68, botY+25)
+	if lcdR.Max.X < winW-154 {
+		fillRect(gtx.Ops, lcdR, color.NRGBA{A: 0xFF})
+		fillRect(gtx.Ops, image.Rect(lcdR.Min.X, lcdR.Min.Y, lcdR.Max.X, lcdR.Min.Y+1), colLCDTop)
+		fillRect(gtx.Ops, image.Rect(lcdR.Min.X, lcdR.Max.Y-1, lcdR.Max.X, lcdR.Max.Y), colLCDBot)
+		// contagem de faixas visíveis em dígitos bitmap NUMBERS (estilo LCD)
+		if ui.plCount > 0 {
+			var ds []int
+			for m := ui.plCount; m > 0; m /= 10 {
+				ds = append([]int{m % 10}, ds...)
+			}
+			x := lcdR.Max.X - 4
+			for i := len(ds) - 1; i >= 0; i-- {
+				x -= 11
+				ui.spr(gtx, "NUMBERS", image.Rect(ds[i]*9, 0, ds[i]*9+9, 13),
+					image.Rect(x, lcdR.Min.Y+1, x+9, lcdR.Min.Y+14))
 			}
 		}
 	}

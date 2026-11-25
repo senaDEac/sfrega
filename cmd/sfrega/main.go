@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,10 +79,38 @@ func main() {
 	defer p.Close()
 	p.SetPlaylistFile(player.PlaylistFilePath())
 	if len(tracks) > 0 {
+		// lê resume.txt ANTES do SetTracks: o emit de track-change
+		// sobrescreveria o arquivo com a faixa 0
+		var last, fracStr string
+		if b, err := os.ReadFile(filepath.Join(filepath.Dir(player.PlaylistFilePath()), "resume.txt")); err == nil {
+			lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+			last = strings.TrimSpace(lines[0])
+			if len(lines) > 1 {
+				fracStr = strings.TrimSpace(lines[1])
+			}
+		}
 		p.SetTracks(tracks)
-		if err := p.Play(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+		// retoma a última faixa tocada (+ posição), se ainda estiver na playlist
+		found := false
+		frac, _ := strconv.ParseFloat(fracStr, 64)
+		for i, t := range tracks {
+			if t == last {
+				if err := p.PlayIndex(i); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(1)
+				}
+				if frac > 0 {
+					_ = p.SeekFraction(frac)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			if err := p.Play(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
 		}
 	}
 
