@@ -77,16 +77,32 @@ func (p *Player) coverForPath(path string) image.Image {
 		return nil
 	}
 	p.coverMu.Lock()
-	defer p.coverMu.Unlock()
 	if p.coverCache == nil {
 		p.coverCache = map[string]image.Image{}
 	}
 	if img, ok := p.coverCache[t.Cover]; ok {
+		p.coverMu.Unlock()
 		return img
 	}
-	img := loadCoverThumb(filepath.Join(p.artDir, t.Cover))
-	p.coverCache[t.Cover] = img
-	return img
+	// decode em background: a capa aparece no próximo frame, sem travar a UI
+	if p.coverPend == nil {
+		p.coverPend = map[string]bool{}
+	}
+	if p.coverPend[t.Cover] {
+		p.coverMu.Unlock()
+		return nil
+	}
+	p.coverPend[t.Cover] = true
+	name := t.Cover
+	p.coverMu.Unlock()
+	go func() {
+		img := loadCoverThumb(filepath.Join(p.artDir, name))
+		p.coverMu.Lock()
+		p.coverCache[name] = img
+		delete(p.coverPend, name)
+		p.coverMu.Unlock()
+	}()
+	return nil
 }
 
 // loadCoverThumb decodifica a imagem e reduz para coverSize×coverSize.

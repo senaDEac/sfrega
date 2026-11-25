@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -123,6 +124,7 @@ type Player struct {
 	artDir     string             // diretório das capas extraídas (covers/)
 	coverMu    sync.Mutex
 	coverCache map[string]image.Image // thumbs por nome de capa
+	coverPend  map[string]bool        // decodes de thumb em andamento
 	genreMu    sync.Mutex
 	genresList []string // gêneros distintos (preenchido pelo warmTags)
 	artistMu   sync.Mutex
@@ -247,6 +249,9 @@ func (p *Player) computeArtists(paths []string) {
 			}
 		}
 	}
+	sort.Slice(artists, func(a, b int) bool {
+		return strings.ToLower(artists[a]) < strings.ToLower(artists[b])
+	})
 	p.artistMu.Lock()
 	p.artistsList = artists
 	p.artistFirst = first

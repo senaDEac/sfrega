@@ -180,6 +180,7 @@ type uibtn struct {
 	down     bool
 	over     bool
 	scrollFn func(dy float32) // opcional: roda do mouse sobre o botão
+	lastClick time.Time       // último clique (detecção de duplo-clique)
 }
 
 // beginScaledFrame configura o sistema de coordenadas lógico da janela e

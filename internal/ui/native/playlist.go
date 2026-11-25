@@ -84,6 +84,7 @@ var (
 	colPLSelText = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
 	colPLFile    = color.NRGBA{R: 0x40, G: 0xD0, B: 0x40, A: 0xFF} // fallback sem metadados
 	colPLCurBg   = color.NRGBA{R: 0x00, G: 0x00, B: 0x8C, A: 0xFF} // fundo azul da faixa tocando
+	colPLExpBg   = color.NRGBA{R: 0x28, G: 0x28, B: 0x28, A: 0xFF} // fundo cinza das faixas expandidas
 )
 
 // Layout da janela playlist conforme WebAmp/PLEDIT:
@@ -404,10 +405,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	// um artista por linha, ordenado, com scroll próprio
 	artistH := 0
 	if ui.plArtistOpen {
-		artists := ui.p.Artists()
-		sort.Slice(artists, func(a, b int) bool {
-			return strings.ToLower(artists[a]) < strings.ToLower(artists[b])
-		})
+		artists := ui.p.Artists() // já vem ordenada alfabeticamente
 		for len(ui.plArtistBtns) < len(artists) {
 			ui.plArtistBtns = append(ui.plArtistBtns, uibtn{})
 		}
@@ -472,22 +470,29 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					ui.textAt(gtx, ui.fontUI, unit.Sp(9), cnt, colPLFile, image.Pt(59, ry+25))
 				}
 				ui.plArtistBtns[ai].scrollFn = func(dy float32) { ui.plArtistScrollAcc += dy }
-				if ui.button(gtx, &ui.plArtistBtns[ai], rowR, func(gtx layout.Context, down bool) {}) {
-					if exp {
-						ui.plArtistExpand = ""
-						ui.plArtistExpandIdx = nil
-					} else {
-						ui.plArtistExpand = a
-						ui.plArtistExpandIdx = ui.artistTracks(a, tracks)
-						// rola para mostrar o artista e suas primeiras faixas
-						want := float32(ai*plRowH - plRowH)
-						if want < 0 {
-							want = 0
+				b := &ui.plArtistBtns[ai]
+				if ui.button(gtx, b, rowR, func(gtx layout.Context, down bool) {}) {
+					now := time.Now()
+					dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+					b.lastClick = now
+					if dbl {
+						b.lastClick = time.Time{}
+						if exp {
+							ui.plArtistExpand = ""
+							ui.plArtistExpandIdx = nil
+						} else {
+							ui.plArtistExpand = a
+							ui.plArtistExpandIdx = ui.artistTracks(a, tracks)
+							// rola para mostrar o artista e suas primeiras faixas
+							want := float32(ai*plRowH - plRowH)
+							if want < 0 {
+								want = 0
+							}
+							if want > ui.plArtistMax {
+								want = ui.plArtistMax
+							}
+							ui.plArtistScroll = want
 						}
-						if want > ui.plArtistMax {
-							want = ui.plArtistMax
-						}
-						ui.plArtistScroll = want
 					}
 				}
 			}
@@ -496,8 +501,9 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			if exp {
 				for _, ti := range ui.plArtistExpandIdx {
 					if ry > visMin && ry < visMax {
-						ro := op.Offset(image.Pt(24, ry)).Push(gtx.Ops)
-						ui.plRow(gtx, ti, tracks, winW-51)
+						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
+						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
+						ui.plRow(gtx, ti, tracks, winW-81)
 						ro.Pop()
 					}
 					ry += plRowH
