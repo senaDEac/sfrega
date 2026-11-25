@@ -555,6 +555,11 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		// só renderiza linhas visíveis (evita decode de capa / ops de 300+ linhas)
 		visMin := areaTop - plRowH
 		visMax := areaTop + artistH
+		// artista da faixa tocando (borda verde na linha dele)
+		curArt := ""
+		if idx := ui.p.Index(); idx >= 0 {
+			curArt, _, _ = ui.p.TrackParts(idx)
+		}
 		for ai, a := range artists {
 			rowR := image.Rect(14, ry, winW-27, ry+plRowH)
 			exp := ui.plArtistExpand == a
@@ -567,6 +572,13 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
 					fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
 					fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
+				}
+				if curArt != "" && a == curArt {
+					// borda verde no artista da faixa tocando
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Max.X, rowR.Min.Y+1), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Max.Y-1, rowR.Max.X, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Min.X+1, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Max.X-1, rowR.Min.Y, rowR.Max.X, rowR.Max.Y), colPLText)
 				}
 				ac := colPLText
 				if exp {
@@ -607,15 +619,6 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
-						er := image.Rect(0, 0, winW-81, plRowH)
-						bc := color.NRGBA{A: 0xFF}
-						if ti == ui.p.Index() {
-							bc = colPLText
-						}
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), bc)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), bc)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), bc)
-						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), bc)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -761,15 +764,6 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
-						er := image.Rect(0, 0, winW-81, plRowH)
-						bc := color.NRGBA{A: 0xFF}
-						if ti == ui.p.Index() {
-							bc = colPLText
-						}
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), bc)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), bc)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), bc)
-						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), bc)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -912,15 +906,6 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
-						er := image.Rect(0, 0, winW-81, plRowH)
-						bc := color.NRGBA{A: 0xFF}
-						if ti == ui.p.Index() {
-							bc = colPLText
-						}
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), bc)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), bc)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), bc)
-						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), bc)
 						ro.Pop()
 					}
 					ry += plRowH
