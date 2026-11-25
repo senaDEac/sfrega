@@ -17,7 +17,10 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
+	"gioui.org/op/paint"
+	"gioui.org/text"
 	"gioui.org/unit"
+	"gioui.org/widget"
 
 	"sfrega/internal/language"
 )
@@ -404,6 +407,18 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 				ui.plAlbumExpandIdx = nil
 				saveAlbumOpen(false)
 			}
+			if i == 5 { // LIST: fecha painéis e desliga o filtro, mantendo as seleções
+				ui.plGenreOpen = false
+				ui.plGenreOn = false
+				saveGenreOn(false)
+				saveGenreOpen(false)
+				ui.plArtistOpen = false
+				saveArtistOpen(false)
+				ui.plFolderOpen = false
+				saveFolderOpen(false)
+				ui.plAlbumOpen = false
+				saveAlbumOpen(false)
+			}
 			if ui.plGenSel == i {
 				ui.plGenSel = -1
 			} else {
@@ -592,6 +607,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
+						er := image.Rect(0, 0, winW-81, plRowH)
+						blk := color.NRGBA{A: 0xFF}
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), blk)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), blk)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), blk)
+						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), blk)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -737,6 +758,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
+						er := image.Rect(0, 0, winW-81, plRowH)
+						blk := color.NRGBA{A: 0xFF}
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), blk)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), blk)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), blk)
+						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), blk)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -879,6 +906,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
+						er := image.Rect(0, 0, winW-81, plRowH)
+						blk := color.NRGBA{A: 0xFF}
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), blk)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), blk)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), blk)
+						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), blk)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -927,6 +960,23 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	fillRect(gtx.Ops, listR, colPLBg)
 
 	ui.plWheel(gtx, listR)
+
+	if ui.plGenSel == 5 {
+		// LIST: placeholder em destaque no lugar da lista
+		m := op.Record(gtx.Ops)
+		paint.ColorOp{Color: colPLText}.Add(gtx.Ops)
+		mat := m.Stop()
+		loff := op.Offset(listR.Min).Push(gtx.Ops)
+		lgtx := gtx
+		lgtx.Constraints.Min = image.Point{}
+		lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
+		layout.Center.Layout(lgtx, func(gtx layout.Context) layout.Dimensions {
+			return widget.Label{Alignment: text.Middle, MaxLines: 1}.Layout(gtx,
+				ui.shaper, ui.fontBold, unit.Sp(27), language.T("pl.list.placeholder"), mat)
+		})
+		loff.Pop()
+		return
+	}
 
 	ui.plScrollSink = nil
 	loff := op.Offset(listR.Min).Push(gtx.Ops)
@@ -1613,9 +1663,16 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 		sink = ui.plScrollSink
 	}
 	ui.plRowClicks[i].scrollFn = func(dy float32) { *sink += dy }
-	if ui.button(gtx, &ui.plRowClicks[i], r, func(gtx layout.Context, down bool) {}) {
+	b := &ui.plRowClicks[i]
+	if ui.button(gtx, b, r, func(gtx layout.Context, down bool) {}) {
 		ui.plSel = i
-		ui.p.PlayIndex(i)
+		now := time.Now()
+		if now.Sub(b.lastClick) < 500*time.Millisecond {
+			b.lastClick = time.Time{}
+			ui.p.PlayIndex(i)
+		} else {
+			b.lastClick = now
+		}
 	}
 	return layout.Dimensions{Size: image.Pt(w, h)}
 }
