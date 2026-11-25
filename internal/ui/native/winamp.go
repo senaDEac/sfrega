@@ -339,6 +339,6 @@ func (ui *uiState) shuffleRepeat(gtx layout.Context, R func(int, int, int, int) 
 	}
 	if ui.eqplBtn(gtx, &ui.btnRep, "SHUFREP", R(192, 88, 47, 15), ui.shuffle,
 		R(28, 0, 47, 15), R(28, 15, 47, 15), R(28, 30, 47, 15), R(28, 45, 47, 15),
-		func() { ui.shuffle = !ui.shuffle }) {
+		func() { ui.shuffle = !ui.shuffle; ui.p.SetShuffle(ui.shuffle) }) {
 	}
 }

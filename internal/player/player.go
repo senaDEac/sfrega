@@ -8,6 +8,7 @@ import (
 	"errors"
 	"image"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -112,6 +113,8 @@ type Player struct {
 
 	playing    atomic.Bool
 	repeat     atomic.Bool
+	shuffle    atomic.Bool
+	shufRemain []int // faixas restantes da lista ativa em ordem embaralhada
 	volume     atomic.Uint32 // float32 bits
 	eq         atomic.Value  // *eqState
 	preamp     atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
@@ -730,6 +733,7 @@ func (p *Player) SetTracks(tracks []string) {
 	p.index = -1
 	p.queue = nil
 	p.qpos = -1
+	p.shufRemain = nil
 	if len(tracks) > 0 {
 		p.index = 0
 	}
@@ -863,6 +867,11 @@ func (p *Player) playIndexLocked(i int) error {
 		return err
 	}
 	p.playing.Store(true)
+	if p.shuffle.Load() {
+		p.rebuildShufLocked()
+	} else {
+		p.shufRemain = nil
+	}
 	p.emit(Event{Kind: "track-change", Index: i, Title: p.currentTitle()})
 	return nil
 }
@@ -876,6 +885,70 @@ func (p *Player) SetRepeat(on bool) { p.repeat.Store(on) }
 
 // Repeat retorna o estado do repeat.
 func (p *Player) Repeat() bool { return p.repeat.Load() }
+
+// SetShuffle liga/desliga o shuffle da lista ativa (fila de grupo ou
+// playlist inteira). Ao ligar, monta a ordem embaralhada a partir da
+// faixa atual; faixas já tocadas nesta sessão podem repetir até a fila
+// zerar (aí para, ou reembaralha com repeat ligado).
+func (p *Player) SetShuffle(on bool) {
+	p.shuffle.Store(on)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if on && p.index >= 0 && p.index < len(p.tracks) {
+		p.rebuildShufLocked()
+	} else if !on {
+		p.shufRemain = nil
+	}
+}
+
+// activeListLocked retorna os índices da lista ativa: a fila do grupo
+// expandido quando existe, senão a playlist inteira.
+func (p *Player) activeListLocked() []int {
+	if p.qpos >= 0 && len(p.queue) > 0 {
+		return p.queue
+	}
+	out := make([]int, len(p.tracks))
+	for i := range out {
+		out[i] = i
+	}
+	return out
+}
+
+// rebuildShufLocked monta shufRemain com as faixas da lista ativa que
+// ainda têm shuffle==0 (não tocadas >=15s neste ciclo), exceto a atual,
+// embaralhadas. Quando nenhuma resta, a fila zera e o shuffle para
+// (ou zera os contadores e recomeça, se repeat ligado).
+func (p *Player) rebuildShufLocked() {
+	rem := make([]int, 0)
+	for _, ti := range p.activeListLocked() {
+		if ti == p.index {
+			continue
+		}
+		if p.lib != nil && p.lib.shuffleCount(p.tracks[ti]) > 0 {
+			continue
+		}
+		rem = append(rem, ti)
+	}
+	rand.Shuffle(len(rem), func(a, b int) { rem[a], rem[b] = rem[b], rem[a] })
+	p.shufRemain = rem
+}
+
+// resetShufCountsLocked zera o contador shuffle de todas as faixas da
+// lista ativa (início de um novo ciclo com repeat).
+func (p *Player) resetShufCountsLocked() {
+	if p.lib == nil {
+		return
+	}
+	for _, ti := range p.activeListLocked() {
+		if ti >= 0 && ti < len(p.tracks) {
+			p.lib.resetShuffle(p.tracks[ti])
+		}
+	}
+	if p.index >= 0 && p.index < len(p.tracks) {
+		p.lib.addShuffle(p.tracks[p.index]) // atual já está tocando
+	}
+	p.lib.flush()
+}
 
 // Volume retorna 0..1.
 func (p *Player) Volume() float32 { return math.Float32frombits(p.volume.Load()) }
@@ -1000,6 +1073,7 @@ func (p *Player) RemoveAt(i int) {
 	p.tracks = append(p.tracks[:i], p.tracks[i+1:]...)
 	p.queue = nil
 	p.qpos = -1
+	p.shufRemain = nil
 	if len(p.tracks) == 0 {
 		p.index = -1
 		p.resetLocked()
@@ -1032,6 +1106,7 @@ func (p *Player) Move(from, to int) {
 	p.tracks = append(p.tracks[:to], append([]string{t}, p.tracks[to:]...)...)
 	p.queue = nil
 	p.qpos = -1
+	p.shufRemain = nil
 	if p.index == from {
 		p.index = to
 	} else if from < p.index && to >= p.index {
@@ -1080,11 +1155,37 @@ func (p *Player) Toggle() {
 func (p *Player) Next() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.shuffle.Load() && p.shufRemain != nil {
+		if len(p.shufRemain) == 0 {
+			if p.repeat.Load() {
+				p.resetShufCountsLocked()
+				p.rebuildShufLocked()
+			}
+			if len(p.shufRemain) == 0 {
+				p.index = -1
+				p.resetLocked()
+				return
+			}
+		}
+		nxt := p.shufRemain[0]
+		p.shufRemain = p.shufRemain[1:]
+		p.index = nxt
+		if p.qpos >= 0 {
+			for k, ti := range p.queue {
+				if ti == nxt {
+					p.qpos = k
+					break
+				}
+			}
+		}
+		p.playNextLocked()
+		return
+	}
 	if p.qpos >= 0 {
 		switch {
 		case p.qpos+1 < len(p.queue):
 			p.playQueueAtLocked(p.qpos + 1)
-		case p.repeat.Load() && len(p.queue) > 0:
+		case p.repeat.Load() && len(p.queue) > 1:
 			p.playQueueAtLocked(0)
 		default:
 			p.index = -1
@@ -1193,7 +1294,7 @@ func (p *Player) openCurrentLocked() error {
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: path,
 		Duration: p.duration(path, rate)})
 	go p.warmDuration(path)
-	go p.decodeLoop(dec, rate, ch, p.trackDone)
+	go p.decodeLoop(dec, rate, ch, p.trackDone, path)
 	return nil
 }
 
@@ -1235,10 +1336,11 @@ func (p *Player) duration(path string, rate uint32) time.Duration {
 }
 
 // decodeLoop decodifica a faixa, aplica EQ/preamp, alimenta analisador e ring buffer.
-func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-chan struct{}) {
+func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-chan struct{}, path string) {
 	chBuf := make([]float32, decodeChunkFrames*channels)
 	eq := p.eq.Load().(*eqState)
 	preamp := p.Preamp()
+	shufCounted := false
 	for {
 		select {
 		case <-p.done:
@@ -1297,6 +1399,19 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 			written += n
 		}
 		p.decoded.Add(uint64(frames))
+		// >=15s reproduzidos: conta 1 no shuffle da faixa (uma vez por play)
+		if !shufCounted && channels > 0 {
+			played := p.decoded.Load() - p.rb.Available()/uint64(channels)
+			if float64(played)/float64(rate) >= 15 {
+				shufCounted = true
+				p.mu.Lock()
+				if p.lib != nil && p.index >= 0 && p.index < len(p.tracks) && p.tracks[p.index] == path {
+					p.lib.addShuffle(path)
+					p.lib.flush()
+				}
+				p.mu.Unlock()
+			}
+		}
 	}
 }
 
@@ -1304,6 +1419,11 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 // com repeat, ou volta ao início pausado.
 func (p *Player) autoAdvance() {
 	p.mu.Lock()
+	if p.shuffle.Load() && p.shufRemain != nil {
+		p.mu.Unlock()
+		p.Next()
+		return
+	}
 	if p.qpos >= 0 && len(p.queue) > 0 {
 		hasNext := p.qpos+1 < len(p.queue)
 		rep := p.repeat.Load()
@@ -1311,7 +1431,7 @@ func (p *Player) autoAdvance() {
 		switch {
 		case hasNext:
 			p.Next()
-		case rep:
+		case rep && len(p.queue) > 1:
 			p.playQueueAt(0)
 		default:
 			_ = p.SeekFrame(0)
@@ -1326,7 +1446,7 @@ func (p *Player) autoAdvance() {
 	switch {
 	case hasNext:
 		p.Next()
-	case rep && n > 0:
+	case rep && n > 1:
 		_ = p.PlayIndex(0)
 	default:
 		_ = p.SeekFrame(0)

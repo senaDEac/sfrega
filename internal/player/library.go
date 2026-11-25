@@ -10,9 +10,10 @@ import (
 
 // TrackMeta são os metadados persistidos de uma faixa.
 type TrackMeta struct {
-	Plays  int      `json:"plays"`
-	Rating int      `json:"rating"` // 0..5
-	Tags   []string `json:"tags"`
+	Plays   int      `json:"plays"`
+	Rating  int      `json:"rating"` // 0..5
+	Tags    []string `json:"tags"`
+	Shuffle int      `json:"shuffle"` // plays >=15s no ciclo de shuffle atual
 }
 
 // trackLibrary persiste metadados por caminho de faixa em JSON.
@@ -94,6 +95,41 @@ func (l *trackLibrary) addPlay(path string) {
 		l.meta[path] = m
 	}
 	m.Plays++
+	l.dirty = true
+}
+
+// shuffleCount retorna o contador de shuffle da faixa (0 se sem meta).
+func (l *trackLibrary) shuffleCount(path string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if m, ok := l.meta[path]; ok {
+		return m.Shuffle
+	}
+	return 0
+}
+
+// addShuffle incrementa o contador de shuffle (play >=15s).
+func (l *trackLibrary) addShuffle(path string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	m, ok := l.meta[path]
+	if !ok {
+		m = &TrackMeta{Tags: randomTags()}
+		l.meta[path] = m
+	}
+	m.Shuffle++
+	l.dirty = true
+}
+
+// resetShuffle zera o contador de shuffle da faixa.
+func (l *trackLibrary) resetShuffle(path string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	m, ok := l.meta[path]
+	if !ok {
+		return
+	}
+	m.Shuffle = 0
 	l.dirty = true
 }
 
