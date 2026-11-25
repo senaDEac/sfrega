@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"gioui.org/app"
@@ -19,6 +18,8 @@ import (
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/unit"
+
+	"sfrega/internal/language"
 )
 
 var plResTag event.Tag
@@ -140,78 +141,6 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 	ui.plBottom(gtx, winW, winH, botY, tracks)
 }
 
-// textCell retorna o retângulo do glifo de c no TEXT.png (fonte 5x6 do
-// Winamp, case-folded; faixa verde = primeiro mapa).
-func textCell(c byte) image.Rectangle {
-	uc := c
-	if uc >= 'a' && uc <= 'z' {
-		uc -= 'a' - 'A'
-	}
-	switch {
-	case uc >= 'A' && uc <= 'Z':
-		i := int(uc - 'A')
-		return image.Rect(i*5, 0, i*5+5, 6)
-	case uc >= '0' && uc <= '9':
-		i := int(uc - '0')
-		return image.Rect(i*5, 6, i*5+5, 12)
-	}
-	punct := map[byte]int{
-		'.': 10, ':': 11, '(': 12, ')': 13, '-': 14, '\'': 15, '!': 16,
-		'_': 17, '+': 18, '\\': 19, '/': 20, '[': 21, ']': 22, '~': 23,
-		'&': 24, '%': 25, ',': 26, '=': 27, '$': 28, '#': 29,
-	}
-	if i, ok := punct[uc]; ok {
-		return image.Rect(i*5, 6, i*5+5, 12)
-	}
-	switch uc {
-	case '"':
-		return image.Rect(130, 0, 135, 6)
-	case '@':
-		return image.Rect(135, 0, 140, 6)
-	case '?':
-		return image.Rect(15, 12, 20, 18)
-	case '*':
-		return image.Rect(20, 12, 25, 18)
-	}
-	return image.Rect(150, 0, 155, 6) // espaço/em branco
-}
-
-var textGlyphCache sync.Map // image.Rectangle -> *image.RGBA
-
-// textGlyph retorna o glifo do TEXT.png com fundo preto tornado transparente.
-func (ui *uiState) textGlyph(src image.Rectangle) *image.RGBA {
-	if v, ok := textGlyphCache.Load(src); ok {
-		return v.(*image.RGBA)
-	}
-	img := ui.skin.Load().Spr("TEXT", src)
-	if img == nil {
-		return nil
-	}
-	out := image.NewRGBA(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
-	for y := 0; y < img.Bounds().Dy(); y++ {
-		for x := 0; x < img.Bounds().Dx(); x++ {
-			c := img.RGBAAt(x, y)
-			if c.R+c.G+c.B > 30 {
-				out.SetRGBA(x, y, c)
-			}
-		}
-	}
-	textGlyphCache.Store(src, out)
-	return out
-}
-
-// plTextBmp desenha txt com a fonte bitmap TEXT.png a partir de (x,y),
-// avançando 5px por caractere até o limite maxX.
-func (ui *uiState) plTextBmp(gtx layout.Context, txt string, x, y, maxX int) {
-	pen := x
-	for i := 0; i < len(txt) && pen+5 <= maxX; i++ {
-		if g := ui.textGlyph(textCell(txt[i])); g != nil {
-			blit(gtx, g, image.Rect(pen, y, pen+5, y+6))
-		}
-		pen += 5
-	}
-}
-
 // plShadeBar desenha a playlist recolhida: linha única na altura do shade
 // do player (18px), começando com a decoração/título "Playlist".
 func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int, int) image.Rectangle) {
@@ -235,7 +164,10 @@ func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int
 		ui.sprFit(gtx, "PLEDIT", image.Rect(120, 42, 130, 55), R(bx1-10, by, 10, bh))
 		if idx := ui.p.Index(); idx >= 0 {
 			if t := ui.p.TrackAt(idx); t != "" {
-				ui.plTextBmp(gtx, filepath.Base(t), bx0+7, by+4, bx1-12)
+				green := color.NRGBA{R: 0x00, G: 0xE2, B: 0x00, A: 0xFF}
+				cs := clip.Rect(image.Rect(bx0+6, by, bx1-11, by+bh)).Push(gtx.Ops)
+				ui.textAt(gtx, ui.fontMenu, unit.Sp(9), filepath.Base(t), green, image.Pt(bx0+7, by+2))
+				cs.Pop()
 			}
 		}
 	}
@@ -341,13 +273,18 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	// 6 botões GENEX abaixo da linha de título, com rótulos da skin GEN
 	gbtns := []*uibtn{&ui.btnPLG1, &ui.btnPLG2, &ui.btnPLG3,
 		&ui.btnPLG4, &ui.btnPLG5, &ui.btnPLG6}
-	labels := []string{"GENERO", "MUSICAS", "ARTISTA", "PASTAS", "ALBUNS", "LISTA"}
+	labels := []string{
+		language.T("pl.btn.genre"), language.T("pl.btn.songs"),
+		language.T("pl.btn.artist"), language.T("pl.btn.folders"),
+		language.T("pl.btn.albums"), language.T("pl.btn.list"),
+	}
 	dark := color.NRGBA{R: 0x10, G: 0x10, B: 0x18, A: 0xFF}
 	for i, gb := range gbtns {
 		bx := 14 + i*47
-		ui.spriteBtn(gtx, gb, "GENEX", R(bx, plTopH+3, 45, 11),
+		dst := R(bx, plTopH+3, 45, 11)
+		ui.spriteBtn(gtx, gb, "GENEX", dst,
 			R(0, 0, 48, 16), R(0, 16, 48, 15))
-		ui.genText(gtx, labels[i], R(bx, plTopH+3, 45, 11), dark)
+		ui.btnText(gtx, labels[i], dst, dark)
 	}
 
 	// fundo da lista

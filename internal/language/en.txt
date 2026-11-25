@@ -8,3 +8,9 @@ about.title=sfrega
 about.body=sfrega — a Winamp-style music player.
 Written in Go, runs on Windows, Linux, macOS, Android and iOS.
 about.close=Close
+pl.btn.genre=GENRE
+pl.btn.songs=SONGS
+pl.btn.artist=ARTIST
+pl.btn.folders=FOLDERS
+pl.btn.albums=ALBUMS
+pl.btn.list=LIST

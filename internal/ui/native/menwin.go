@@ -46,11 +46,12 @@ var (
 
 // mrow é uma linha do menu: item, separador ou pai de submenu.
 type mrow struct {
-	label  string
-	indent int
-	kind   int // 0=item, 1=check, 2=pai (seta)
-	sep    bool
-	act    func()
+	label   string
+	indent  int
+	kind    int // 0=item, 1=check, 2=pai (seta)
+	sep     bool
+	checked bool
+	act     func()
 }
 
 // toggleMenu abre/fecha a janela de menu.
@@ -270,22 +271,30 @@ func (ui *uiState) menuRows() []mrow {
 		rows = append(rows, mrow{label: "Language", indent: 1, kind: 2,
 			act: func() { ui.menuLang = !ui.menuLang }})
 		if ui.menuLang {
+			cur := language.Current()
 			for _, l := range language.Available() {
 				lbl := language.Name(l)
 				code := l
 				rows = append(rows, mrow{label: lbl, indent: 2,
-					act: func() { language.Set(code) }})
+					checked: l == cur,
+					act:     func() { language.Set(code) }})
 			}
 		}
 		rows = append(rows, mrow{label: "Skins", indent: 1, kind: 2,
 			act: func() { ui.menuSkins = !ui.menuSkins }})
 		if ui.menuSkins {
+			curSkin := loadSkinSel()
+			if curSkin == "" {
+				curSkin = "padrao"
+			}
 			rows = append(rows, mrow{label: "padrão", indent: 2,
-				act: func() { ui.applySkin("padrao"); saveSkinSel("padrao") }})
+				checked: curSkin == "padrao",
+				act:     func() { ui.applySkin("padrao"); saveSkinSel("padrao") }})
 			for _, n := range skins.WszNames() {
 				code := n
 				rows = append(rows, mrow{label: n, indent: 2,
-					act: func() { ui.applySkin(code); saveSkinSel(code) }})
+					checked: code == curSkin,
+					act:     func() { ui.applySkin(code); saveSkinSel(code) }})
 			}
 		}
 	}
@@ -323,6 +332,8 @@ func (ui *uiState) menuDrawRow(gtx layout.Context, row mrow, bi *int, y, rowRigh
 			if on {
 				menuCheck(gtx, 10, rh/2, tx)
 			}
+		} else if row.checked {
+			menuCheck(gtx, 10, rh/2, tx)
 		}
 		ui.textAt(gtx, ui.fontMenu, unit.Sp(10), row.label, tx,
 			image.Pt(20+row.indent*16, 2))

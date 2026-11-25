@@ -577,6 +577,10 @@ func loadFonts() ([]text.FontFace, error) {
 		"/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
 		"/usr/share/fonts/liberation/LiberationSans-Bold.ttf",
 		"/usr/share/fonts/liberation/LiberationMono-Regular.ttf",
+		// fallbacks p/ caracteres especiais: CJK/largura total e símbolos
+		"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+		"/usr/share/fonts/noto/NotoSansSymbols-Regular.ttf",
+		"/usr/share/fonts/noto/NotoSans-Regular.ttf",
 	}
 	for _, p := range paths {
 		data, err := os.ReadFile(p)
@@ -779,6 +783,14 @@ func (ui *uiState) lbl(gtx layout.Context, fnt font.Font, size unit.Sp, txt stri
 
 // textAt desenha uma linha de texto em pos (thread-safe).
 func (ui *uiState) textAt(gtx layout.Context, fnt font.Font, size unit.Sp, txt string, c color.NRGBA, pos image.Point) {
+	// remove variation selectors de emoji (U+FE0F etc.): forçam fallback para
+	// fonte emoji/cor, que o shaper resolve como glifo nulo invisível
+	txt = strings.Map(func(r rune) rune {
+		if r >= 0xFE00 && r <= 0xFE0F {
+			return -1
+		}
+		return r
+	}, txt)
 	ui.shapeMu.Lock()
 	defer ui.shapeMu.Unlock()
 	m := op.Record(gtx.Ops)
@@ -787,6 +799,24 @@ func (ui *uiState) textAt(gtx layout.Context, fnt font.Font, size unit.Sp, txt s
 	off := op.Offset(pos).Push(gtx.Ops)
 	widget.Label{MaxLines: 1}.Layout(gtx, ui.shaper, fnt, size, txt, mat)
 	off.Pop()
+}
+
+// btnText desenha s centralizado em dst com fonte vetorial —
+// substitui genText, que só cobre o charset bitmap da skin.
+func (ui *uiState) btnText(gtx layout.Context, s string, dst image.Rectangle, c color.NRGBA) {
+	x := dst.Min.X + 4
+	y := dst.Min.Y + (dst.Dy()-10)/2
+	// glifos CJK são mais altos que latinos; compensa o centro óptico
+	for _, r := range s {
+		if r > 0x2E80 {
+			y -= 2
+			break
+		}
+	}
+	inner := image.Rect(dst.Min.X+1, dst.Min.Y, dst.Max.X-1, dst.Max.Y)
+	cs := clip.Rect(inner).Push(gtx.Ops)
+	ui.textAt(gtx, ui.fontMenu, unit.Sp(8), s, c, image.Pt(x, y))
+	cs.Pop()
 }
 
 // winampButton desenha um botão quadrado estilo Winamp com glifo.
