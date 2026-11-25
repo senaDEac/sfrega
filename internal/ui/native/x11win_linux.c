@@ -521,7 +521,7 @@ static void geo_path(char *buf, size_t len)
     const char *home = getenv("HOME");
     if (!home)
         home = "/tmp";
-    snprintf(buf, len, "%s/.config/sfrega/geometry.txt", home);
+    snprintf(buf, len, "%s/.local/share/sfrega/configs/geometry.txt", home);
 }
 
 static Window find_by_name(Display *dpy, const char *want, Atom ncl, Atom nwn, Atom u8)
@@ -568,9 +568,11 @@ void sfrega_geo_save(void)
     Atom nwn = XInternAtom(dpy, "_NET_WM_NAME", False);
     Atom u8 = XInternAtom(dpy, "UTF8_STRING", False);
 
-    char path[512], cfg[512];
+    char path[512], cfg[512], base[512];
     geo_path(path, sizeof(path));
-    snprintf(cfg, sizeof(cfg), "%s/.config/sfrega", getenv("HOME") ? getenv("HOME") : "/tmp");
+    snprintf(base, sizeof(base), "%s/.local/share/sfrega", getenv("HOME") ? getenv("HOME") : "/tmp");
+    snprintf(cfg, sizeof(cfg), "%s/configs", base);
+    mkdir(base, 0755);
     mkdir(cfg, 0755);
 
     /* preserva posições de janelas hoje fechadas */

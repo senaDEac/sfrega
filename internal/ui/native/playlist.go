@@ -713,6 +713,13 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		ui.plScrollSink = &ui.plFolderScrollAcc
 		visMin := areaTop - plRowH
 		visMax := areaTop + folderH
+		// pasta da faixa tocando (borda verde na linha dela)
+		curDir := ""
+		if idx := ui.p.Index(); idx >= 0 {
+			if path := ui.p.TrackAt(idx); path != "" {
+				curDir = filepath.Dir(path)
+			}
+		}
 		for di, dir := range folders {
 			rowR := image.Rect(14, ry, winW-27, ry+plRowH)
 			exp := ui.plFolderExpand == dir
@@ -725,6 +732,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
 					fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
 					fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
+				}
+				if curDir != "" && dir == curDir {
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Max.X, rowR.Min.Y+1), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Max.Y-1, rowR.Max.X, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Min.X+1, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Max.X-1, rowR.Min.Y, rowR.Max.X, rowR.Max.Y), colPLText)
 				}
 				ac := colPLText
 				if exp {
@@ -855,6 +868,11 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		ui.plScrollSink = &ui.plAlbumScrollAcc
 		visMin := areaTop - plRowH
 		visMax := areaTop + albumH
+		// álbum da faixa tocando (borda verde na linha dele)
+		curAlb := ""
+		if idx := ui.p.Index(); idx >= 0 {
+			curAlb = ui.p.TrackAlbum(idx)
+		}
 		for ai2, al := range albums {
 			rowR := image.Rect(14, ry, winW-27, ry+plRowH)
 			exp := ui.plAlbumExpand == al
@@ -867,6 +885,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
 					fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
 					fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
+				}
+				if curAlb != "" && al == curAlb {
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Max.X, rowR.Min.Y+1), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Max.Y-1, rowR.Max.X, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Min.X+1, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Max.X-1, rowR.Min.Y, rowR.Max.X, rowR.Max.Y), colPLText)
 				}
 				ac := colPLText
 				if exp {

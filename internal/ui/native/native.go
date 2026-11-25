@@ -540,6 +540,10 @@ func (ui *uiState) applySkin(code string) {
 		fitCache.Delete(k)
 		return true
 	})
+	glyphCache.Range(func(k, _ any) bool {
+		glyphCache.Delete(k)
+		return true
+	})
 	ui.mu.Lock()
 	for _, w := range []*app.Window{ui.winMain, ui.winEQ, ui.winPL, ui.winMenu} {
 		if w != nil {
@@ -889,21 +893,32 @@ func Run(p *player.Player) error {
 		}
 	}()
 
+	// A janela principal precisa de ~30fps (espectro, tempo, marquee).
+	// As secundárias são majoritariamente estáticas: ~8fps basta para a
+	// barra de posição e mudanças de estado, e corta o custo de render
+	// (principalmente da Playlist, que é grande).
 	go func() {
-		t := time.NewTicker(33 * time.Millisecond)
-		for range t.C {
-			ui.winMain.Invalidate()
-			ui.mu.Lock()
-			if ui.winEQ != nil {
-				ui.winEQ.Invalidate()
+		fast := time.NewTicker(33 * time.Millisecond)
+		slow := time.NewTicker(120 * time.Millisecond)
+		defer fast.Stop()
+		defer slow.Stop()
+		for {
+			select {
+			case <-fast.C:
+				ui.winMain.Invalidate()
+			case <-slow.C:
+				ui.mu.Lock()
+				if ui.winEQ != nil {
+					ui.winEQ.Invalidate()
+				}
+				if ui.winPL != nil {
+					ui.winPL.Invalidate()
+				}
+				if ui.winMenu != nil {
+					ui.winMenu.Invalidate()
+				}
+				ui.mu.Unlock()
 			}
-			if ui.winPL != nil {
-				ui.winPL.Invalidate()
-			}
-			if ui.winMenu != nil {
-				ui.winMenu.Invalidate()
-			}
-			ui.mu.Unlock()
 		}
 	}()
 
@@ -1112,6 +1127,16 @@ func (ui *uiState) spr(gtx layout.Context, name string, src, dst image.Rectangle
 	blit(gtx, img, dst)
 }
 
+// glyphCache guarda glifos já recoloridos (a varredura de pixels por frame
+// era um custo desnecessário a 30fps).
+var glyphCache sync.Map // glyphKey -> *image.RGBA
+
+type glyphKey struct {
+	name string
+	src  image.Rectangle
+	c    color.NRGBA
+}
+
 // sprGlyph desenha um glifo do bitmap name recolorido: pixels claros
 // viram a cor c, o restante fica transparente.
 func (ui *uiState) sprGlyph(gtx layout.Context, name string, src, dst image.Rectangle, c color.NRGBA) {
@@ -1119,15 +1144,22 @@ func (ui *uiState) sprGlyph(gtx layout.Context, name string, src, dst image.Rect
 	if img == nil {
 		return
 	}
-	b := img.Bounds()
-	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	for y := 0; y < b.Dy(); y++ {
-		for x := 0; x < b.Dx(); x++ {
-			p := img.RGBAAt(b.Min.X+x, b.Min.Y+y)
-			if p.R > 180 && p.G > 180 && p.B > 180 {
-				out.Set(x, y, c)
+	key := glyphKey{name, src, c}
+	var out *image.RGBA
+	if v, ok := glyphCache.Load(key); ok {
+		out = v.(*image.RGBA)
+	} else {
+		b := img.Bounds()
+		out = image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+		for y := 0; y < b.Dy(); y++ {
+			for x := 0; x < b.Dx(); x++ {
+				p := img.RGBAAt(b.Min.X+x, b.Min.Y+y)
+				if p.R > 180 && p.G > 180 && p.B > 180 {
+					out.Set(x, y, c)
+				}
 			}
 		}
+		glyphCache.Store(key, out)
 	}
 	blit(gtx, out, dst)
 }
@@ -1210,7 +1242,13 @@ func blit(gtx layout.Context, src image.Image, dst image.Rectangle) {
 	cs.Pop()
 }
 
-var fitCache sync.Map // chave "nome|src|dxdy" -> *image.RGBA escalada
+type fitKey struct {
+	name   string
+	src    image.Rectangle
+	dx, dy int
+}
+
+var fitCache sync.Map // fitKey -> *image.RGBA escalada
 
 // sprFit desenha o recorte src do bitmap name em dst, escalando a imagem
 // em Go quando necessário (o affine do Gio não escala de forma confiável
@@ -1225,8 +1263,7 @@ func (ui *uiState) sprFit(gtx layout.Context, name string, src, dst image.Rectan
 		blit(gtx, img, dst)
 		return
 	}
-	key := fmt.Sprintf("%s|%d,%d,%d,%d|%dx%d", name,
-		src.Min.X, src.Min.Y, src.Max.X, src.Max.Y, dx, dy)
+	key := fitKey{name, src, dx, dy}
 	if v, ok := fitCache.Load(key); ok {
 		blit(gtx, v.(*image.RGBA), dst)
 		return

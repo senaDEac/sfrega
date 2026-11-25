@@ -115,6 +115,7 @@ type Player struct {
 	preamp     atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
 	pan        atomic.Uint32 // float32 bits (-1 esquerda .. +1 direita)
 	decoded    atomic.Uint64 // frames decodificados totais da faixa
+	durCache   sync.Map      // path -> uint64 frames totais (MP3 exige varredura)
 	done       chan struct{}
 	trackDone  chan struct{} // cancelado ao trocar de faixa
 	events     chan Event
@@ -396,6 +397,9 @@ func (p *Player) AlbumTracks(album string) []int {
 	return out
 }
 
+// TrackAlbum retorna o álbum da faixa i (metadado), "" se não houver.
+func (p *Player) TrackAlbum(i int) string { return p.trackAlbum(i) }
+
 // trackAlbum retorna o álbum do metadado da faixa i ("" se não houver).
 func (p *Player) trackAlbum(i int) string {
 	p.mu.Lock()
@@ -586,7 +590,7 @@ func (p *Player) saveResume() {
 	}
 	data := p.tracks[p.index]
 	if p.dec != nil {
-		if dur := p.dec.LengthFrames(); dur > 0 {
+		if dur := p.durationFrames(data); dur > 0 {
 			if frac := float64(p.playedFrames(p.dec.SampleRate(), p.dec.Channels())) / float64(dur); frac > 0.001 {
 				data += "\n" + strconv.FormatFloat(frac, 'g', -1, 64)
 			}
@@ -922,7 +926,10 @@ func (p *Player) SeekFraction(f float64) error {
 	if p.dec == nil {
 		return errors.New("player: nada tocando")
 	}
-	total := p.dec.LengthFrames()
+	total := p.durationFrames(p.tracks[p.index])
+	if total == 0 {
+		return errors.New("player: duração desconhecida")
+	}
 	if !p.dec.SeekFrame(int64(float64(total) * f)) {
 		return errors.New("player: seek falhou")
 	}
@@ -1117,9 +1124,47 @@ func (p *Player) openCurrentLocked() error {
 	}
 	p.trackDone = make(chan struct{})
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: path,
-		Duration: time.Duration(dec.LengthFrames()) * time.Second / time.Duration(rate)})
+		Duration: p.duration(path, rate)})
+	go p.warmDuration(path)
 	go p.decodeLoop(dec, rate, ch, p.trackDone)
 	return nil
+}
+
+// warmDuration calcula o total de frames da faixa em background.
+// Para MP3 sem header VBR o miniaudio varre o arquivo decodificando —
+// caro demais para rodar na thread de UI/playback. Usa um decoder
+// separado para não disputar o mutex do decoder de reprodução.
+func (p *Player) warmDuration(path string) {
+	if _, ok := p.durCache.Load(path); ok {
+		return
+	}
+	d2, err := audio.OpenDecoder(path)
+	if err != nil {
+		return
+	}
+	n := d2.LengthFrames()
+	d2.Close()
+	if n > 0 {
+		p.durCache.Store(path, n)
+	}
+}
+
+// durationFrames retorna os frames totais cacheados da faixa (0 = ainda
+// desconhecido; a UI preenche quando warmDuration terminar).
+func (p *Player) durationFrames(path string) uint64 {
+	if v, ok := p.durCache.Load(path); ok {
+		return v.(uint64)
+	}
+	return 0
+}
+
+// duration converte frames em time.Duration usando a sample rate informada.
+func (p *Player) duration(path string, rate uint32) time.Duration {
+	frames := p.durationFrames(path)
+	if frames == 0 || rate == 0 {
+		return 0
+	}
+	return time.Duration(frames) * time.Second / time.Duration(rate)
 }
 
 // decodeLoop decodifica a faixa, aplica EQ/preamp, alimenta analisador e ring buffer.
@@ -1259,10 +1304,10 @@ func (p *Player) Spectrum() [spectrum.Bands]float32 {
 func (p *Player) Duration() time.Duration {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.dec == nil {
+	if p.dec == nil || p.index < 0 || p.index >= len(p.tracks) {
 		return 0
 	}
-	return time.Duration(p.dec.LengthFrames()) * time.Second / time.Duration(p.dec.SampleRate())
+	return p.duration(p.tracks[p.index], p.dec.SampleRate())
 }
 
 // Position retorna posição atual (aprox., baseada em frames escritos no buffer
