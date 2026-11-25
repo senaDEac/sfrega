@@ -164,10 +164,10 @@ func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int
 		ui.sprFit(gtx, "PLEDIT", image.Rect(72, 58, 97, 71), R(bx0+5, by, bx1-bx0-15, bh))
 		ui.sprFit(gtx, "PLEDIT", image.Rect(120, 42, 130, 55), R(bx1-10, by, 10, bh))
 		if idx := ui.p.Index(); idx >= 0 {
-			if t := ui.p.TrackAt(idx); t != "" {
+			if name, _ := ui.p.TrackTitle(idx); name != "" {
 				green := color.NRGBA{R: 0x00, G: 0xE2, B: 0x00, A: 0xFF}
 				cs := clip.Rect(image.Rect(bx0+6, by, bx1-11, by+bh)).Push(gtx.Ops)
-				ui.textAt(gtx, ui.fontMenu, unit.Sp(9), filepath.Base(t), green, image.Pt(bx0+7, by+2))
+				ui.textAt(gtx, ui.fontMenu, unit.Sp(9), name, green, image.Pt(bx0+7, by+2))
 				cs.Pop()
 			}
 		}
@@ -283,13 +283,53 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	for i, gb := range gbtns {
 		bx := 14 + i*47
 		dst := R(bx, plTopH+3, 45, 11)
-		ui.spriteBtn(gtx, gb, "GENEX", dst,
-			R(0, 0, 48, 16), R(0, 16, 48, 15))
+		if ui.spriteBtn(gtx, gb, "GENEX", dst,
+			R(0, 0, 48, 16), R(0, 16, 48, 15)) && i == 0 {
+			ui.plGenreOpen = !ui.plGenreOpen
+			if !ui.plGenreOpen {
+				ui.plGenreSel = ""
+			}
+		}
 		ui.btnText(gtx, labels[i], dst, dark)
 	}
 
+	// fileira de gêneros abaixo dos botões GENEX (GENRE abre/fecha)
+	genreH := 0
+	if ui.plGenreOpen {
+		genres := ui.p.Genres()
+		for len(ui.plGenreBtns) < len(genres) {
+			ui.plGenreBtns = append(ui.plGenreBtns, uibtn{})
+		}
+		x := 14
+		for gi, g := range genres {
+			gw := 12 + len([]rune(g))*6
+			if gw > 160 {
+				gw = 160
+			}
+			if x+gw > winW-23 {
+				break
+			}
+			dst := R(x, plTopH+16, gw, 11)
+			if ui.spriteBtn(gtx, &ui.plGenreBtns[gi], "GENEX", dst,
+				R(0, 0, 48, 16), R(0, 16, 48, 15)) {
+				if ui.plGenreSel == g {
+					ui.plGenreSel = ""
+				} else {
+					ui.plGenreSel = g
+				}
+			}
+			gc := dark
+			if ui.plGenreSel == g {
+				gc = color.NRGBA{R: 0xE2, G: 0x00, B: 0x00, A: 0xFF}
+			}
+			ui.btnTextB(gtx, g, dst, gc)
+			x += gw + 2
+		}
+		genreH = 13
+	}
+
 	// fundo da lista
-	listR := image.Rect(12, plTopH+16, winW-23, botY-3)
+	listR := image.Rect(12, plTopH+16+genreH, winW-23, botY-3)
 	fillRect(gtx.Ops, listR, colPLBg)
 
 	ui.plWheel(gtx, listR)
@@ -298,9 +338,10 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	lgtx := gtx
 	lgtx.Constraints.Min = image.Point{}
 	lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
+	order := ui.p.TracksForGenre(ui.plGenreSel)
 	ui.plList.Axis = layout.Vertical
-	ui.plList.Layout(lgtx, len(tracks), func(gtx layout.Context, i int) layout.Dimensions {
-		return ui.plRow(gtx, i, tracks, listR.Dx())
+	ui.plList.Layout(lgtx, len(order), func(gtx layout.Context, i int) layout.Dimensions {
+		return ui.plRow(gtx, order[i], tracks, listR.Dx())
 	})
 	loff.Pop()
 	if ui.plScrollAcc != 0 {

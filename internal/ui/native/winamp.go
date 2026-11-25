@@ -173,15 +173,9 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 	fillRect(gtx.Ops, R(64, 32, 1, 2), green)
 
 	// título com marquee em (111,24,154,12)
-	title := ui.p.TrackAt(ui.p.Index())
+	title, _ := ui.p.TrackTitle(ui.p.Index())
 	if title == "" {
 		title = "sfrega"
-	}
-	for i := len(title) - 1; i > 0; i-- {
-		if title[i] == '/' || title[i] == '\\' {
-			title = title[i+1:]
-			break
-		}
 	}
 	viewW := 154
 	textW := len(title) * 5

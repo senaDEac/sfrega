@@ -129,6 +129,9 @@ type uiState struct {
 	plMenuOpen                                           int
 	plSel                                                int
 	plScrollAcc                                          float32
+	plGenreOpen                                          bool
+	plGenreSel                                           string
+	plGenreBtns                                          []uibtn
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
@@ -804,6 +807,15 @@ func (ui *uiState) textAt(gtx layout.Context, fnt font.Font, size unit.Sp, txt s
 // btnText desenha s centralizado em dst com fonte vetorial —
 // substitui genText, que só cobre o charset bitmap da skin.
 func (ui *uiState) btnText(gtx layout.Context, s string, dst image.Rectangle, c color.NRGBA) {
+	ui.btnTextF(gtx, ui.fontMenu, s, dst, c)
+}
+
+// btnTextB é btnText em negrito.
+func (ui *uiState) btnTextB(gtx layout.Context, s string, dst image.Rectangle, c color.NRGBA) {
+	ui.btnTextF(gtx, ui.fontMenuBold, s, dst, c)
+}
+
+func (ui *uiState) btnTextF(gtx layout.Context, fnt font.Font, s string, dst image.Rectangle, c color.NRGBA) {
 	x := dst.Min.X + 4
 	y := dst.Min.Y + (dst.Dy()-10)/2
 	// glifos CJK são mais altos que latinos; compensa o centro óptico
@@ -815,7 +827,7 @@ func (ui *uiState) btnText(gtx layout.Context, s string, dst image.Rectangle, c 
 	}
 	inner := image.Rect(dst.Min.X+1, dst.Min.Y, dst.Max.X-1, dst.Max.Y)
 	cs := clip.Rect(inner).Push(gtx.Ops)
-	ui.textAt(gtx, ui.fontMenu, unit.Sp(8), s, c, image.Pt(x, y))
+	ui.textAt(gtx, fnt, unit.Sp(8), s, c, image.Pt(x, y))
 	cs.Pop()
 }
 

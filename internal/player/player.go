@@ -4,6 +4,7 @@ package player
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"math"
 	"os"
@@ -97,25 +98,36 @@ type Player struct {
 	tracks   []string
 	index    int
 	listFile string        // playlist persistida em m3u ("" = desativado)
+	tagsFile string        // cache de tags persistido em tags.json
 	lib      *trackLibrary // metadados por faixa (plays/rating/tags)
 	dec      *audio.Decoder
 	rb       *audio.RingBuffer
 	dev      *audio.Device
 	analyzer *spectrum.Analyzer
 
-	playing   atomic.Bool
-	repeat    atomic.Bool
-	volume    atomic.Uint32 // float32 bits
-	eq        atomic.Value  // *eqState
-	preamp    atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
-	pan       atomic.Uint32 // float32 bits (-1 esquerda .. +1 direita)
-	decoded   atomic.Uint64 // frames decodificados totais da faixa
-	done      chan struct{}
-	trackDone chan struct{} // cancelado ao trocar de faixa
-	events    chan Event
-	lastBands atomic.Value // [spectrum.Bands]float32
-	tagMu     sync.Mutex
-	tagCache  map[string]tagInfo // cache de metadados de áudio por path
+	playing    atomic.Bool
+	repeat     atomic.Bool
+	volume     atomic.Uint32 // float32 bits
+	eq         atomic.Value  // *eqState
+	preamp     atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
+	pan        atomic.Uint32 // float32 bits (-1 esquerda .. +1 direita)
+	decoded    atomic.Uint64 // frames decodificados totais da faixa
+	done       chan struct{}
+	trackDone  chan struct{} // cancelado ao trocar de faixa
+	events     chan Event
+	lastBands  atomic.Value // [spectrum.Bands]float32
+	tagMu      sync.Mutex
+	tagCache   map[string]tagInfo // cache de metadados de áudio por path
+	genreMu    sync.Mutex
+	genresList []string // gêneros distintos (preenchido pelo warmTags)
+}
+
+// tagPeek retorna o tag em cache sem ler o arquivo (seguro para a UI).
+func (p *Player) tagPeek(path string) (tagInfo, bool) {
+	p.tagMu.Lock()
+	defer p.tagMu.Unlock()
+	t, ok := p.tagCache[path]
+	return t, ok
 }
 
 // tagForPath retorna os metadados de áudio da faixa (com cache).
@@ -136,15 +148,61 @@ func (p *Player) tagForPath(path string) tagInfo {
 	return t
 }
 
-// warmTags pré-carrega tags das faixas em background.
+// warmTags pré-carrega tags das faixas em background e calcula os gêneros.
 // Não pode ser chamado com p.mu segurado.
 func (p *Player) warmTags(paths []string) {
 	cp := append([]string(nil), paths...)
-	go func() {
-		for _, path := range cp {
-			p.tagForPath(path)
+	p.computeGenres(cp) // cache pré-carregado do tags.json: gêneros instantâneos
+	jobs := make(chan string)
+	var wg sync.WaitGroup
+	for w := 0; w < 8; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range jobs {
+				p.tagForPath(path)
+			}
+		}()
+	}
+	done := make(chan struct{})
+	go func() { // gêneros progridem enquanto o warm roda
+		tk := time.NewTicker(2 * time.Second)
+		defer tk.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tk.C:
+				p.computeGenres(cp)
+			}
 		}
 	}()
+	go func() {
+		for _, path := range cp {
+			jobs <- path
+		}
+		close(jobs)
+		wg.Wait()
+		close(done)
+		p.computeGenres(cp)
+		p.saveTags()
+	}()
+}
+
+// computeGenres recalcula a lista de gêneros distintos na ordem das faixas.
+func (p *Player) computeGenres(paths []string) {
+	seen := map[string]bool{}
+	var genres []string
+	for _, path := range paths {
+		t, _ := p.tagPeek(path)
+		if t.Genre != "" && !seen[t.Genre] {
+			seen[t.Genre] = true
+			genres = append(genres, t.Genre)
+		}
+	}
+	p.genreMu.Lock()
+	p.genresList = genres
+	p.genreMu.Unlock()
 }
 
 // TrackTitle retorna o nome de exibição da faixa i: título do metadado
@@ -160,8 +218,51 @@ func (p *Player) TrackTitle(i int) (name string, hasMeta bool) {
 	if path == "" {
 		return "", false
 	}
-	t := p.tagForPath(path)
+	t, _ := p.tagPeek(path)
 	return displayNameCached(t, path), t.Title != "" || t.Artist != ""
+}
+
+// TrackGenre retorna o gênero da faixa i (metadado), "" se não houver.
+func (p *Player) TrackGenre(i int) string {
+	p.mu.Lock()
+	var path string
+	if i >= 0 && i < len(p.tracks) {
+		path = p.tracks[i]
+	}
+	p.mu.Unlock()
+	if path == "" {
+		return ""
+	}
+	t, _ := p.tagPeek(path)
+	return t.Genre
+}
+
+// Genres retorna os gêneros distintos das faixas (cache do warmTags).
+func (p *Player) Genres() []string {
+	p.genreMu.Lock()
+	defer p.genreMu.Unlock()
+	return append([]string(nil), p.genresList...)
+}
+
+// TracksForGenre retorna os índices das faixas do gênero ("" = todas).
+func (p *Player) TracksForGenre(genre string) []int {
+	p.mu.Lock()
+	n := len(p.tracks)
+	p.mu.Unlock()
+	if genre == "" {
+		out := make([]int, n)
+		for i := range out {
+			out[i] = i
+		}
+		return out
+	}
+	var out []int
+	for i := 0; i < n; i++ {
+		if p.TrackGenre(i) == genre {
+			out = append(out, i)
+		}
+	}
+	return out
 }
 
 func displayNameCached(t tagInfo, path string) string {
@@ -213,9 +314,57 @@ func (p *Player) SetPlaylistFile(path string) {
 	defer p.mu.Unlock()
 	p.listFile = path
 	if path != "" {
-		p.lib = newTrackLibrary(filepath.Join(filepath.Dir(path), "library.json"))
+		dir := filepath.Dir(path)
+		p.lib = newTrackLibrary(filepath.Join(dir, "library.json"))
+		p.tagsFile = filepath.Join(dir, "tags.json")
+		p.loadTags()
 	} else {
 		p.lib = nil
+		p.tagsFile = ""
+	}
+}
+
+// loadTags carrega o cache de tags persistido (título/artista/gênero).
+func (p *Player) loadTags() {
+	if p.tagsFile == "" {
+		return
+	}
+	b, err := os.ReadFile(p.tagsFile)
+	if err != nil {
+		return
+	}
+	var m map[string]tagInfo
+	if json.Unmarshal(b, &m) != nil {
+		return
+	}
+	p.tagMu.Lock()
+	if p.tagCache == nil {
+		p.tagCache = map[string]tagInfo{}
+	}
+	for k, v := range m {
+		p.tagCache[k] = v
+	}
+	p.tagMu.Unlock()
+}
+
+// saveTags grava o cache de tags de forma atômica.
+func (p *Player) saveTags() {
+	if p.tagsFile == "" {
+		return
+	}
+	p.tagMu.Lock()
+	m := make(map[string]tagInfo, len(p.tagCache))
+	for k, v := range p.tagCache {
+		m[k] = v
+	}
+	p.tagMu.Unlock()
+	b, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	tmp := p.tagsFile + ".tmp"
+	if os.WriteFile(tmp, b, 0o644) == nil {
+		_ = os.Rename(tmp, p.tagsFile)
 	}
 }
 
@@ -844,4 +993,5 @@ func (p *Player) Close() {
 	if p.lib != nil {
 		p.lib.flush()
 	}
+	p.saveTags()
 }
