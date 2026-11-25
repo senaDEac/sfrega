@@ -608,11 +608,14 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
 						er := image.Rect(0, 0, winW-81, plRowH)
-						blk := color.NRGBA{A: 0xFF}
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), blk)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), blk)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), blk)
-						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), blk)
+						bc := color.NRGBA{A: 0xFF}
+						if ti == ui.p.Index() {
+							bc = colPLText
+						}
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), bc)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), bc)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), bc)
+						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), bc)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -759,11 +762,14 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
 						er := image.Rect(0, 0, winW-81, plRowH)
-						blk := color.NRGBA{A: 0xFF}
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), blk)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), blk)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), blk)
-						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), blk)
+						bc := color.NRGBA{A: 0xFF}
+						if ti == ui.p.Index() {
+							bc = colPLText
+						}
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), bc)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), bc)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), bc)
+						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), bc)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -907,11 +913,14 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
 						ui.plRow(gtx, ti, tracks, winW-81)
 						er := image.Rect(0, 0, winW-81, plRowH)
-						blk := color.NRGBA{A: 0xFF}
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), blk)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), blk)
-						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), blk)
-						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), blk)
+						bc := color.NRGBA{A: 0xFF}
+						if ti == ui.p.Index() {
+							bc = colPLText
+						}
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Max.X, er.Min.Y+1), bc)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Max.Y-1, er.Max.X, er.Max.Y), bc)
+						fillRect(gtx.Ops, image.Rect(er.Min.X, er.Min.Y, er.Min.X+1, er.Max.Y), bc)
+						fillRect(gtx.Ops, image.Rect(er.Max.X-1, er.Min.Y, er.Max.X, er.Max.Y), bc)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -1673,6 +1682,13 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 		} else {
 			b.lastClick = now
 		}
+	}
+	if cur {
+		// borda verde na faixa tocando
+		fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1), colPLText)
+		fillRect(gtx.Ops, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y), colPLText)
+		fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Min.X+1, r.Max.Y), colPLText)
+		fillRect(gtx.Ops, image.Rect(r.Max.X-1, r.Min.Y, r.Max.X, r.Max.Y), colPLText)
 	}
 	return layout.Dimensions{Size: image.Pt(w, h)}
 }
