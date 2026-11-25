@@ -101,6 +101,7 @@ type uiState struct {
 	btnShuf, btnRep                              uibtn
 	btnGenex, btnGenex2                          uibtn
 	volDrag, balDrag, posDrag                    fader
+	plPosDrag                                    fader // seek na barra da Playlist
 
 	// widgets EQ
 	plRowClicks                     []uibtn
@@ -695,6 +696,8 @@ func Run(p *player.Player) error {
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
 	ui.posDrag.releaseCommit = true
+	ui.plPosDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
+	ui.plPosDrag.releaseCommit = true
 	ui.preampSlide.val = 0.5
 	ui.preampSlide.commit = func(v float32) {
 		// -12..+12 dB

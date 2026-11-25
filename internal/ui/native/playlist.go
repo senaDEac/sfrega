@@ -484,8 +484,8 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 
 	// ---- lado direito do rodapé (150px) ----
 	rx := winW - 150
-	// tempo total da playlist (verde)
-	ui.textAt(gtx, ui.fontMono, unit.Sp(8), ui.plTimeText(), colPLText, image.Pt(rx+7, botY+10))
+	// cobre a caixa preta do indicador de tempo (sprite PLEDIT) com a cor do fundo local
+	fillRect(gtx.Ops, image.Rect(rx+4, botY+8, rx+96, botY+18), color.NRGBA{R: 40, G: 40, B: 63, A: 0xFF})
 
 	// botões de transporte 10x10 (CBUTTONS escalado)
 	type tbtn struct {
@@ -514,10 +514,6 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 		ui.p.Pause()
 		_ = ui.p.SeekFraction(0)
 	}
-	// mini-time (tempo atual)
-	ui.textAt(gtx, ui.fontMono, unit.Sp(7), ui.fmtTime(ui.p.Position().Seconds()),
-		colPLText, image.Pt(rx+66, botY+23))
-
 	// menu List (new/save/load) à direita
 	lx := winW - 44
 	ly := botY + 8
@@ -553,25 +549,10 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 		}
 	}
 
-	// fundo preto estilo LCD ao lado direito do botão MISC
-	lcdR := image.Rect(plMenuX+4*29+4, botY+9, plMenuX+4*29+68, botY+25)
-	if lcdR.Max.X < winW-154 {
-		fillRect(gtx.Ops, lcdR, color.NRGBA{A: 0xFF})
-		fillRect(gtx.Ops, image.Rect(lcdR.Min.X, lcdR.Min.Y, lcdR.Max.X, lcdR.Min.Y+1), colLCDTop)
-		fillRect(gtx.Ops, image.Rect(lcdR.Min.X, lcdR.Max.Y-1, lcdR.Max.X, lcdR.Max.Y), colLCDBot)
-		// contagem de faixas visíveis em dígitos bitmap NUMBERS (estilo LCD)
-		if ui.plCount > 0 {
-			var ds []int
-			for m := ui.plCount; m > 0; m /= 10 {
-				ds = append([]int{m % 10}, ds...)
-			}
-			x := lcdR.Max.X - 4
-			for i := len(ds) - 1; i >= 0; i-- {
-				x -= 11
-				ui.spr(gtx, "NUMBERS", image.Rect(ds[i]*9, 0, ds[i]*9+9, 13),
-					image.Rect(x, lcdR.Min.Y+1, x+9, lcdR.Min.Y+14))
-			}
-		}
+	// barra de progresso no espaço liberado à direita (antiga caixa do time)
+	barR := image.Rect(winW-144, botY+8, winW-55, botY+18)
+	if barR.Min.X > plMenuX+4*29+72 {
+		ui.plPosBar(gtx, barR)
 	}
 
 	// setas de scroll (decorativas)
@@ -580,6 +561,39 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 
 	// orelha de redimensionamento (canto inferior direito)
 	ui.plResize(gtx, image.Rect(winW-16, botY+20, winW-2, botY+36), winW, winH)
+}
+
+// plPosBar desenha a barra de progresso da música no rodapé da Playlist,
+// com o mesmo sprite POSBAR e indicador do player.
+func (ui *uiState) plPosBar(gtx layout.Context, barR image.Rectangle) {
+	pos, dur := ui.p.Position(), ui.p.Duration()
+	frac := 0.0
+	if dur > 0 {
+		frac = pos.Seconds() / dur.Seconds()
+	}
+	if frac < 0 {
+		frac = 0
+	}
+	if frac > 1 {
+		frac = 1
+	}
+	if !ui.plPosDrag.active {
+		ui.plPosDrag.val = float32(frac)
+	}
+	ui.sprFit(gtx, "POSBAR", image.Rect(0, 0, 248, 10), barR)
+	// indicador (mesmo sprite do player, escalado)
+	kw := 22
+	if barR.Dx() < 80 {
+		kw = 16
+	}
+	travel := barR.Dx() - kw
+	if travel < 0 {
+		travel = 0
+	}
+	kx := barR.Min.X + int(float32(travel)*ui.plPosDrag.val)
+	ui.sprFit(gtx, "POSBAR", image.Rect(248, 0, 277, 10),
+		image.Rect(kx, barR.Max.Y-10, kx+kw, barR.Max.Y))
+	ui.scrub(gtx, &ui.plPosDrag, image.Rect(barR.Min.X, barR.Min.Y, barR.Max.X, barR.Max.Y+10))
 }
 
 // plResize registra drag na orelha do canto inferior direito e
