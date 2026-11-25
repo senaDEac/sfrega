@@ -100,6 +100,8 @@ type Player struct {
 	mu       sync.Mutex
 	tracks   []string
 	index    int
+	queue    []int // ordem de reprodução de um grupo (nil = playlist inteira)
+	qpos     int   // posição atual dentro de queue (-1 = sem fila)
 	listFile string        // playlist persistida em m3u ("" = desativado)
 	tagsFile string        // cache de tags persistido em tags.json
 	lib      *trackLibrary // metadados por faixa (plays/rating/tags)
@@ -726,6 +728,8 @@ func (p *Player) SetTracks(tracks []string) {
 	defer p.mu.Unlock()
 	p.tracks = append([]string(nil), tracks...)
 	p.index = -1
+	p.queue = nil
+	p.qpos = -1
 	if len(tracks) > 0 {
 		p.index = 0
 	}
@@ -801,10 +805,51 @@ func (p *Player) TrackAt(i int) string {
 	return ""
 }
 
-// PlayIndex toca a faixa i da playlist.
+// PlayIndex toca a faixa i da playlist (contexto: playlist inteira).
 func (p *Player) PlayIndex(i int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.queue = nil
+	p.qpos = -1
+	return p.playIndexLocked(i)
+}
+
+// PlayInOrder toca a faixa i usando order como sequência de reprodução
+// (ex.: faixas do álbum/pasta/artista expandido). Se i não estiver em
+// order, cai no comportamento de PlayIndex.
+func (p *Player) PlayInOrder(i int, order []int) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.queue = nil
+	p.qpos = -1
+	for k, ti := range order {
+		if ti == i {
+			p.queue = append([]int(nil), order...)
+			p.qpos = k
+			break
+		}
+	}
+	return p.playIndexLocked(i)
+}
+
+// playQueueAtLocked troca para a posição k da fila ativa.
+func (p *Player) playQueueAtLocked(k int) {
+	if k < 0 || k >= len(p.queue) {
+		return
+	}
+	p.qpos = k
+	p.index = p.queue[k]
+	p.playNextLocked()
+}
+
+// playQueueAt é playQueueAtLocked com lock (uso fora de Next/autoAdvance).
+func (p *Player) playQueueAt(k int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.playQueueAtLocked(k)
+}
+
+func (p *Player) playIndexLocked(i int) error {
 	if i < 0 || i >= len(p.tracks) {
 		return errors.New("player: índice inválido")
 	}
@@ -953,6 +998,8 @@ func (p *Player) RemoveAt(i int) {
 		return
 	}
 	p.tracks = append(p.tracks[:i], p.tracks[i+1:]...)
+	p.queue = nil
+	p.qpos = -1
 	if len(p.tracks) == 0 {
 		p.index = -1
 		p.resetLocked()
@@ -983,6 +1030,8 @@ func (p *Player) Move(from, to int) {
 	t := p.tracks[from]
 	p.tracks = append(p.tracks[:from], p.tracks[from+1:]...)
 	p.tracks = append(p.tracks[:to], append([]string{t}, p.tracks[to:]...)...)
+	p.queue = nil
+	p.qpos = -1
 	if p.index == from {
 		p.index = to
 	} else if from < p.index && to >= p.index {
@@ -1027,10 +1076,22 @@ func (p *Player) Toggle() {
 	}
 }
 
-// Next avança; no fim da playlist para.
+// Next avança; no fim da playlist/fila para (com repeat, volta ao início).
 func (p *Player) Next() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.qpos >= 0 {
+		switch {
+		case p.qpos+1 < len(p.queue):
+			p.playQueueAtLocked(p.qpos + 1)
+		case p.repeat.Load() && len(p.queue) > 0:
+			p.playQueueAtLocked(0)
+		default:
+			p.index = -1
+			p.resetLocked()
+		}
+		return
+	}
 	if p.index+1 < len(p.tracks) {
 		p.index++
 		p.playNextLocked()
@@ -1044,7 +1105,13 @@ func (p *Player) Next() {
 func (p *Player) Prev() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.index-1 >= 0 {
+	if p.qpos >= 0 {
+		if p.qpos > 0 {
+			p.playQueueAtLocked(p.qpos - 1)
+		} else {
+			p.resetLocked()
+		}
+	} else if p.index-1 >= 0 {
 		p.index--
 		p.playNextLocked()
 	} else {
@@ -1237,6 +1304,21 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 // com repeat, ou volta ao início pausado.
 func (p *Player) autoAdvance() {
 	p.mu.Lock()
+	if p.qpos >= 0 && len(p.queue) > 0 {
+		hasNext := p.qpos+1 < len(p.queue)
+		rep := p.repeat.Load()
+		p.mu.Unlock()
+		switch {
+		case hasNext:
+			p.Next()
+		case rep:
+			p.playQueueAt(0)
+		default:
+			_ = p.SeekFrame(0)
+			p.Pause()
+		}
+		return
+	}
 	n := len(p.tracks)
 	hasNext := p.index+1 < n
 	rep := p.repeat.Load()

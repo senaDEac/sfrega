@@ -618,7 +618,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					if ry > visMin && ry < visMax {
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
-						ui.plRow(gtx, ti, tracks, winW-81)
+						ui.plRow(gtx, ti, tracks, winW-81, ui.plArtistExpandIdx)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -776,7 +776,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					if ry > visMin && ry < visMax {
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
-						ui.plRow(gtx, ti, tracks, winW-81)
+						ui.plRow(gtx, ti, tracks, winW-81, ui.plFolderExpandIdx)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -929,7 +929,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					if ry > visMin && ry < visMax {
 						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
 						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
-						ui.plRow(gtx, ti, tracks, winW-81)
+						ui.plRow(gtx, ti, tracks, winW-81, ui.plAlbumExpandIdx)
 						ro.Pop()
 					}
 					ry += plRowH
@@ -1019,7 +1019,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	ui.plCount = len(order)
 	ui.plList.Axis = layout.Vertical
 	ui.plList.Layout(lgtx, len(order), func(gtx layout.Context, i int) layout.Dimensions {
-		return ui.plRow(gtx, order[i], tracks, listR.Dx())
+		return ui.plRow(gtx, order[i], tracks, listR.Dx(), nil)
 	})
 	loff.Pop()
 	if ui.plScrollAcc != 0 {
@@ -1607,7 +1607,9 @@ func (ui *uiState) fmtTime(sec float64) string {
 }
 
 // plRow desenha uma linha da playlist (plRowH px, fonte verde).
-func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layout.Dimensions {
+// order != nil define a sequência de reprodução (grupo expandido);
+// nil = playlist inteira.
+func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int, order []int) layout.Dimensions {
 	h := plRowH
 	r := image.Rect(0, 0, w, h)
 	cur := i == ui.p.Index()
@@ -1687,7 +1689,11 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 		now := time.Now()
 		if now.Sub(b.lastClick) < 500*time.Millisecond {
 			b.lastClick = time.Time{}
-			ui.p.PlayIndex(i)
+			if order != nil {
+				_ = ui.p.PlayInOrder(i, order)
+			} else {
+				ui.p.PlayIndex(i)
+			}
 		} else {
 			b.lastClick = now
 		}
