@@ -28,6 +28,10 @@ var plWheelTag event.Tag
 var plArtistWheelTag event.Tag
 var plScrollTag event.Tag
 var plArtistScrollTag event.Tag
+var plFolderWheelTag event.Tag
+var plFolderScrollTag event.Tag
+var plAlbumWheelTag event.Tag
+var plAlbumScrollTag event.Tag
 
 // plWheel rola a lista com a roda do mouse (mesmo padrão do menuWindow).
 func (ui *uiState) plWheel(gtx layout.Context, r image.Rectangle) {
@@ -72,6 +76,29 @@ func (ui *uiState) plArtistWheel(gtx layout.Context, r image.Rectangle) {
 			continue
 		}
 		ui.plArtistScrollAcc += e.Scroll.Y
+	}
+}
+
+// plFolderWheel rola o painel de pastas na área vazia.
+func (ui *uiState) plFolderWheel(gtx layout.Context, r image.Rectangle) {
+	cs := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plFolderWheelTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target:  &plFolderWheelTag,
+			Kinds:   pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		ui.plFolderScrollAcc += e.Scroll.Y
 	}
 }
 
@@ -321,11 +348,19 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					saveGenreSel("")
 				}
 				saveGenreOpen(ui.plGenreOpen)
-				// só uma fileira de sub-botões por vez
+				// só uma fileira de sub-painéis por vez
 				ui.plArtistOpen = false
 				ui.plArtistExpand = ""
 				ui.plArtistExpandIdx = nil
 				saveArtistOpen(false)
+				ui.plFolderOpen = false
+				ui.plFolderExpand = ""
+				ui.plFolderExpandIdx = nil
+				saveFolderOpen(false)
+				ui.plAlbumOpen = false
+				ui.plAlbumExpand = ""
+				ui.plAlbumExpandIdx = nil
+				saveAlbumOpen(false)
 			}
 			if i == 2 { // ARTISTA: abre/fecha a lista de artistas
 				ui.plArtistOpen = !ui.plArtistOpen
@@ -334,13 +369,28 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 					ui.plArtistExpandIdx = nil
 				}
 				saveArtistOpen(ui.plArtistOpen)
-				// só uma fileira de sub-botões por vez
+				// só uma fileira de sub-painéis por vez
 				ui.plGenreOpen = false
 				ui.plGenreSel = ""
 				saveGenreSel("")
 				saveGenreOpen(false)
+				ui.plFolderOpen = false
+				ui.plFolderExpand = ""
+				ui.plFolderExpandIdx = nil
+				saveFolderOpen(false)
+				ui.plAlbumOpen = false
+				ui.plAlbumExpand = ""
+				ui.plAlbumExpandIdx = nil
+				saveAlbumOpen(false)
 			}
-			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha as fileiras
+			if i == 3 { // PASTAS: abre/fecha a lista de diretórios
+				ui.plFolderOpen = !ui.plFolderOpen
+				if !ui.plFolderOpen {
+					ui.plFolderExpand = ""
+					ui.plFolderExpandIdx = nil
+				}
+				saveFolderOpen(ui.plFolderOpen)
+				// só uma fileira de sub-painéis por vez
 				ui.plGenreOpen = false
 				ui.plGenreSel = ""
 				saveGenreSel("")
@@ -349,6 +399,49 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 				ui.plArtistExpand = ""
 				ui.plArtistExpandIdx = nil
 				saveArtistOpen(false)
+				ui.plAlbumOpen = false
+				ui.plAlbumExpand = ""
+				ui.plAlbumExpandIdx = nil
+				saveAlbumOpen(false)
+			}
+			if i == 4 { // ÁLBUNS: abre/fecha a lista de álbuns
+				ui.plAlbumOpen = !ui.plAlbumOpen
+				if !ui.plAlbumOpen {
+					ui.plAlbumExpand = ""
+					ui.plAlbumExpandIdx = nil
+				}
+				saveAlbumOpen(ui.plAlbumOpen)
+				// só uma fileira de sub-painéis por vez
+				ui.plGenreOpen = false
+				ui.plGenreSel = ""
+				saveGenreSel("")
+				saveGenreOpen(false)
+				ui.plArtistOpen = false
+				ui.plArtistExpand = ""
+				ui.plArtistExpandIdx = nil
+				saveArtistOpen(false)
+				ui.plFolderOpen = false
+				ui.plFolderExpand = ""
+				ui.plFolderExpandIdx = nil
+				saveFolderOpen(false)
+			}
+			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha os painéis
+				ui.plGenreOpen = false
+				ui.plGenreSel = ""
+				saveGenreSel("")
+				saveGenreOpen(false)
+				ui.plArtistOpen = false
+				ui.plArtistExpand = ""
+				ui.plArtistExpandIdx = nil
+				saveArtistOpen(false)
+				ui.plFolderOpen = false
+				ui.plFolderExpand = ""
+				ui.plFolderExpandIdx = nil
+				saveFolderOpen(false)
+				ui.plAlbumOpen = false
+				ui.plAlbumExpand = ""
+				ui.plAlbumExpandIdx = nil
+				saveAlbumOpen(false)
 			}
 			if ui.plGenSel == i {
 				ui.plGenSel = -1
@@ -358,7 +451,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			saveGenSel(ui.plGenSel)
 		}
 		lc := dark
-		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") || (i == 2 && ui.plArtistOpen) {
+		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") || (i == 2 && ui.plArtistOpen) || (i == 3 && ui.plFolderOpen) || (i == 4 && ui.plAlbumOpen) {
 			ui.btnTextB(gtx, labels[i], dst, genGreen)
 		} else {
 			ui.btnText(gtx, labels[i], dst, lc)
@@ -447,6 +540,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		ry := areaTop - int(ui.plArtistScroll)
 		// roda primeiro (embaixo): se fosse por cima, engoliria os Press dos botões
 		ui.plArtistWheel(gtx, panel)
+		ui.plScrollSink = &ui.plArtistScrollAcc
 		// só renderiza linhas visíveis (evita decode de capa / ops de 300+ linhas)
 		visMin := areaTop - plRowH
 		visMax := areaTop + artistH
@@ -483,15 +577,6 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 						} else {
 							ui.plArtistExpand = a
 							ui.plArtistExpandIdx = ui.artistTracks(a, tracks)
-							// rola para mostrar o artista e suas primeiras faixas
-							want := float32(ai*plRowH - plRowH)
-							if want < 0 {
-								want = 0
-							}
-							if want > ui.plArtistMax {
-								want = ui.plArtistMax
-							}
-							ui.plArtistScroll = want
 						}
 					}
 				}
@@ -544,8 +629,263 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		}
 	}
 
-	// com a fileira de artistas aberta ela ocupa toda a área da lista
-	if ui.plArtistOpen {
+	// painel de pastas: mesmo formato do de artistas, agrupado por diretório
+	if ui.plFolderOpen {
+		folders := ui.p.Folders()
+		for len(ui.plFolderBtns) < len(folders) {
+			ui.plFolderBtns = append(ui.plFolderBtns, uibtn{})
+		}
+		expN := 0
+		if ui.plFolderExpand != "" {
+			for _, d := range folders {
+				if d == ui.plFolderExpand {
+					expN = len(ui.plFolderExpandIdx)
+					break
+				}
+			}
+		}
+		areaTop := plTopH + 16 + genreH
+		avail := botY - 3 - areaTop
+		contentH := (len(folders) + expN) * plRowH
+		folderH := contentH
+		if folderH > avail {
+			folderH = avail
+		}
+		if folderH < 0 {
+			folderH = 0
+		}
+		ui.plCount = len(folders)
+		ui.plFolderMax = float32(contentH - folderH)
+		if ui.plFolderMax < 0 {
+			ui.plFolderMax = 0
+		}
+		if ui.plFolderScroll > ui.plFolderMax {
+			ui.plFolderScroll = ui.plFolderMax
+		}
+		if ui.plFolderScroll < 0 {
+			ui.plFolderScroll = 0
+		}
+		panel := image.Rect(12, areaTop, winW-23, areaTop+folderH)
+		fillRect(gtx.Ops, panel, colPLBg)
+		cs := clip.Rect(panel).Push(gtx.Ops)
+		// scroll via deslocamento de ry (sem op.Offset: quebrava a área de eventos)
+		ry := areaTop - int(ui.plFolderScroll)
+		// roda primeiro (embaixo): se fosse por cima, engoliria os Press dos botões
+		ui.plFolderWheel(gtx, panel)
+		ui.plScrollSink = &ui.plFolderScrollAcc
+		visMin := areaTop - plRowH
+		visMax := areaTop + folderH
+		for di, dir := range folders {
+			rowR := image.Rect(14, ry, winW-27, ry+plRowH)
+			exp := ui.plFolderExpand == dir
+			if ry > visMin && ry < visMax {
+				if exp {
+					fillRect(gtx.Ops, rowR, colPLCurBg)
+				}
+				ac := colPLText
+				if exp {
+					ac = colPLSelText
+				}
+				if img := ui.p.FolderCover(dir); img != nil {
+					blit(gtx, img, image.Rect(15, ry+1, 55, ry+41))
+				}
+				ui.textAt(gtx, ui.fontUI, unit.Sp(9), ui.p.FolderName(dir), ac, image.Pt(59, ry+9))
+				if n := ui.p.FolderTrackCount(dir); n > 0 {
+					cnt := fmt.Sprintf(language.T("pl.artist.tracks"), n)
+					ui.textAt(gtx, ui.fontUI, unit.Sp(9), cnt, colPLFile, image.Pt(59, ry+25))
+				}
+				ui.plFolderBtns[di].scrollFn = func(dy float32) { ui.plFolderScrollAcc += dy }
+				b := &ui.plFolderBtns[di]
+				if ui.button(gtx, b, rowR, func(gtx layout.Context, down bool) {}) {
+					now := time.Now()
+					dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+					b.lastClick = now
+					if dbl {
+						b.lastClick = time.Time{}
+						if exp {
+							ui.plFolderExpand = ""
+							ui.plFolderExpandIdx = nil
+						} else {
+							ui.plFolderExpand = dir
+							ui.plFolderExpandIdx = ui.folderTracks(dir, tracks)
+						}
+					}
+				}
+			}
+			ry += plRowH
+			if exp {
+				for _, ti := range ui.plFolderExpandIdx {
+					if ry > visMin && ry < visMax {
+						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
+						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
+						ui.plRow(gtx, ti, tracks, winW-81)
+						ro.Pop()
+					}
+					ry += plRowH
+				}
+			}
+		}
+		cs.Pop()
+		if ui.plFolderScrollAcc != 0 {
+			ui.plFolderScroll -= ui.plFolderScrollAcc
+			if ui.plFolderScroll > ui.plFolderMax {
+				ui.plFolderScroll = ui.plFolderMax
+			}
+			if ui.plFolderScroll < 0 {
+				ui.plFolderScroll = 0
+			}
+			ui.plFolderScrollAcc = 0
+		}
+		if contentH > folderH && folderH > 0 {
+			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+folderH-1)
+			fillRect(gtx.Ops, track, colPLBg)
+			thumbH := folderH * folderH / contentH
+			if thumbH < 12 {
+				thumbH = 12
+			}
+			if thumbH > folderH-2 {
+				thumbH = folderH - 2
+			}
+			frac := float32(0)
+			if ui.plFolderMax > 0 {
+				frac = ui.plFolderScroll / ui.plFolderMax
+			}
+			thumbY := areaTop + 1 + int(frac*float32(folderH-2-thumbH))
+			fillRect(gtx.Ops, image.Rect(winW-20, thumbY, winW-16, thumbY+thumbH),
+				color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF})
+			ui.plFolderScrollDrag(gtx, track, thumbY, thumbH, folderH, ui.plFolderMax)
+		}
+	}
+
+	// painel de álbuns: mesmo formato, agrupado pela tag ALBUM/TALB
+	if ui.plAlbumOpen {
+		albums := ui.p.Albums()
+		for len(ui.plAlbumBtns) < len(albums) {
+			ui.plAlbumBtns = append(ui.plAlbumBtns, uibtn{})
+		}
+		expN := 0
+		if ui.plAlbumExpand != "" {
+			for _, al := range albums {
+				if al == ui.plAlbumExpand {
+					expN = len(ui.plAlbumExpandIdx)
+					break
+				}
+			}
+		}
+		areaTop := plTopH + 16 + genreH
+		avail := botY - 3 - areaTop
+		contentH := (len(albums) + expN) * plRowH
+		albumH := contentH
+		if albumH > avail {
+			albumH = avail
+		}
+		if albumH < 0 {
+			albumH = 0
+		}
+		ui.plCount = len(albums)
+		ui.plAlbumMax = float32(contentH - albumH)
+		if ui.plAlbumMax < 0 {
+			ui.plAlbumMax = 0
+		}
+		if ui.plAlbumScroll > ui.plAlbumMax {
+			ui.plAlbumScroll = ui.plAlbumMax
+		}
+		if ui.plAlbumScroll < 0 {
+			ui.plAlbumScroll = 0
+		}
+		panel := image.Rect(12, areaTop, winW-23, areaTop+albumH)
+		fillRect(gtx.Ops, panel, colPLBg)
+		cs := clip.Rect(panel).Push(gtx.Ops)
+		ry := areaTop - int(ui.plAlbumScroll)
+		// roda primeiro (embaixo): se fosse por cima, engoliria os Press dos botões
+		ui.plAlbumWheel(gtx, panel)
+		ui.plScrollSink = &ui.plAlbumScrollAcc
+		visMin := areaTop - plRowH
+		visMax := areaTop + albumH
+		for ai2, al := range albums {
+			rowR := image.Rect(14, ry, winW-27, ry+plRowH)
+			exp := ui.plAlbumExpand == al
+			if ry > visMin && ry < visMax {
+				if exp {
+					fillRect(gtx.Ops, rowR, colPLCurBg)
+				}
+				ac := colPLText
+				if exp {
+					ac = colPLSelText
+				}
+				if img := ui.p.AlbumCover(al); img != nil {
+					blit(gtx, img, image.Rect(15, ry+1, 55, ry+41))
+				}
+				ui.textAt(gtx, ui.fontUI, unit.Sp(9), al, ac, image.Pt(59, ry+9))
+				if n := ui.p.AlbumTrackCount(al); n > 0 {
+					cnt := fmt.Sprintf(language.T("pl.artist.tracks"), n)
+					ui.textAt(gtx, ui.fontUI, unit.Sp(9), cnt, colPLFile, image.Pt(59, ry+25))
+				}
+				ui.plAlbumBtns[ai2].scrollFn = func(dy float32) { ui.plAlbumScrollAcc += dy }
+				b := &ui.plAlbumBtns[ai2]
+				if ui.button(gtx, b, rowR, func(gtx layout.Context, down bool) {}) {
+					now := time.Now()
+					dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+					b.lastClick = now
+					if dbl {
+						b.lastClick = time.Time{}
+						if exp {
+							ui.plAlbumExpand = ""
+							ui.plAlbumExpandIdx = nil
+						} else {
+							ui.plAlbumExpand = al
+							ui.plAlbumExpandIdx = ui.albumTracks(al, tracks)
+						}
+					}
+				}
+			}
+			ry += plRowH
+			if exp {
+				for _, ti := range ui.plAlbumExpandIdx {
+					if ry > visMin && ry < visMax {
+						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
+						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
+						ui.plRow(gtx, ti, tracks, winW-81)
+						ro.Pop()
+					}
+					ry += plRowH
+				}
+			}
+		}
+		cs.Pop()
+		if ui.plAlbumScrollAcc != 0 {
+			ui.plAlbumScroll -= ui.plAlbumScrollAcc
+			if ui.plAlbumScroll > ui.plAlbumMax {
+				ui.plAlbumScroll = ui.plAlbumMax
+			}
+			if ui.plAlbumScroll < 0 {
+				ui.plAlbumScroll = 0
+			}
+			ui.plAlbumScrollAcc = 0
+		}
+		if contentH > albumH && albumH > 0 {
+			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+albumH-1)
+			fillRect(gtx.Ops, track, colPLBg)
+			thumbH := albumH * albumH / contentH
+			if thumbH < 12 {
+				thumbH = 12
+			}
+			if thumbH > albumH-2 {
+				thumbH = albumH - 2
+			}
+			frac := float32(0)
+			if ui.plAlbumMax > 0 {
+				frac = ui.plAlbumScroll / ui.plAlbumMax
+			}
+			thumbY := areaTop + 1 + int(frac*float32(albumH-2-thumbH))
+			fillRect(gtx.Ops, image.Rect(winW-20, thumbY, winW-16, thumbY+thumbH),
+				color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF})
+			ui.plAlbumScrollDrag(gtx, track, thumbY, thumbH, albumH, ui.plAlbumMax)
+		}
+	}
+
+	// com painel de artistas/pastas/álbuns aberto ele ocupa toda a área da lista
+	if ui.plArtistOpen || ui.plFolderOpen || ui.plAlbumOpen {
 		return
 	}
 
@@ -555,6 +895,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 
 	ui.plWheel(gtx, listR)
 
+	ui.plScrollSink = nil
 	loff := op.Offset(listR.Min).Push(gtx.Ops)
 	lgtx := gtx
 	lgtx.Constraints.Min = image.Point{}
@@ -727,6 +1068,157 @@ func (ui *uiState) plArtistScrollDrag(gtx layout.Context, track image.Rectangle,
 			ui.plScrollDragging = false
 		}
 	}
+}
+
+// plFolderScrollDrag permite arrastar o thumb da scrollbar de pastas.
+func (ui *uiState) plFolderScrollDrag(gtx layout.Context, track image.Rectangle, thumbY, thumbH, viewH int, maxScroll float32) {
+	if maxScroll <= 0 {
+		return
+	}
+	travel := viewH - 2 - thumbH
+	if travel <= 0 {
+		return
+	}
+	trackTop := float32(track.Min.Y)
+	cs := clip.Rect(track).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plFolderScrollTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &plFolderScrollTag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			if e.Position.Y < float32(thumbY) || e.Position.Y > float32(thumbY+thumbH) {
+				continue
+			}
+			ui.plScrollDragging = true
+		case pointer.Drag:
+			if !ui.plScrollDragging {
+				continue
+			}
+			frac := (e.Position.Y - trackTop) / float32(travel)
+			if frac < 0 {
+				frac = 0
+			}
+			if frac > 1 {
+				frac = 1
+			}
+			ui.plFolderScroll = frac * maxScroll
+		case pointer.Release, pointer.Cancel:
+			ui.plScrollDragging = false
+		}
+	}
+}
+
+// plAlbumWheel rola o painel de álbuns na área vazia.
+func (ui *uiState) plAlbumWheel(gtx layout.Context, r image.Rectangle) {
+	cs := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plAlbumWheelTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target:  &plAlbumWheelTag,
+			Kinds:   pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		ui.plAlbumScrollAcc += e.Scroll.Y
+	}
+}
+
+// plAlbumScrollDrag permite arrastar o thumb da scrollbar de álbuns.
+func (ui *uiState) plAlbumScrollDrag(gtx layout.Context, track image.Rectangle, thumbY, thumbH, viewH int, maxScroll float32) {
+	if maxScroll <= 0 {
+		return
+	}
+	travel := viewH - 2 - thumbH
+	if travel <= 0 {
+		return
+	}
+	trackTop := float32(track.Min.Y)
+	cs := clip.Rect(track).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plAlbumScrollTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &plAlbumScrollTag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			if e.Position.Y < float32(thumbY) || e.Position.Y > float32(thumbY+thumbH) {
+				continue
+			}
+			ui.plScrollDragging = true
+		case pointer.Drag:
+			if !ui.plScrollDragging {
+				continue
+			}
+			frac := (e.Position.Y - trackTop) / float32(travel)
+			if frac < 0 {
+				frac = 0
+			}
+			if frac > 1 {
+				frac = 1
+			}
+			ui.plAlbumScroll = frac * maxScroll
+		case pointer.Release, pointer.Cancel:
+			ui.plScrollDragging = false
+		}
+	}
+}
+
+// albumTracks retorna os índices das faixas do álbum em ordem alfabética.
+func (ui *uiState) albumTracks(a string, tracks []string) []int {
+	idx := ui.p.AlbumTracks(a)
+	names := make(map[int]string, len(idx))
+	for _, i := range idx {
+		n, _ := ui.p.TrackTitle(i)
+		if n == "" {
+			n = filepath.Base(tracks[i])
+		}
+		names[i] = strings.ToLower(n)
+	}
+	sort.Slice(idx, func(x, y int) bool { return names[idx[x]] < names[idx[y]] })
+	return idx
+}
+
+// folderTracks retorna os índices das faixas do diretório em ordem alfabética.
+func (ui *uiState) folderTracks(dir string, tracks []string) []int {
+	idx := ui.p.FolderTracks(dir)
+	names := make(map[int]string, len(idx))
+	for _, i := range idx {
+		n, _ := ui.p.TrackTitle(i)
+		if n == "" {
+			n = filepath.Base(tracks[i])
+		}
+		names[i] = strings.ToLower(n)
+	}
+	sort.Slice(idx, func(x, y int) bool { return names[idx[x]] < names[idx[y]] })
+	return idx
 }
 
 // plBottom desenha o rodapé de 38px: menus à esquerda, transporte à direita.
@@ -1079,7 +1571,11 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 	// a roda do mouse é consumida pelo botão da linha (ui.button filtra
 	// Scroll); acumula o delta e aplica após o Layout para não corromper
 	// a iteração do List
-	ui.plRowClicks[i].scrollFn = func(dy float32) { ui.plScrollAcc += dy }
+	sink := &ui.plScrollAcc
+	if ui.plScrollSink != nil {
+		sink = ui.plScrollSink
+	}
+	ui.plRowClicks[i].scrollFn = func(dy float32) { *sink += dy }
 	if ui.button(gtx, &ui.plRowClicks[i], r, func(gtx layout.Context, down bool) {}) {
 		ui.plSel = i
 		ui.p.PlayIndex(i)

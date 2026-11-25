@@ -131,6 +131,12 @@ type Player struct {
 	artistsList []string          // artistas distintos (preenchido pelo warmTags)
 	artistFirst map[string]string // artista → path da primeira ocorrência
 	artistCount map[string]int    // artista → total de faixas
+	foldersList []string          // diretórios distintos (preenchido pelo warmTags)
+	folderFirst map[string]string // dir → path da primeira ocorrência
+	folderCount map[string]int    // dir → total de faixas
+	albumsList  []string          // álbuns distintos (preenchido pelo warmTags)
+	albumFirst  map[string]string // álbum → path da primeira ocorrência
+	albumCount  map[string]int    // álbum → total de faixas
 }
 
 // tagPeek retorna o tag em cache sem ler o arquivo (seguro para a UI).
@@ -238,6 +244,14 @@ func (p *Player) computeArtists(paths []string) {
 	first := map[string]string{}
 	count := map[string]int{}
 	var artists []string
+	seenF := map[string]bool{}
+	fFirst := map[string]string{}
+	fCount := map[string]int{}
+	var folders []string
+	seenA := map[string]bool{}
+	aFirst := map[string]string{}
+	aCount := map[string]int{}
+	var albums []string
 	for _, path := range paths {
 		t, _ := p.tagPeek(path)
 		if t.Artist != "" {
@@ -248,14 +262,41 @@ func (p *Player) computeArtists(paths []string) {
 				artists = append(artists, t.Artist)
 			}
 		}
+		dir := filepath.Dir(path)
+		fCount[dir]++
+		if !seenF[dir] {
+			seenF[dir] = true
+			fFirst[dir] = path
+			folders = append(folders, dir)
+		}
+		if t.Album != "" {
+			aCount[t.Album]++
+			if !seenA[t.Album] {
+				seenA[t.Album] = true
+				aFirst[t.Album] = path
+				albums = append(albums, t.Album)
+			}
+		}
 	}
 	sort.Slice(artists, func(a, b int) bool {
 		return strings.ToLower(artists[a]) < strings.ToLower(artists[b])
+	})
+	sort.Slice(folders, func(a, b int) bool {
+		return strings.ToLower(filepath.Base(folders[a])) < strings.ToLower(filepath.Base(folders[b]))
+	})
+	sort.Slice(albums, func(a, b int) bool {
+		return strings.ToLower(albums[a]) < strings.ToLower(albums[b])
 	})
 	p.artistMu.Lock()
 	p.artistsList = artists
 	p.artistFirst = first
 	p.artistCount = count
+	p.foldersList = folders
+	p.folderFirst = fFirst
+	p.folderCount = fCount
+	p.albumsList = albums
+	p.albumFirst = aFirst
+	p.albumCount = aCount
 	p.artistMu.Unlock()
 }
 
@@ -279,6 +320,95 @@ func (p *Player) Artists() []string {
 	p.artistMu.Lock()
 	defer p.artistMu.Unlock()
 	return append([]string(nil), p.artistsList...)
+}
+
+// Folders retorna os diretórios distintos das faixas, ordenados por nome.
+func (p *Player) Folders() []string {
+	p.artistMu.Lock()
+	defer p.artistMu.Unlock()
+	return append([]string(nil), p.foldersList...)
+}
+
+// FolderName retorna o nome de exibição do diretório (base).
+func (p *Player) FolderName(dir string) string {
+	return filepath.Base(dir)
+}
+
+// FolderTrackCount retorna o total de faixas do diretório.
+func (p *Player) FolderTrackCount(dir string) int {
+	p.artistMu.Lock()
+	defer p.artistMu.Unlock()
+	return p.folderCount[dir]
+}
+
+// FolderCover retorna a capa da primeira faixa do diretório (nil se não houver).
+func (p *Player) FolderCover(dir string) image.Image {
+	p.artistMu.Lock()
+	path := p.folderFirst[dir]
+	p.artistMu.Unlock()
+	return p.coverForPath(path)
+}
+
+// FolderTracks retorna os índices das faixas do diretório.
+func (p *Player) FolderTracks(dir string) []int {
+	p.mu.Lock()
+	tracks := append([]string(nil), p.tracks...)
+	p.mu.Unlock()
+	var out []int
+	for i, path := range tracks {
+		if filepath.Dir(path) == dir {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// Albums retorna os álbuns distintos das faixas, ordenados por nome.
+func (p *Player) Albums() []string {
+	p.artistMu.Lock()
+	defer p.artistMu.Unlock()
+	return append([]string(nil), p.albumsList...)
+}
+
+// AlbumTrackCount retorna o total de faixas do álbum.
+func (p *Player) AlbumTrackCount(album string) int {
+	p.artistMu.Lock()
+	defer p.artistMu.Unlock()
+	return p.albumCount[album]
+}
+
+// AlbumCover retorna a capa da primeira faixa do álbum (nil se não houver).
+func (p *Player) AlbumCover(album string) image.Image {
+	p.artistMu.Lock()
+	path := p.albumFirst[album]
+	p.artistMu.Unlock()
+	return p.coverForPath(path)
+}
+
+// AlbumTracks retorna os índices das faixas do álbum.
+func (p *Player) AlbumTracks(album string) []int {
+	var out []int
+	for i := 0; i < p.Count(); i++ {
+		if p.trackAlbum(i) == album {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// trackAlbum retorna o álbum do metadado da faixa i ("" se não houver).
+func (p *Player) trackAlbum(i int) string {
+	p.mu.Lock()
+	var path string
+	if i >= 0 && i < len(p.tracks) {
+		path = p.tracks[i]
+	}
+	p.mu.Unlock()
+	if path == "" {
+		return ""
+	}
+	t, _ := p.tagPeek(path)
+	return t.Album
 }
 
 // TracksForArtist retorna os índices das faixas do artista ("" = todas).

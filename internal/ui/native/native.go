@@ -132,6 +132,7 @@ type uiState struct {
 	plScrollAcc                                          float32
 	plScrollDragging                                     bool    // arraste na scrollbar da lista
 	plScrollDragLast                                     float32 // último offset de scroll (px) no arraste
+	plScrollSink                                         *float32 // acumulador de roda p/ linhas expandidas (nil = plScrollAcc)
 	plGenreOpen                                          bool
 	plGenreSel                                           string
 	plGenreBtns                                          []uibtn
@@ -142,6 +143,20 @@ type uiState struct {
 	plArtistScroll                                       float32 // offset vertical da fileira (px)
 	plArtistScrollAcc                                    float32
 	plArtistMax                                          float32 // conteúdo - área visível
+	plFolderOpen                                         bool
+	plFolderExpand                                       string  // diretório expandido ("" = nenhum)
+	plFolderExpandIdx                                    []int   // faixas do diretório expandido
+	plFolderBtns                                         []uibtn
+	plFolderScroll                                       float32
+	plFolderScrollAcc                                    float32
+	plFolderMax                                          float32
+	plAlbumOpen                                          bool
+	plAlbumExpand                                        string  // álbum expandido ("" = nenhum)
+	plAlbumExpandIdx                                     []int   // faixas do álbum expandido
+	plAlbumBtns                                          []uibtn
+	plAlbumScroll                                        float32
+	plAlbumScrollAcc                                     float32
+	plAlbumMax                                           float32
 	plGenSel                                             int // botão GENEX selecionado (-1 = nenhum)
 	plCount                                              int // faixas visíveis (após filtro)
 
@@ -302,6 +317,40 @@ func loadArtistOpen() bool {
 // saveArtistOpen grava o estado da fileira de artistas.
 func saveArtistOpen(on bool) {
 	p := configPath("artistopen.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadFolderOpen lê se a fileira de pastas da Playlist abre expandida.
+func loadFolderOpen() bool {
+	b, err := os.ReadFile(configPath("folderopen.txt"))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveFolderOpen grava o estado da fileira de pastas.
+func saveFolderOpen(on bool) {
+	p := configPath("folderopen.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadAlbumOpen lê se o painel de álbuns da Playlist abre expandido.
+func loadAlbumOpen() bool {
+	b, err := os.ReadFile(configPath("albumopen.txt"))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveAlbumOpen grava o estado do painel de álbuns.
+func saveAlbumOpen(on bool) {
+	p := configPath("albumopen.txt")
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	v := "0\n"
 	if on {
@@ -703,6 +752,8 @@ func Run(p *player.Player) error {
 		plGenreOpen:  loadGenreOpen(),
 		plGenreSel:   loadGenreSel(),
 		plArtistOpen: loadArtistOpen(),
+		plFolderOpen: loadFolderOpen(),
+		plAlbumOpen:  loadAlbumOpen(),
 		plGenSel:     loadGenSel(),
 	}
 	ui.volDrag.val = 1.0

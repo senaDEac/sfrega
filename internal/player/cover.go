@@ -9,6 +9,7 @@ import (
 	_ "image/png"
 	"os"
 	"path/filepath"
+	"sync"
 
 	_ "golang.org/x/image/bmp"
 	xdraw "golang.org/x/image/draw"
@@ -16,6 +17,35 @@ import (
 )
 
 const coverSize = 40
+
+var (
+	noMusicImg  image.Image
+	noMusicOnce sync.Once
+)
+
+// noMusicCover retorna o placeholder images/no-music.png (40x40), se existir.
+func noMusicCover() image.Image {
+	noMusicOnce.Do(func() {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return
+		}
+		fp := filepath.Join(home, ".local", "share", "sfrega", "images", "no-music.png")
+		f, err := os.Open(fp)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		img, _, err := image.Decode(f)
+		if err != nil {
+			return
+		}
+		dst := image.NewNRGBA(image.Rect(0, 0, coverSize, coverSize))
+		xdraw.CatmullRom.Scale(dst, dst.Bounds(), img, img.Bounds(), xdraw.Over, nil)
+		noMusicImg = dst
+	})
+	return noMusicImg
+}
 
 // saveCover grava a imagem embutida em covers/<hash>.<ext> e retorna o
 // nome do arquivo ("-" quando não há arte ou o diretório não existe).
@@ -27,7 +57,8 @@ func (p *Player) saveCover(path string, art []byte) string {
 	if ext == "" {
 		return "-"
 	}
-	sum := sha1.Sum([]byte(path))
+	// hash do conteúdo: faixas com a mesma arte compartilham o arquivo/thumb
+	sum := sha1.Sum(art)
 	name := hex.EncodeToString(sum[:8]) + "." + ext
 	fp := filepath.Join(p.artDir, name)
 	if _, err := os.Stat(fp); err != nil {
@@ -70,11 +101,11 @@ func (p *Player) TrackCover(i int) image.Image {
 // coverForPath retorna a capa do arquivo (nil se não houver).
 func (p *Player) coverForPath(path string) image.Image {
 	if path == "" {
-		return nil
+		return noMusicCover()
 	}
 	t, _ := p.tagPeek(path)
 	if t.Cover == "" || t.Cover == "-" || p.artDir == "" {
-		return nil
+		return noMusicCover()
 	}
 	p.coverMu.Lock()
 	if p.coverCache == nil {
@@ -90,7 +121,7 @@ func (p *Player) coverForPath(path string) image.Image {
 	}
 	if p.coverPend[t.Cover] {
 		p.coverMu.Unlock()
-		return nil
+		return nil // decode em andamento: sem imagem neste frame
 	}
 	p.coverPend[t.Cover] = true
 	name := t.Cover
@@ -99,6 +130,9 @@ func (p *Player) coverForPath(path string) image.Image {
 		img := loadCoverThumb(filepath.Join(p.artDir, name))
 		p.coverMu.Lock()
 		p.coverCache[name] = img
+		if img == nil {
+			p.coverCache[name] = noMusicCover()
+		}
 		delete(p.coverPend, name)
 		p.coverMu.Unlock()
 	}()

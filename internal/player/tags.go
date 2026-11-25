@@ -13,6 +13,7 @@ type tagInfo struct {
 	Title  string
 	Artist string
 	Genre  string
+	Album  string
 	Art    []byte `json:"-"` // imagem embutida (só em memória)
 	Cover  string // nome do arquivo de capa em covers/ ("-" = sem arte)
 }
@@ -147,8 +148,9 @@ func id3v2(d []byte) tagInfo {
 		case "TCON":
 			t.Genre = genreName(textEnc(d[pos+10 : fend]))
 		case "TALB":
+			t.Album = textEnc(d[pos+10 : fend])
 			if !hasTitle {
-				t.Title = textEnc(d[pos+10 : fend])
+				t.Title = t.Album
 			}
 		case "APIC":
 			if t.Art == nil {
@@ -301,6 +303,8 @@ func vorbisComment(d []byte) tagInfo {
 					t.Artist = v
 				case "GENRE":
 					t.Genre = genreName(v)
+				case "ALBUM":
+					t.Album = v
 				case "METADATA_BLOCK_PICTURE":
 					if t.Art == nil {
 						t.Art = vorbisPicture(v)
