@@ -64,6 +64,11 @@ func (p *Player) TrackCover(i int) image.Image {
 		path = p.tracks[i]
 	}
 	p.mu.Unlock()
+	return p.coverForPath(path)
+}
+
+// coverForPath retorna a capa do arquivo (nil se não houver).
+func (p *Player) coverForPath(path string) image.Image {
 	if path == "" {
 		return nil
 	}

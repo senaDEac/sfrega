@@ -26,6 +26,8 @@ var plResTag event.Tag
 var plShadeResTag event.Tag
 var plWheelTag event.Tag
 var plArtistWheelTag event.Tag
+var plScrollTag event.Tag
+var plArtistScrollTag event.Tag
 
 // plWheel rola a lista com a roda do mouse (mesmo padrão do menuWindow).
 func (ui *uiState) plWheel(gtx layout.Context, r image.Rectangle) {
@@ -320,15 +322,15 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 				saveGenreOpen(ui.plGenreOpen)
 				// só uma fileira de sub-botões por vez
 				ui.plArtistOpen = false
-				ui.plArtistSel = ""
-				saveArtistSel("")
+				ui.plArtistExpand = ""
+				ui.plArtistExpandIdx = nil
 				saveArtistOpen(false)
 			}
-			if i == 2 { // ARTISTA: abre/fecha a fileira de artistas
+			if i == 2 { // ARTISTA: abre/fecha a lista de artistas
 				ui.plArtistOpen = !ui.plArtistOpen
 				if !ui.plArtistOpen {
-					ui.plArtistSel = ""
-					saveArtistSel("")
+					ui.plArtistExpand = ""
+					ui.plArtistExpandIdx = nil
 				}
 				saveArtistOpen(ui.plArtistOpen)
 				// só uma fileira de sub-botões por vez
@@ -343,8 +345,8 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 				saveGenreSel("")
 				saveGenreOpen(false)
 				ui.plArtistOpen = false
-				ui.plArtistSel = ""
-				saveArtistSel("")
+				ui.plArtistExpand = ""
+				ui.plArtistExpandIdx = nil
 				saveArtistOpen(false)
 			}
 			if ui.plGenSel == i {
@@ -355,7 +357,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			saveGenSel(ui.plGenSel)
 		}
 		lc := dark
-		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") || (i == 2 && ui.plArtistSel != "") {
+		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") || (i == 2 && ui.plArtistOpen) {
 			ui.btnTextB(gtx, labels[i], dst, genGreen)
 		} else {
 			ui.btnText(gtx, labels[i], dst, lc)
@@ -409,20 +411,27 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		for len(ui.plArtistBtns) < len(artists) {
 			ui.plArtistBtns = append(ui.plArtistBtns, uibtn{})
 		}
+		// faixas do artista expandido (só se ainda existir na lista)
+		expN := 0
+		if ui.plArtistExpand != "" {
+			for _, a2 := range artists {
+				if a2 == ui.plArtistExpand {
+					expN = len(ui.plArtistExpandIdx)
+					break
+				}
+			}
+		}
 		areaTop := plTopH + 16 + genreH
 		avail := botY - 3 - areaTop
-		contentH := len(artists) * 13
-		maxH := avail - 30 // reserva ~2 linhas para a lista de músicas
-		if maxH < 13 {
-			maxH = avail
-		}
-		if maxH < 0 {
-			maxH = 0
-		}
+		contentH := (len(artists) + expN) * plRowH
 		artistH = contentH
-		if artistH > maxH {
-			artistH = maxH
+		if artistH > avail {
+			artistH = avail
 		}
+		if artistH < 0 {
+			artistH = 0
+		}
+		ui.plCount = len(artists)
 		ui.plArtistMax = float32(contentH - artistH)
 		if ui.plArtistMax < 0 {
 			ui.plArtistMax = 0
@@ -433,38 +442,69 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		if ui.plArtistScroll < 0 {
 			ui.plArtistScroll = 0
 		}
-		if !ui.plArtistDrag.active && ui.plArtistMax > 0 {
-			ui.plArtistDrag.val = ui.plArtistScroll / ui.plArtistMax
-		}
 		panel := image.Rect(12, areaTop, winW-23, areaTop+artistH)
 		fillRect(gtx.Ops, panel, colPLBg)
 		cs := clip.Rect(panel).Push(gtx.Ops)
-		off := op.Offset(image.Pt(0, -int(ui.plArtistScroll))).Push(gtx.Ops)
+		// scroll via deslocamento de ry (sem op.Offset: quebrava a área de eventos)
+		ry := areaTop - int(ui.plArtistScroll)
+		// roda primeiro (embaixo): se fosse por cima, engoliria os Press dos botões
+		ui.plArtistWheel(gtx, panel)
+		// só renderiza linhas visíveis (evita decode de capa / ops de 300+ linhas)
+		visMin := areaTop - plRowH
+		visMax := areaTop + artistH
 		for ai, a := range artists {
-			ry := areaTop + ai*13
-			rowR := image.Rect(14, ry, winW-27, ry+13)
-			selA := ui.plArtistSel == a
-			if selA {
-				fillRect(gtx.Ops, rowR, colPLSelBg)
-			}
-			ac := colPLText
-			if selA {
-				ac = colPLSelText
-			}
-			ui.textAt(gtx, ui.fontUI, unit.Sp(9), a, ac, image.Pt(16, ry+2))
-			ui.plArtistBtns[ai].scrollFn = func(dy float32) { ui.plArtistScrollAcc += dy }
-			if ui.button(gtx, &ui.plArtistBtns[ai], rowR, func(gtx layout.Context, down bool) {}) {
-				if ui.plArtistSel == a {
-					ui.plArtistSel = ""
-				} else {
-					ui.plArtistSel = a
+			rowR := image.Rect(14, ry, winW-27, ry+plRowH)
+			exp := ui.plArtistExpand == a
+			if ry > visMin && ry < visMax {
+				if exp {
+					fillRect(gtx.Ops, rowR, colPLCurBg)
 				}
-				saveArtistSel(ui.plArtistSel)
+				ac := colPLText
+				if exp {
+					ac = colPLSelText
+				}
+				if img := ui.p.ArtistCover(a); img != nil {
+					blit(gtx, img, image.Rect(15, ry+1, 55, ry+41))
+				}
+				ui.textAt(gtx, ui.fontUI, unit.Sp(9), a, ac, image.Pt(59, ry+9))
+				if n := ui.p.ArtistTrackCount(a); n > 0 {
+					cnt := fmt.Sprintf(language.T("pl.artist.tracks"), n)
+					ui.textAt(gtx, ui.fontUI, unit.Sp(9), cnt, colPLFile, image.Pt(59, ry+25))
+				}
+				ui.plArtistBtns[ai].scrollFn = func(dy float32) { ui.plArtistScrollAcc += dy }
+				if ui.button(gtx, &ui.plArtistBtns[ai], rowR, func(gtx layout.Context, down bool) {}) {
+					if exp {
+						ui.plArtistExpand = ""
+						ui.plArtistExpandIdx = nil
+					} else {
+						ui.plArtistExpand = a
+						ui.plArtistExpandIdx = ui.artistTracks(a, tracks)
+						// rola para mostrar o artista e suas primeiras faixas
+						want := float32(ai*plRowH - plRowH)
+						if want < 0 {
+							want = 0
+						}
+						if want > ui.plArtistMax {
+							want = ui.plArtistMax
+						}
+						ui.plArtistScroll = want
+					}
+				}
+			}
+			ry += plRowH
+			// músicas do artista logo abaixo, no formato das linhas de música
+			if exp {
+				for _, ti := range ui.plArtistExpandIdx {
+					if ry > visMin && ry < visMax {
+						ro := op.Offset(image.Pt(24, ry)).Push(gtx.Ops)
+						ui.plRow(gtx, ti, tracks, winW-51)
+						ro.Pop()
+					}
+					ry += plRowH
+				}
 			}
 		}
-		off.Pop()
 		cs.Pop()
-		ui.plArtistWheel(gtx, panel)
 		// aplica o scroll acumulado pela roda (botões e área vazia)
 		if ui.plArtistScrollAcc != 0 {
 			ui.plArtistScroll -= ui.plArtistScrollAcc
@@ -494,8 +534,13 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			thumbY := areaTop + 1 + int(frac*float32(artistH-2-thumbH))
 			fillRect(gtx.Ops, image.Rect(winW-20, thumbY, winW-16, thumbY+thumbH),
 				color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF})
-			ui.scrub(gtx, &ui.plArtistDrag, track)
+			ui.plArtistScrollDrag(gtx, track, thumbY, thumbH, artistH, ui.plArtistMax)
 		}
+	}
+
+	// com a fileira de artistas aberta ela ocupa toda a área da lista
+	if ui.plArtistOpen {
+		return
 	}
 
 	// fundo da lista
@@ -509,19 +554,6 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	lgtx.Constraints.Min = image.Point{}
 	lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
 	order := ui.p.TracksForGenre(ui.plGenreSel)
-	if ui.plArtistSel != "" {
-		aset := make(map[int]bool)
-		for _, i := range ui.p.TracksForArtist(ui.plArtistSel) {
-			aset[i] = true
-		}
-		var f []int
-		for _, i := range order {
-			if aset[i] {
-				f = append(f, i)
-			}
-		}
-		order = f
-	}
 	// ordem alfabética pelo nome de exibição
 	names := make(map[int]string, len(order))
 	for _, i := range order {
@@ -567,6 +599,128 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		}
 	}
 	ui.spr(gtx, "PLEDIT", R(52, 53, 8, 18), R(winW-17, thumbY, 8, 18))
+	ui.plScrollDrag(gtx, winW, botY, maxS, thumbY)
+}
+
+// plScrollDrag permite arrastar o indicador da scrollbar da lista de músicas.
+func (ui *uiState) plScrollDrag(gtx layout.Context, winW, botY, maxS, thumbY int) {
+	if maxS <= 0 {
+		return
+	}
+	trackTop := plTopH + 6
+	trackH := botY - 3 - trackTop
+	thumbH := 18
+	travel := trackH - thumbH
+	if travel <= 0 {
+		return
+	}
+	sbR := image.Rect(winW-19, trackTop, winW-7, botY-3)
+	cs := clip.Rect(sbR).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plScrollTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &plScrollTag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			// só inicia o arraste se o ponteiro estiver sobre o thumb
+			if e.Position.Y < float32(thumbY) || e.Position.Y > float32(thumbY+18) {
+				continue
+			}
+			ui.plScrollDragging = true
+			pos := ui.plList.Position
+			ui.plScrollDragLast = float32(pos.First)*plRowH + float32(pos.Offset)
+		case pointer.Drag:
+			if !ui.plScrollDragging {
+				continue
+			}
+			frac := (e.Position.Y - float32(trackTop)) / float32(travel)
+			if frac < 0 {
+				frac = 0
+			}
+			if frac > 1 {
+				frac = 1
+			}
+			target := frac * float32(maxS)
+			ui.plList.ScrollBy((target - ui.plScrollDragLast) / plRowH)
+			ui.plScrollDragLast = target
+		case pointer.Release, pointer.Cancel:
+			ui.plScrollDragging = false
+		}
+	}
+}
+
+// artistTracks retorna os índices das faixas do artista em ordem alfabética.
+func (ui *uiState) artistTracks(a string, tracks []string) []int {
+	idx := ui.p.TracksForArtist(a)
+	names := make(map[int]string, len(idx))
+	for _, i := range idx {
+		n, _ := ui.p.TrackTitle(i)
+		if n == "" {
+			n = filepath.Base(tracks[i])
+		}
+		names[i] = strings.ToLower(n)
+	}
+	sort.Slice(idx, func(x, y int) bool { return names[idx[x]] < names[idx[y]] })
+	return idx
+}
+
+// plArtistScrollDrag permite arrastar o thumb da scrollbar de artistas.
+func (ui *uiState) plArtistScrollDrag(gtx layout.Context, track image.Rectangle, thumbY, thumbH, viewH int, maxScroll float32) {
+	if maxScroll <= 0 {
+		return
+	}
+	travel := viewH - 2 - thumbH
+	if travel <= 0 {
+		return
+	}
+	trackTop := float32(track.Min.Y)
+	cs := clip.Rect(track).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plArtistScrollTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &plArtistScrollTag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			if e.Position.Y < float32(thumbY) || e.Position.Y > float32(thumbY+thumbH) {
+				continue
+			}
+			ui.plScrollDragging = true
+		case pointer.Drag:
+			if !ui.plScrollDragging {
+				continue
+			}
+			frac := (e.Position.Y - trackTop) / float32(travel)
+			if frac < 0 {
+				frac = 0
+			}
+			if frac > 1 {
+				frac = 1
+			}
+			ui.plArtistScroll = frac * maxScroll
+		case pointer.Release, pointer.Cancel:
+			ui.plScrollDragging = false
+		}
+	}
 }
 
 // plBottom desenha o rodapé de 38px: menus à esquerda, transporte à direita.

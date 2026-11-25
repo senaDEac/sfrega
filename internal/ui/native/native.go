@@ -130,16 +130,18 @@ type uiState struct {
 	plMenuOpen                                           int
 	plSel                                                int
 	plScrollAcc                                          float32
+	plScrollDragging                                     bool    // arraste na scrollbar da lista
+	plScrollDragLast                                     float32 // último offset de scroll (px) no arraste
 	plGenreOpen                                          bool
 	plGenreSel                                           string
 	plGenreBtns                                          []uibtn
 	plArtistOpen                                         bool
-	plArtistSel                                          string
+	plArtistExpand                                       string  // artista expandido ("" = nenhum)
+	plArtistExpandIdx                                    []int   // faixas do artista expandido
 	plArtistBtns                                         []uibtn
 	plArtistScroll                                       float32 // offset vertical da fileira (px)
 	plArtistScrollAcc                                    float32
 	plArtistMax                                          float32 // conteúdo - área visível
-	plArtistDrag                                         fader   // scrollbar da fileira de artistas
 	plGenSel                                             int // botão GENEX selecionado (-1 = nenhum)
 	plCount                                              int // faixas visíveis (após filtro)
 
@@ -307,21 +309,6 @@ func saveArtistOpen(on bool) {
 	_ = os.WriteFile(p, []byte(v), 0o644)
 }
 
-// loadArtistSel lê o artista selecionado persistido ("" = todos).
-func loadArtistSel() string {
-	b, err := os.ReadFile(configPath("artist.txt"))
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-
-// saveArtistSel grava o artista selecionado na Playlist.
-func saveArtistSel(a string) {
-	p := configPath("artist.txt")
-	_ = os.MkdirAll(filepath.Dir(p), 0o755)
-	_ = os.WriteFile(p, []byte(a), 0o644)
-}
 
 // loadGenSel lê o botão GENEX selecionado persistido (-1 = nenhum).
 func loadGenSel() int {
@@ -715,7 +702,6 @@ func Run(p *player.Player) error {
 		plGenreOpen:  loadGenreOpen(),
 		plGenreSel:   loadGenreSel(),
 		plArtistOpen: loadArtistOpen(),
-		plArtistSel:  loadArtistSel(),
 		plGenSel:     loadGenSel(),
 	}
 	ui.volDrag.val = 1.0
@@ -740,9 +726,7 @@ func Run(p *player.Player) error {
 	ui.posDrag.releaseCommit = true
 	ui.plPosDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
 	ui.plPosDrag.releaseCommit = true
-	ui.plArtistDrag.commit = func(v float32) {
-		ui.plArtistScroll = v * ui.plArtistMax
-	}
+
 	ui.preampSlide.val = 0.5
 	ui.preampSlide.commit = func(v float32) {
 		// -12..+12 dB

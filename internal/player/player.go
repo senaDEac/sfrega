@@ -126,7 +126,9 @@ type Player struct {
 	genreMu    sync.Mutex
 	genresList []string // gêneros distintos (preenchido pelo warmTags)
 	artistMu   sync.Mutex
-	artistsList []string // artistas distintos (preenchido pelo warmTags)
+	artistsList []string          // artistas distintos (preenchido pelo warmTags)
+	artistFirst map[string]string // artista → path da primeira ocorrência
+	artistCount map[string]int    // artista → total de faixas
 }
 
 // tagPeek retorna o tag em cache sem ler o arquivo (seguro para a UI).
@@ -231,17 +233,40 @@ func (p *Player) computeGenres(paths []string) {
 // computeArtists recalcula a lista de artistas distintos na ordem das faixas.
 func (p *Player) computeArtists(paths []string) {
 	seen := map[string]bool{}
+	first := map[string]string{}
+	count := map[string]int{}
 	var artists []string
 	for _, path := range paths {
 		t, _ := p.tagPeek(path)
-		if t.Artist != "" && !seen[t.Artist] {
-			seen[t.Artist] = true
-			artists = append(artists, t.Artist)
+		if t.Artist != "" {
+			count[t.Artist]++
+			if !seen[t.Artist] {
+				seen[t.Artist] = true
+				first[t.Artist] = path
+				artists = append(artists, t.Artist)
+			}
 		}
 	}
 	p.artistMu.Lock()
 	p.artistsList = artists
+	p.artistFirst = first
+	p.artistCount = count
 	p.artistMu.Unlock()
+}
+
+// ArtistTrackCount retorna o total de faixas do artista.
+func (p *Player) ArtistTrackCount(artist string) int {
+	p.artistMu.Lock()
+	defer p.artistMu.Unlock()
+	return p.artistCount[artist]
+}
+
+// ArtistCover retorna a capa da primeira faixa do artista (nil se não houver).
+func (p *Player) ArtistCover(artist string) image.Image {
+	p.artistMu.Lock()
+	path := p.artistFirst[artist]
+	p.artistMu.Unlock()
+	return p.coverForPath(path)
 }
 
 // Artists retorna os artistas distintos das faixas (cache do warmTags).
