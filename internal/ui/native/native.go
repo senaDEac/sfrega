@@ -130,29 +130,30 @@ type uiState struct {
 	plMenuOpen                                           int
 	plSel                                                int
 	plScrollAcc                                          float32
-	plScrollDragging                                     bool    // arraste na scrollbar da lista
-	plScrollDragLast                                     float32 // último offset de scroll (px) no arraste
+	plScrollDragging                                     bool     // arraste na scrollbar da lista
+	plScrollDragLast                                     float32  // último offset de scroll (px) no arraste
 	plScrollSink                                         *float32 // acumulador de roda p/ linhas expandidas (nil = plScrollAcc)
 	plGenreOpen                                          bool
 	plGenreSel                                           string
+	plGenreOn                                            bool
 	plGenreBtns                                          []uibtn
 	plArtistOpen                                         bool
-	plArtistExpand                                       string  // artista expandido ("" = nenhum)
-	plArtistExpandIdx                                    []int   // faixas do artista expandido
+	plArtistExpand                                       string // artista expandido ("" = nenhum)
+	plArtistExpandIdx                                    []int  // faixas do artista expandido
 	plArtistBtns                                         []uibtn
 	plArtistScroll                                       float32 // offset vertical da fileira (px)
 	plArtistScrollAcc                                    float32
 	plArtistMax                                          float32 // conteúdo - área visível
 	plFolderOpen                                         bool
-	plFolderExpand                                       string  // diretório expandido ("" = nenhum)
-	plFolderExpandIdx                                    []int   // faixas do diretório expandido
+	plFolderExpand                                       string // diretório expandido ("" = nenhum)
+	plFolderExpandIdx                                    []int  // faixas do diretório expandido
 	plFolderBtns                                         []uibtn
 	plFolderScroll                                       float32
 	plFolderScrollAcc                                    float32
 	plFolderMax                                          float32
 	plAlbumOpen                                          bool
-	plAlbumExpand                                        string  // álbum expandido ("" = nenhum)
-	plAlbumExpandIdx                                     []int   // faixas do álbum expandido
+	plAlbumExpand                                        string // álbum expandido ("" = nenhum)
+	plAlbumExpandIdx                                     []int  // faixas do álbum expandido
 	plAlbumBtns                                          []uibtn
 	plAlbumScroll                                        float32
 	plAlbumScrollAcc                                     float32
@@ -191,11 +192,11 @@ type uiState struct {
 
 // uibtn é um botão simples via pointer events (sem macro do Clickable).
 type uibtn struct {
-	tag      event.Tag
-	down     bool
-	over     bool
-	scrollFn func(dy float32) // opcional: roda do mouse sobre o botão
-	lastClick time.Time       // último clique (detecção de duplo-clique)
+	tag       event.Tag
+	down      bool
+	over      bool
+	scrollFn  func(dy float32) // opcional: roda do mouse sobre o botão
+	lastClick time.Time        // último clique (detecção de duplo-clique)
 }
 
 // beginScaledFrame configura o sistema de coordenadas lógico da janela e
@@ -308,6 +309,23 @@ func saveGenreSel(g string) {
 	_ = os.WriteFile(p, []byte(g), 0o644)
 }
 
+// loadGenreOn lê se o filtro de gênero está ativo.
+func loadGenreOn() bool {
+	b, err := os.ReadFile(configPath("genreon.txt"))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveGenreOn grava se o filtro de gênero está ativo.
+func saveGenreOn(on bool) {
+	p := configPath("genreon.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
 // loadArtistOpen lê se a fileira de artistas da Playlist abre expandida.
 func loadArtistOpen() bool {
 	b, err := os.ReadFile(configPath("artistopen.txt"))
@@ -359,6 +377,21 @@ func saveAlbumOpen(on bool) {
 	_ = os.WriteFile(p, []byte(v), 0o644)
 }
 
+// loadExpand lê a seleção expandida persistida de um painel ("" = nenhuma).
+func loadExpand(file string) string {
+	b, err := os.ReadFile(configPath(file))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// saveExpand grava a seleção expandida de um painel.
+func saveExpand(file, v string) {
+	p := configPath(file)
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(v+"\n"), 0o644)
+}
 
 // loadGenSel lê o botão GENEX selecionado persistido (-1 = nenhum).
 func loadGenSel() int {
@@ -740,21 +773,25 @@ func Run(p *player.Player) error {
 	faces, _ := loadFonts()
 	shaper := text.NewShaper(text.WithCollection(faces))
 	ui := &uiState{
-		p:            p,
-		shaper:       shaper,
-		fontUI:       font.Font{Typeface: "DejaVu Sans"},
-		fontBold:     font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
-		fontMono:     font.Font{Typeface: "DejaVu Sans Mono"},
-		fontMenu:     font.Font{Typeface: "Liberation Sans"},
-		fontMenuBold: font.Font{Typeface: "Liberation Sans", Weight: font.Bold},
-		plSel:        -1,
-		plMenuOpen:   -1,
-		plGenreOpen:  loadGenreOpen(),
-		plGenreSel:   loadGenreSel(),
-		plArtistOpen: loadArtistOpen(),
-		plFolderOpen: loadFolderOpen(),
-		plAlbumOpen:  loadAlbumOpen(),
-		plGenSel:     loadGenSel(),
+		p:              p,
+		shaper:         shaper,
+		fontUI:         font.Font{Typeface: "DejaVu Sans"},
+		fontBold:       font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
+		fontMono:       font.Font{Typeface: "DejaVu Sans Mono"},
+		fontMenu:       font.Font{Typeface: "Liberation Sans"},
+		fontMenuBold:   font.Font{Typeface: "Liberation Sans", Weight: font.Bold},
+		plSel:          -1,
+		plMenuOpen:     -1,
+		plGenreOpen:    loadGenreOpen(),
+		plGenreSel:     loadGenreSel(),
+		plGenreOn:      loadGenreOn(),
+		plArtistOpen:   loadArtistOpen(),
+		plFolderOpen:   loadFolderOpen(),
+		plAlbumOpen:    loadAlbumOpen(),
+		plArtistExpand: loadExpand("artistexp.txt"),
+		plFolderExpand: loadExpand("folderexp.txt"),
+		plAlbumExpand:  loadExpand("albumexp.txt"),
+		plGenSel:       loadGenSel(),
 	}
 	ui.volDrag.val = 1.0
 	ui.skin.Store(skin)

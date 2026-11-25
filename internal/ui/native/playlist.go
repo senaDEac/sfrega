@@ -343,92 +343,53 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			R(0, 0, 48, 16), R(0, 16, 48, 15)) {
 			if i == 0 {
 				ui.plGenreOpen = !ui.plGenreOpen
-				if !ui.plGenreOpen {
-					ui.plGenreSel = ""
-					saveGenreSel("")
-				}
 				saveGenreOpen(ui.plGenreOpen)
-				// só uma fileira de sub-painéis por vez
+				if ui.plGenreOpen && ui.plGenreSel != "" {
+					ui.plGenreOn = true
+					saveGenreOn(true)
+				}
+				// só um painel por vez; as seleções são mantidas
 				ui.plArtistOpen = false
-				ui.plArtistExpand = ""
-				ui.plArtistExpandIdx = nil
 				saveArtistOpen(false)
 				ui.plFolderOpen = false
-				ui.plFolderExpand = ""
-				ui.plFolderExpandIdx = nil
 				saveFolderOpen(false)
 				ui.plAlbumOpen = false
-				ui.plAlbumExpand = ""
-				ui.plAlbumExpandIdx = nil
 				saveAlbumOpen(false)
 			}
 			if i == 2 { // ARTISTA: abre/fecha a lista de artistas
 				ui.plArtistOpen = !ui.plArtistOpen
-				if !ui.plArtistOpen {
-					ui.plArtistExpand = ""
-					ui.plArtistExpandIdx = nil
-				}
 				saveArtistOpen(ui.plArtistOpen)
-				// só uma fileira de sub-painéis por vez
 				ui.plGenreOpen = false
-				ui.plGenreSel = ""
-				saveGenreSel("")
 				saveGenreOpen(false)
 				ui.plFolderOpen = false
-				ui.plFolderExpand = ""
-				ui.plFolderExpandIdx = nil
 				saveFolderOpen(false)
 				ui.plAlbumOpen = false
-				ui.plAlbumExpand = ""
-				ui.plAlbumExpandIdx = nil
 				saveAlbumOpen(false)
 			}
 			if i == 3 { // PASTAS: abre/fecha a lista de diretórios
 				ui.plFolderOpen = !ui.plFolderOpen
-				if !ui.plFolderOpen {
-					ui.plFolderExpand = ""
-					ui.plFolderExpandIdx = nil
-				}
 				saveFolderOpen(ui.plFolderOpen)
-				// só uma fileira de sub-painéis por vez
 				ui.plGenreOpen = false
-				ui.plGenreSel = ""
-				saveGenreSel("")
 				saveGenreOpen(false)
 				ui.plArtistOpen = false
-				ui.plArtistExpand = ""
-				ui.plArtistExpandIdx = nil
 				saveArtistOpen(false)
 				ui.plAlbumOpen = false
-				ui.plAlbumExpand = ""
-				ui.plAlbumExpandIdx = nil
 				saveAlbumOpen(false)
 			}
 			if i == 4 { // ÁLBUNS: abre/fecha a lista de álbuns
 				ui.plAlbumOpen = !ui.plAlbumOpen
-				if !ui.plAlbumOpen {
-					ui.plAlbumExpand = ""
-					ui.plAlbumExpandIdx = nil
-				}
 				saveAlbumOpen(ui.plAlbumOpen)
-				// só uma fileira de sub-painéis por vez
 				ui.plGenreOpen = false
-				ui.plGenreSel = ""
-				saveGenreSel("")
 				saveGenreOpen(false)
 				ui.plArtistOpen = false
-				ui.plArtistExpand = ""
-				ui.plArtistExpandIdx = nil
 				saveArtistOpen(false)
 				ui.plFolderOpen = false
-				ui.plFolderExpand = ""
-				ui.plFolderExpandIdx = nil
 				saveFolderOpen(false)
 			}
 			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha os painéis
 				ui.plGenreOpen = false
-				ui.plGenreSel = ""
-				saveGenreSel("")
+				ui.plGenreOn = false
+				saveGenreOn(false)
 				saveGenreOpen(false)
 				ui.plArtistOpen = false
 				ui.plArtistExpand = ""
@@ -449,10 +410,21 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 				ui.plGenSel = i
 			}
 			saveGenSel(ui.plGenSel)
+			saveExpand("artistexp.txt", ui.plArtistExpand)
+			saveExpand("folderexp.txt", ui.plFolderExpand)
+			saveExpand("albumexp.txt", ui.plAlbumExpand)
 		}
 		lc := dark
-		if ui.plGenSel == i || (i == 0 && ui.plGenreSel != "") || (i == 2 && ui.plArtistOpen) || (i == 3 && ui.plFolderOpen) || (i == 4 && ui.plAlbumOpen) {
+		sel := ui.plGenSel == i || (i == 0 && ui.plGenreOn && ui.plGenreSel != "" && !ui.plArtistOpen && !ui.plFolderOpen && !ui.plAlbumOpen) || (i == 2 && ui.plArtistOpen) || (i == 3 && ui.plFolderOpen) || (i == 4 && ui.plAlbumOpen)
+		if sel {
 			ui.btnTextB(gtx, labels[i], dst, genGreen)
+			// borda bordeaux no botão selecionado
+			bx0, by0 := dst.Min.X, dst.Min.Y
+			bx1, by1 := dst.Max.X, dst.Max.Y
+			fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
+			fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
+			fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
+			fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
 		} else {
 			ui.btnText(gtx, labels[i], dst, lc)
 		}
@@ -478,17 +450,32 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			if ui.spriteBtn(gtx, &ui.plGenreBtns[gi], "GENEX", dst,
 				R(0, 0, 48, 16), R(0, 16, 48, 15)) {
 				if ui.plGenreSel == g {
-					ui.plGenreSel = ""
+					if ui.plGenreOn {
+						ui.plGenreSel = ""
+						ui.plGenreOn = false
+					} else {
+						ui.plGenreOn = true
+					}
 				} else {
 					ui.plGenreSel = g
+					ui.plGenreOn = true
 				}
 				saveGenreSel(ui.plGenreSel)
+				saveGenreOn(ui.plGenreOn)
 			}
 			gc := dark
 			if ui.plGenreSel == g {
 				gc = genGreen
 			}
 			ui.btnTextB(gtx, g, dst, gc)
+			if ui.plGenreSel == g {
+				bx0, by0 := dst.Min.X, dst.Min.Y
+				bx1, by1 := dst.Max.X, dst.Max.Y
+				fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
+				fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
+				fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
+				fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
+			}
 			x += gw + 2
 		}
 		genreH = 13
@@ -501,6 +488,15 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		artists := ui.p.Artists() // já vem ordenada alfabeticamente
 		for len(ui.plArtistBtns) < len(artists) {
 			ui.plArtistBtns = append(ui.plArtistBtns, uibtn{})
+		}
+		// restaura a expansão persistida quando as faixas já estão carregadas
+		if ui.plArtistExpand != "" && ui.plArtistExpandIdx == nil {
+			for _, a2 := range artists {
+				if a2 == ui.plArtistExpand {
+					ui.plArtistExpandIdx = ui.artistTracks(a2, tracks)
+					break
+				}
+			}
 		}
 		// faixas do artista expandido (só se ainda existir na lista)
 		expN := 0
@@ -550,6 +546,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			if ry > visMin && ry < visMax {
 				if exp {
 					fillRect(gtx.Ops, rowR, colPLCurBg)
+					bx0, by0 := rowR.Min.X, rowR.Min.Y
+					bx1, by1 := rowR.Max.X, rowR.Max.Y
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
 				}
 				ac := colPLText
 				if exp {
@@ -578,6 +580,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 							ui.plArtistExpand = a
 							ui.plArtistExpandIdx = ui.artistTracks(a, tracks)
 						}
+						saveExpand("artistexp.txt", ui.plArtistExpand)
 					}
 				}
 			}
@@ -635,6 +638,14 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		for len(ui.plFolderBtns) < len(folders) {
 			ui.plFolderBtns = append(ui.plFolderBtns, uibtn{})
 		}
+		if ui.plFolderExpand != "" && ui.plFolderExpandIdx == nil {
+			for _, d := range folders {
+				if d == ui.plFolderExpand {
+					ui.plFolderExpandIdx = ui.folderTracks(d, tracks)
+					break
+				}
+			}
+		}
 		expN := 0
 		if ui.plFolderExpand != "" {
 			for _, d := range folders {
@@ -681,6 +692,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			if ry > visMin && ry < visMax {
 				if exp {
 					fillRect(gtx.Ops, rowR, colPLCurBg)
+					bx0, by0 := rowR.Min.X, rowR.Min.Y
+					bx1, by1 := rowR.Max.X, rowR.Max.Y
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
 				}
 				ac := colPLText
 				if exp {
@@ -709,6 +726,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 							ui.plFolderExpand = dir
 							ui.plFolderExpandIdx = ui.folderTracks(dir, tracks)
 						}
+						saveExpand("folderexp.txt", ui.plFolderExpand)
 					}
 				}
 			}
@@ -763,6 +781,14 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		for len(ui.plAlbumBtns) < len(albums) {
 			ui.plAlbumBtns = append(ui.plAlbumBtns, uibtn{})
 		}
+		if ui.plAlbumExpand != "" && ui.plAlbumExpandIdx == nil {
+			for _, al := range albums {
+				if al == ui.plAlbumExpand {
+					ui.plAlbumExpandIdx = ui.albumTracks(al, tracks)
+					break
+				}
+			}
+		}
 		expN := 0
 		if ui.plAlbumExpand != "" {
 			for _, al := range albums {
@@ -808,6 +834,12 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			if ry > visMin && ry < visMax {
 				if exp {
 					fillRect(gtx.Ops, rowR, colPLCurBg)
+					bx0, by0 := rowR.Min.X, rowR.Min.Y
+					bx1, by1 := rowR.Max.X, rowR.Max.Y
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
 				}
 				ac := colPLText
 				if exp {
@@ -836,6 +868,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 							ui.plAlbumExpand = al
 							ui.plAlbumExpandIdx = ui.albumTracks(al, tracks)
 						}
+						saveExpand("albumexp.txt", ui.plAlbumExpand)
 					}
 				}
 			}
@@ -900,7 +933,11 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	lgtx := gtx
 	lgtx.Constraints.Min = image.Point{}
 	lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
-	order := ui.p.TracksForGenre(ui.plGenreSel)
+	gsel := ""
+	if ui.plGenreOn {
+		gsel = ui.plGenreSel
+	}
+	order := ui.p.TracksForGenre(gsel)
 	// ordem alfabética pelo nome de exibição
 	names := make(map[int]string, len(order))
 	for _, i := range order {
