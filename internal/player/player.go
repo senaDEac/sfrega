@@ -122,7 +122,7 @@ type Player struct {
 	tagCache   map[string]tagInfo // cache de metadados de áudio por path
 	artDir     string             // diretório das capas extraídas (covers/)
 	coverMu    sync.Mutex
-	coverCache map[string]image.Image // thumbs 15x15 por nome de capa
+	coverCache map[string]image.Image // thumbs por nome de capa
 	genreMu    sync.Mutex
 	genresList []string // gêneros distintos (preenchido pelo warmTags)
 }
@@ -239,6 +239,21 @@ func (p *Player) TrackTitle(i int) (name string, hasMeta bool) {
 	}
 	t, _ := p.tagPeek(path)
 	return displayNameCached(t, path), t.Title != "" || t.Artist != ""
+}
+
+// TrackParts retorna artista e título separados do metadado da faixa i.
+func (p *Player) TrackParts(i int) (artist, title string, hasMeta bool) {
+	p.mu.Lock()
+	var path string
+	if i >= 0 && i < len(p.tracks) {
+		path = p.tracks[i]
+	}
+	p.mu.Unlock()
+	if path == "" {
+		return "", "", false
+	}
+	t, _ := p.tagPeek(path)
+	return t.Artist, t.Title, t.Title != "" || t.Artist != ""
 }
 
 // TrackGenre retorna o gênero da faixa i (metadado), "" se não houver.

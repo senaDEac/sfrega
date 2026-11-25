@@ -66,7 +66,7 @@ var (
 const (
 	plTopH  = 20
 	plBotH  = 38
-	plRowH  = 15
+	plRowH  = 42
 	plMenuX = 14 // primeiro menu button x (pitch 29)
 )
 
@@ -679,7 +679,7 @@ func (ui *uiState) fmtTime(sec float64) string {
 	return fmt.Sprintf("%d:%02d", (s/60)%100, s%60)
 }
 
-// plRow desenha uma linha da playlist (13px, fonte verde).
+// plRow desenha uma linha da playlist (plRowH px, fonte verde).
 func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layout.Dimensions {
 	h := plRowH
 	r := image.Rect(0, 0, w, h)
@@ -688,11 +688,21 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 	if sel {
 		fillRect(gtx.Ops, r, colPLSelBg)
 	}
-	name, hasMeta := ui.p.TrackTitle(i)
+	artist, title, hasMeta := ui.p.TrackParts(i)
+	twoLine := hasMeta && artist != "" && title != ""
+	name := ""
+	if twoLine {
+		name = title
+	} else if hasMeta {
+		name = artist
+		if name == "" {
+			name = title
+		}
+	}
 	if name == "" {
 		name = filepath.Base(tracks[i])
 	}
-	if sel {
+	if sel && !twoLine {
 		name = "> " + name
 	}
 	if m := ui.p.TrackMeta(tracks[i]); m != nil {
@@ -722,9 +732,14 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int) layo
 		c = colPLSelText
 	}
 	if img := ui.p.TrackCover(i); img != nil {
-		blit(gtx, img, image.Rect(1, 0, 16, 15))
+		blit(gtx, img, image.Rect(1, 1, 41, 41))
 	}
-	ui.textAt(gtx, ui.fontUI, unit.Sp(9), name, c, image.Pt(19, 2))
+	if twoLine {
+		ui.textAt(gtx, ui.fontUI, unit.Sp(9), artist, c, image.Pt(45, 9))
+		ui.textAt(gtx, ui.fontUI, unit.Sp(9), name, c, image.Pt(45, 23))
+	} else {
+		ui.textAt(gtx, ui.fontUI, unit.Sp(9), name, c, image.Pt(45, 16))
+	}
 	for len(ui.plRowClicks) <= i {
 		ui.plRowClicks = append(ui.plRowClicks, uibtn{})
 	}
