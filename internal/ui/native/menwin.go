@@ -19,6 +19,7 @@ import (
 
 	"sfrega/internal/language"
 	"sfrega/internal/skins"
+	"sfrega/internal/spectrum"
 )
 
 // Janela de menu (File / Always on top / Config>Language / About),
@@ -123,6 +124,7 @@ func (ui *uiState) menuLoop() {
 			ui.menuLang = false
 			ui.menuSkins = false
 			ui.menuCnt = false
+			ui.menuSpec = false
 			ui.menuScroll = 0
 			return
 		case app.FrameEvent:
@@ -307,6 +309,23 @@ func (ui *uiState) menuRows() []mrow {
 				act: func() { ui.openConfirm(2) }})
 			rows = append(rows, mrow{label: "Zerar hashtags", indent: 2,
 				act: func() { ui.openConfirm(3) }})
+		}
+		rows = append(rows, mrow{label: "Spectrum", indent: 1, kind: 2,
+			act: func() { ui.menuSpec = !ui.menuSpec }})
+		if ui.menuSpec {
+			cur := ui.specName
+			if cur == "" {
+				cur = "padrao"
+			}
+			rows = append(rows, mrow{label: "padrão", indent: 2,
+				checked: cur == "padrao",
+				act:     func() { ui.applySpec("padrao"); saveSpecSel("padrao") }})
+			for _, n := range spectrum.SpecNames() {
+				code := n
+				rows = append(rows, mrow{label: n, indent: 2,
+					checked: code == cur,
+					act:     func() { ui.applySpec(code); saveSpecSel(code) }})
+			}
 		}
 	}
 	rows = append(rows, mrow{label: language.T("menu.about"),

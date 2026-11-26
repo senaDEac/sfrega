@@ -35,6 +35,7 @@ import (
 
 	"sfrega/internal/player"
 	"sfrega/internal/skins"
+	"sfrega/internal/spectrum"
 )
 
 // Paleta Winamp 2.x (skin clássica cinza).
@@ -180,6 +181,7 @@ type uiState struct {
 	menuLang     bool
 	menuSkins    bool
 	menuCnt      bool
+	menuSpec     bool
 	menuAbout    bool
 	alwaysOnTop  bool
 	menuScale    int
@@ -194,6 +196,12 @@ type uiState struct {
 	shuffle, repeat bool
 	marqueeX        int
 	lastTick        time.Time
+
+	// variante do analisador de espectro (~/.local/share/sfrega/spectrum)
+	spec      *spectrum.Spec
+	specName  string
+	specPeaks [spectrum.Bands]float32
+	specCap   [spectrum.Bands]float32 // capa branca: persegue o pico com atraso
 }
 
 // uibtn é um botão simples via pointer events (sem macro do Clickable).
@@ -512,6 +520,42 @@ func saveOpenWindows(eq, pl, menu bool) {
 	_ = os.WriteFile(p, []byte(strings.Join(names, " ")+"\n"), 0o644)
 }
 
+// loadSpecSel lê a variante de espectro escolhida ("" = padrão).
+func loadSpecSel() string {
+	b, err := os.ReadFile(configPath("spectrum.txt"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// saveSpecSel grava a variante de espectro para a próxima sessão.
+func saveSpecSel(code string) {
+	p := configPath("spectrum.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(code+"\n"), 0o644)
+}
+
+// applySpec troca a variante do analisador ("" ou "padrao" = visual original).
+func (ui *uiState) applySpec(code string) {
+	ui.specName = code
+	if code == "" || code == "padrao" {
+		ui.spec = nil
+	} else if s := spectrum.LoadSpec(code); s != nil {
+		ui.spec = s
+	} else {
+		ui.spec = nil
+		ui.specName = "padrao"
+	}
+	ui.specPeaks = [spectrum.Bands]float32{}
+	ui.specCap = [spectrum.Bands]float32{}
+	ui.mu.Lock()
+	if ui.winMain != nil {
+		ui.winMain.Invalidate()
+	}
+	ui.mu.Unlock()
+}
+
 // loadSkinSel lê a skin escolhida ("" = nenhuma/padrão automático).
 func loadSkinSel() string {
 	b, err := os.ReadFile(configPath("skin.txt"))
@@ -808,6 +852,7 @@ func Run(p *player.Player) error {
 	if sel := loadSkinSel(); sel != "" {
 		ui.applySkin(sel)
 	}
+	ui.applySpec(loadSpecSel())
 	ui.menuScale = 1
 	ui.ontopDone = map[string]bool{}
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
@@ -1337,32 +1382,182 @@ func (ui *uiState) spriteBtn(gtx layout.Context, b *uibtn, name string, dst imag
 	})
 }
 
-// spectrumDraw desenha as barras do analisador com a paleta VISCOLOR da skin.
+// spectrumDraw desenha o analisador de espectro. Sem variante usa o visual
+// original (barras pretas + paleta VISCOLOR por altura); com variante
+// (~/.local/share/sfrega/spectrum/<nome>/) aplica config.json + PNGs.
 func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
-	fillRect(gtx.Ops, r, color.NRGBA{A: 0xFF})
-	bands := ui.p.Spectrum()
-	n := len(bands)
-	bw := r.Dx() / n
-	if bw < 1 {
-		bw = 1
+	spec := ui.spec
+	if spec != nil && spec.BgImg != nil {
+		blit(gtx, spec.BgImg, r)
+	} else {
+		fillRect(gtx.Ops, r, color.NRGBA{A: 0xFF})
 	}
+	bands := ui.p.Spectrum()
+
+	// agrega as 48 bandas do analisador em n barras (max por grupo)
+	n := len(bands)
+	if spec != nil && spec.Bands > 0 && spec.Bands < n {
+		n = spec.Bands
+	}
+	var vals [spectrum.Bands]float32
+	if n == len(bands) {
+		copy(vals[:], bands[:])
+	} else {
+		for i := 0; i < n; i++ {
+			lo, hi := i*len(bands)/n, (i+1)*len(bands)/n
+			for k := lo; k < hi; k++ {
+				if bands[k] > vals[i] {
+					vals[i] = bands[k]
+				}
+			}
+		}
+	}
+
+	gain := 1.0
+	fall := float32(0.9)
+	dir, style := "up", "bars"
+	if spec != nil {
+		gain = spec.Gain
+		fall = float32(spec.Fall)
+		dir, style = spec.Direction, spec.Style
+	}
+
+	h := float32(r.Dy())
+	mid := float32(r.Min.Y) + h/2
+	peakOn := spec != nil && spec.Peak
+
+	type pt struct{ x, y float32 }
+	linePts := make([]pt, 0, n)
+	effFall := 1 - (1-fall)*0.5 // decaimento do pico: metade da taxa
+
 	for i := 0; i < n; i++ {
-		v := float32(bands[i])
+		v := vals[i] * float32(gain)
 		if v < 0 {
 			v = 0
 		}
 		if v > 1 {
 			v = 1
 		}
-		h := int(v * float32(r.Dy()) * 1.2)
-		if h < 1 {
+		// pico com decaimento; a capa branca persegue com atraso
+		if peakOn {
+			if v > ui.specPeaks[i] {
+				ui.specPeaks[i] = v
+			} else {
+				ui.specPeaks[i] *= effFall
+			}
+			// capa: sobe rápido, desce devagar (atraso visual)
+			d := ui.specPeaks[i] - ui.specCap[i]
+			if d > 0 {
+				ui.specCap[i] += d * 0.3
+			} else {
+				ui.specCap[i] += d * 0.04
+			}
+		} else {
+			ui.specPeaks[i] = 0
+			ui.specCap[i] = 0
+		}
+		bh := v * h * 1.2
+		if bh > h {
+			bh = h
+		}
+		col := ui.specColor(spec, i, n, v)
+		// distribui as barras pela largura toda (posições fracionárias)
+		x0 := r.Min.X + i*r.Dx()/n
+		x1 := r.Min.X + (i+1)*r.Dx()/n
+		if x1 <= x0 {
+			x1 = x0 + 1
+		}
+		if style == "line" {
+			linePts = append(linePts, pt{float32(x0+x1) / 2, specLevelY(dir, mid, h, v)})
 			continue
 		}
-		bar := image.Rect(r.Min.X+i*bw, r.Max.Y-h, r.Min.X+(i+1)*bw-1, r.Max.Y)
-		// cor por altura: topo = cores claras (índice baixo)
-		ci := int((1 - v) * 17)
-		fillRect(gtx.Ops, bar, ui.skin.Load().VisColor(ci))
+		var bar image.Rectangle
+		switch dir {
+		case "down":
+			bar = image.Rect(x0, r.Min.Y, x1, r.Min.Y+int(bh))
+		case "center":
+			y0 := int(mid - bh/2)
+			bar = image.Rect(x0, y0, x1, y0+int(bh))
+		default:
+			bar = image.Rect(x0, r.Max.Y-int(bh), x1, r.Max.Y)
+		}
+		if bar.Dy() > 0 {
+			fillRect(gtx.Ops, bar, col)
+		}
+		// capa de pico branca, exatamente 1px, na posição atrasada
+		if peakOn && ui.specCap[i] > v+0.01 {
+			py := int(specLevelY(dir, mid, h, ui.specCap[i]))
+			if py < r.Min.Y {
+				py = r.Min.Y
+			}
+			if py > r.Max.Y-1 {
+				py = r.Max.Y - 1
+			}
+			fillRect(gtx.Ops, image.Rect(x0, py, x1, py+1),
+				color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF})
+		}
 	}
+
+	if style == "line" && len(linePts) > 1 {
+		path := clip.Path{}
+		path.Begin(gtx.Ops)
+		path.MoveTo(f32.Pt(linePts[0].x, linePts[0].y))
+		for _, p := range linePts[1:] {
+			path.LineTo(f32.Pt(p.x, p.y))
+		}
+		lc := ui.specColor(spec, n/2, n, 0.5)
+		if spec != nil && spec.HasFG {
+			lc = spec.FG
+		} else if spec != nil && len(spec.Grad) > 0 {
+			lc = spec.Grad[0]
+		}
+		paint.FillShape(gtx.Ops, lc, clip.Stroke{Path: path.End(), Width: 1}.Op())
+	}
+}
+
+// specLevelY devolve a posição vertical do nível v conforme a direção.
+func specLevelY(dir string, mid, h, v float32) float32 {
+	switch dir {
+	case "down":
+		return mid - h/2 + v*h*1.2
+	case "center":
+		return mid - v*h*0.6
+	default:
+		return mid + h/2 - v*h*1.2
+	}
+}
+
+// specColor resolve a cor da barra i: fg sólido > gradiente > VISCOLOR.
+func (ui *uiState) specColor(spec *spectrum.Spec, i, n int, v float32) color.NRGBA {
+	if spec != nil {
+		if spec.HasFG {
+			return spec.FG
+		}
+		if len(spec.Grad) > 0 {
+			t := float32(i) / float32(max(1, n-1))
+			pos := t * float32(len(spec.Grad)-1)
+			k := int(pos)
+			if k >= len(spec.Grad)-1 {
+				return spec.Grad[len(spec.Grad)-1]
+			}
+			f := pos - float32(k)
+			a, b := spec.Grad[k], spec.Grad[k+1]
+			return color.NRGBA{
+				R: uint8(float32(a.R) + (float32(b.R)-float32(a.R))*f),
+				G: uint8(float32(a.G) + (float32(b.G)-float32(a.G))*f),
+				B: uint8(float32(a.B) + (float32(b.B)-float32(a.B))*f),
+				A: 0xFF,
+			}
+		}
+	}
+	ci := int((1 - v) * 17)
+	if ci < 0 {
+		ci = 0
+	}
+	if ci > 17 {
+		ci = 17
+	}
+	return ui.skin.Load().VisColor(ci)
 }
 
 // eject abre o diálogo nativo de arquivos; as faixas escolhidas são

@@ -96,6 +96,13 @@ type Event struct {
 	Err      error
 }
 
+// pcmChunk é um bloco de PCM decodificado aguardando ser analisado na
+// posição em que for efetivamente reproduzido (não na decodificação).
+type pcmChunk struct {
+	start uint64    // frame absoluto (decoded)
+	pcm   []float32 // amostras intercaladas
+}
+
 // Player é o núcleo do player.
 type Player struct {
 	mu       sync.Mutex
@@ -125,6 +132,9 @@ type Player struct {
 	trackDone   chan struct{} // cancelado ao trocar de faixa
 	events      chan Event
 	lastBands   atomic.Value // [spectrum.Bands]float32
+	aqMu        sync.Mutex
+	analyzeQ    []pcmChunk // PCM decodificado aguardando a posição tocada
+	idleN       int        // contador p/ decaimento do espectro parado
 	tagMu       sync.Mutex
 	tagCache    map[string]tagInfo // cache de metadados de áudio por path
 	artDir      string             // diretório das capas extraídas (covers/)
@@ -562,6 +572,7 @@ func New(rate uint32, channels uint32) (*Player, error) {
 	p.pan.Store(math.Float32bits(0))
 	p.eq.Store(eqFromGains([10]float64{}, 44100))
 	go p.resumeLoop()
+	go p.analyzeLoop()
 	return p, nil
 }
 
@@ -891,6 +902,7 @@ func (p *Player) playIndexLocked(i int) error {
 	if p.dec != nil {
 		p.closeTrackLocked()
 		p.rb.Clear()
+		p.clearAnalyzeQ()
 		p.decoded.Store(0)
 	}
 	if err := p.openCurrentLocked(); err != nil {
@@ -1082,6 +1094,7 @@ func (p *Player) SeekFraction(f float64) error {
 		return errors.New("player: seek falhou")
 	}
 	p.rb.Clear()
+	p.clearAnalyzeQ()
 	p.decoded.Store(uint64(int64(float64(total) * f)))
 	return nil
 }
@@ -1169,6 +1182,7 @@ func (p *Player) Play() error {
 func (p *Player) Pause() {
 	if p.playing.CompareAndSwap(true, false) {
 		p.rb.Clear()
+		p.clearAnalyzeQ()
 		p.emit(Event{Kind: "state-change", Playing: false, Volume: p.Volume()})
 	}
 }
@@ -1256,6 +1270,7 @@ func (p *Player) playNextLocked() {
 	wasPlaying := p.playing.Load()
 	p.closeTrackLocked()
 	p.rb.Clear()
+	p.clearAnalyzeQ()
 	p.decoded.Store(0)
 	if wasPlaying {
 		p.playing.Store(false)
@@ -1270,6 +1285,7 @@ func (p *Player) playNextLocked() {
 func (p *Player) resetLocked() {
 	p.closeTrackLocked()
 	p.rb.Clear()
+	p.clearAnalyzeQ()
 	p.playing.Store(false)
 	p.decoded.Store(0)
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
@@ -1416,8 +1432,14 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 				chunk[i] = float32(l * float64(preamp))
 			}
 		}
-		bands := p.analyzer.Feed(chunk, rate)
-		p.lastBands.Store(bands)
+		// enfileira p/ o analisador: o FFT roda quando este trecho
+		// realmente tocar (playedFrames), não ~2s antes (buffer).
+		cp := make([]float32, samples)
+		copy(cp, chunk)
+		p.aqMu.Lock()
+		p.analyzeQ = append(p.analyzeQ, pcmChunk{
+			start: p.decoded.Load(), pcm: cp}) // decoded = início do chunk
+		p.aqMu.Unlock()
 		// escreve no ring buffer (parcial + espera)
 		written := 0
 		for written < samples {
@@ -1484,6 +1506,84 @@ func (p *Player) autoAdvance() {
 	}
 }
 
+// analyzeLoop alimenta o analisador de FFT na posição real de reprodução.
+func (p *Player) analyzeLoop() {
+	tick := time.NewTicker(8 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-p.done:
+			return
+		case <-tick.C:
+			p.pumpAnalyzer()
+		}
+	}
+}
+
+// pumpAnalyzer consome da fila os chunks cuja faixa já foi reproduzida.
+func (p *Player) pumpAnalyzer() {
+	p.mu.Lock()
+	dec := p.dec
+	p.mu.Unlock()
+	if dec == nil || !p.playing.Load() {
+		// nada tocando: alimenta silêncio p/ o espectro descer à base
+		p.idleN++
+		if p.idleN%4 == 0 {
+			p.feedAnalyzer(zeroPCM[:], 2, 44100)
+		}
+		return
+	}
+	p.idleN = 0
+	rate := dec.SampleRate()
+	ch := int(dec.Channels())
+	if ch <= 0 {
+		ch = 2
+	}
+	played := p.playedFrames(rate, uint32(ch))
+
+	p.aqMu.Lock()
+	var ready []pcmChunk
+	for len(p.analyzeQ) > 0 {
+		c := p.analyzeQ[0]
+		frames := uint64(len(c.pcm) / ch)
+		if c.start+frames > played {
+			break
+		}
+		ready = append(ready, c)
+		p.analyzeQ = p.analyzeQ[1:]
+	}
+	p.aqMu.Unlock()
+	for _, c := range ready {
+		p.feedAnalyzer(c.pcm, ch, rate)
+	}
+}
+
+// zeroPCM é um bloco mudo usado p/ decair o espectro quando nada toca.
+var zeroPCM [8192]float32
+
+// feedAnalyzer roda o FFT em sub-blocos (~23ms) para resposta fluida.
+func (p *Player) feedAnalyzer(pcm []float32, channels int, rate uint32) {
+	sub := len(pcm) / 4
+	if sub < 1 {
+		sub = len(pcm)
+	}
+	for s := 0; s < len(pcm); s += sub {
+		end := s + sub
+		if end > len(pcm) {
+			end = len(pcm)
+		}
+		bands := p.analyzer.Feed(pcm[s:end], channels, rate)
+		p.lastBands.Store(bands)
+	}
+}
+
+// clearAnalyzeQ descarta PCM enfileirado (seek/troca de faixa/parada).
+func (p *Player) clearAnalyzeQ() {
+	p.aqMu.Lock()
+	p.analyzeQ = p.analyzeQ[:0]
+	p.aqMu.Unlock()
+}
+
 // playedFrames estima frames já tocados = decodificados - buffer restante.
 func (p *Player) playedFrames(rate, channels uint32) uint64 {
 	dec := p.decoded.Load()
@@ -1520,6 +1620,7 @@ func (p *Player) SeekFrame(frame int64) error {
 		return errors.New("player: seek falhou")
 	}
 	p.rb.Clear()
+	p.clearAnalyzeQ()
 	p.decoded.Store(uint64(frame))
 	return nil
 }

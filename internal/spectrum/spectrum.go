@@ -30,41 +30,53 @@ func New() *Analyzer {
 	return a
 }
 
-// Feed alimenta o analisador com PCM mono float32 e retorna Bands magnitudes
-// normalizadas (0..1, escala log). O PCM deve ter len > 0.
-func (a *Analyzer) Feed(pcm []float32, sampleRate uint32) [Bands]float32 {
+// Feed alimenta o analisador com PCM intercalado (channels por frame) e
+// retorna Bands magnitudes normalizadas (0..1, escala log). Janela de
+// FFTSize frames; se o bloco for menor, o restante fica zerado (padding).
+func (a *Analyzer) Feed(pcm []float32, channels int, sampleRate uint32) [Bands]float32 {
 	var out [Bands]float32
-	// downmix para mono se estéreo (pcm intercalado)
-	mono := make([]float32, FFTSize)
-	step := len(pcm) / FFTSize
+	if channels <= 0 {
+		channels = 1
+	}
+	frames := len(pcm) / channels
+	if frames <= 0 {
+		return out
+	}
+	// decima no domínio de frames (nunca entrelaça canais)
+	step := frames / FFTSize
 	if step < 1 {
 		step = 1
 	}
+	filled := 0
 	for i := 0; i < FFTSize; i++ {
-		idx := i * step
-		if idx >= len(pcm) {
+		f := i * step
+		if f >= frames {
 			break
 		}
-		v := pcm[idx]
-		// assume estéreo: pega também o canal seguinte se houver
-		if idx+1 < len(pcm) {
-			v = (v + pcm[idx+1]) * 0.5
+		var v float32
+		if channels == 2 {
+			v = (pcm[2*f] + pcm[2*f+1]) * 0.5
+		} else {
+			v = pcm[f*channels]
 		}
-		mono[i] = v * a.window[i]
+		a.fftBuf[i] = complex(float64(v*a.window[i]), 0)
+		filled = i + 1
 	}
-	for i := 0; i < FFTSize; i++ {
-		a.fftBuf[i] = complex(float64(mono[i]), 0)
+	for i := filled; i < FFTSize; i++ {
+		a.fftBuf[i] = 0
 	}
 	fft(a.fftBuf)
+	// taxa efetiva após decimação (define o Nyquist do eixo de bandas)
+	effRate := float64(sampleRate) / float64(step)
 	// magnitude -> bandas logarítmicas
 	half := FFTSize / 2
 	for b := 0; b < Bands; b++ {
 		// mapeia banda para faixa de frequência log (20Hz .. Nyquist)
-		nyq := float64(sampleRate) / 2
+		nyq := effRate / 2
 		fLo := 20.0 * math.Pow(nyq/20.0, float64(b)/float64(Bands))
 		fHi := 20.0 * math.Pow(nyq/20.0, float64(b+1)/float64(Bands))
-		kLo := int(fLo / float64(sampleRate) * float64(FFTSize))
-		kHi := int(fHi / float64(sampleRate) * float64(FFTSize))
+		kLo := int(fLo / effRate * float64(FFTSize))
+		kHi := int(fHi / effRate * float64(FFTSize))
 		if kLo < 1 {
 			kLo = 1
 		}
@@ -86,7 +98,9 @@ func (a *Analyzer) Feed(pcm []float32, sampleRate uint32) [Bands]float32 {
 				peak = m
 			}
 		}
-		avg := peak * 2.0 / float64(FFTSize) * 4.0
+		// normaliza pelo nº de amostras preenchidas (janela pode estar
+		// meio vazia quando o bloco < FFTSize — zero-padding não muda o peak)
+		avg := peak * 2.0 / float64(max(filled, 1)) * 4.0
 		// compressão perceptual + suavização temporal
 		v := float32(math.Pow(avg, 0.6))
 		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
@@ -98,7 +112,12 @@ func (a *Analyzer) Feed(pcm []float32, sampleRate uint32) [Bands]float32 {
 		if v < 0 {
 			v = 0
 		}
-		a.prev[b] = a.prev[b]*a.smooth + v*(1-a.smooth)
+		// ataque rápido, decaimento mais lento (visual tipo webamp)
+		sm := float32(0.4)
+		if v < a.prev[b] {
+			sm = 0.78
+		}
+		a.prev[b] = a.prev[b]*sm + v*(1-sm)
 		out[b] = a.prev[b]
 	}
 	return out
