@@ -35,6 +35,8 @@ var plFolderWheelTag event.Tag
 var plFolderScrollTag event.Tag
 var plAlbumWheelTag event.Tag
 var plAlbumScrollTag event.Tag
+var plGenreWheelTag event.Tag
+var plGenreScrollTag event.Tag
 
 // plWheel rola a lista com a roda do mouse (mesmo padrão do menuWindow).
 func (ui *uiState) plWheel(gtx layout.Context, r image.Rectangle) {
@@ -346,13 +348,9 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		dst := R(bx, plTopH+3, 45, 11)
 		if ui.spriteBtn(gtx, gb, "GENEX", dst,
 			R(0, 0, 48, 16), R(0, 16, 48, 15)) {
-			if i == 0 {
+			if i == 0 { // GENRE: abre/fecha a lista de gêneros
 				ui.plGenreOpen = !ui.plGenreOpen
 				saveGenreOpen(ui.plGenreOpen)
-				if ui.plGenreOpen && ui.plGenreSel != "" {
-					ui.plGenreOn = true
-					saveGenreOn(true)
-				}
 				// só um painel por vez; as seleções são mantidas
 				ui.plArtistOpen = false
 				saveArtistOpen(false)
@@ -393,8 +391,6 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			}
 			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha os painéis
 				ui.plGenreOpen = false
-				ui.plGenreOn = false
-				saveGenreOn(false)
 				saveGenreOpen(false)
 				ui.plArtistOpen = false
 				ui.plArtistExpand = ""
@@ -411,8 +407,6 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			}
 			if i == 5 { // LIST: fecha painéis e desliga o filtro, mantendo as seleções
 				ui.plGenreOpen = false
-				ui.plGenreOn = false
-				saveGenreOn(false)
 				saveGenreOpen(false)
 				ui.plArtistOpen = false
 				saveArtistOpen(false)
@@ -427,12 +421,13 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 				ui.plGenSel = i
 			}
 			saveGenSel(ui.plGenSel)
+			saveExpand("genreexp.txt", ui.plGenreExpand)
 			saveExpand("artistexp.txt", ui.plArtistExpand)
 			saveExpand("folderexp.txt", ui.plFolderExpand)
 			saveExpand("albumexp.txt", ui.plAlbumExpand)
 		}
 		lc := dark
-		sel := ui.plGenSel == i || (i == 0 && ui.plGenreOn && ui.plGenreSel != "" && !ui.plArtistOpen && !ui.plFolderOpen && !ui.plAlbumOpen) || (i == 2 && ui.plArtistOpen) || (i == 3 && ui.plFolderOpen) || (i == 4 && ui.plAlbumOpen)
+		sel := ui.plGenSel == i || (i == 0 && ui.plGenreOpen) || (i == 2 && ui.plArtistOpen) || (i == 3 && ui.plFolderOpen) || (i == 4 && ui.plAlbumOpen)
 		if sel {
 			ui.btnTextB(gtx, labels[i], dst, genGreen)
 			// borda bordeaux no botão selecionado
@@ -447,55 +442,167 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		}
 	}
 
-	// fileira de gêneros abaixo dos botões GENEX (GENRE abre/fecha)
+	// painel de gêneros: mesmo formato do de artistas, um gênero por linha;
+	// duplo-clique expande e mostra todas as músicas do gênero
 	genreH := 0
 	if ui.plGenreOpen {
 		genres := ui.p.Genres()
 		for len(ui.plGenreBtns) < len(genres) {
 			ui.plGenreBtns = append(ui.plGenreBtns, uibtn{})
 		}
-		x := 14
-		for gi, g := range genres {
-			gw := 12 + len([]rune(g))*6
-			if gw > 160 {
-				gw = 160
-			}
-			if x+gw > winW-23 {
-				break
-			}
-			dst := R(x, plTopH+16, gw, 11)
-			if ui.spriteBtn(gtx, &ui.plGenreBtns[gi], "GENEX", dst,
-				R(0, 0, 48, 16), R(0, 16, 48, 15)) {
-				if ui.plGenreSel == g {
-					if ui.plGenreOn {
-						ui.plGenreSel = ""
-						ui.plGenreOn = false
-					} else {
-						ui.plGenreOn = true
-					}
-				} else {
-					ui.plGenreSel = g
-					ui.plGenreOn = true
+		// restaura a expansão persistida quando as faixas já estão carregadas
+		if ui.plGenreExpand != "" && ui.plGenreExpandIdx == nil {
+			for _, g := range genres {
+				if g == ui.plGenreExpand {
+					ui.plGenreExpandIdx = ui.genreTracks(g, tracks)
+					break
 				}
-				saveGenreSel(ui.plGenreSel)
-				saveGenreOn(ui.plGenreOn)
 			}
-			gc := dark
-			if ui.plGenreSel == g {
-				gc = genGreen
-			}
-			ui.btnTextB(gtx, g, dst, gc)
-			if ui.plGenreSel == g {
-				bx0, by0 := dst.Min.X, dst.Min.Y
-				bx1, by1 := dst.Max.X, dst.Max.Y
-				fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
-				fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
-				fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
-				fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
-			}
-			x += gw + 2
 		}
-		genreH = 13
+		// faixas do gênero expandido (só se ainda existir na lista)
+		expN := 0
+		if ui.plGenreExpand != "" {
+			for _, g := range genres {
+				if g == ui.plGenreExpand {
+					expN = len(ui.plGenreExpandIdx)
+					break
+				}
+			}
+		}
+		areaTop := plTopH + 16
+		avail := botY - 3 - areaTop
+		contentH := (len(genres) + expN) * plRowH
+		gH := contentH
+		if gH > avail {
+			gH = avail
+		}
+		if gH < 0 {
+			gH = 0
+		}
+		ui.plCount = len(genres)
+		ui.plGenreMax = float32(contentH - gH)
+		if ui.plGenreMax < 0 {
+			ui.plGenreMax = 0
+		}
+		if ui.plGenreScroll > ui.plGenreMax {
+			ui.plGenreScroll = ui.plGenreMax
+		}
+		if ui.plGenreScroll < 0 {
+			ui.plGenreScroll = 0
+		}
+		panel := image.Rect(12, areaTop, winW-23, areaTop+gH)
+		fillRect(gtx.Ops, panel, colPLBg)
+		cs := clip.Rect(panel).Push(gtx.Ops)
+		// scroll via deslocamento de ry (sem op.Offset: quebrava a área de eventos)
+		ry := areaTop - int(ui.plGenreScroll)
+		// roda primeiro (embaixo): se fosse por cima, engoliria os Press dos botões
+		ui.plGenreWheel(gtx, panel)
+		ui.plScrollSink = &ui.plGenreScrollAcc
+		// só renderiza linhas visíveis (evita decode de capa / ops de 300+ linhas)
+		visMin := areaTop - plRowH
+		visMax := areaTop + gH
+		// gênero da faixa tocando (borda verde na linha dele)
+		curGen := ""
+		if idx := ui.p.Index(); idx >= 0 {
+			curGen = ui.p.TrackGenre(idx)
+		}
+		for gi, g := range genres {
+			rowR := image.Rect(14, ry, winW-27, ry+plRowH)
+			exp := ui.plGenreExpand == g
+			if ry > visMin && ry < visMax {
+				if exp {
+					fillRect(gtx.Ops, rowR, colPLCurBg)
+					bx0, by0 := rowR.Min.X, rowR.Min.Y
+					bx1, by1 := rowR.Max.X, rowR.Max.Y
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
+					fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
+				}
+				if curGen != "" && g == curGen {
+					// borda verde no gênero da faixa tocando
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Max.X, rowR.Min.Y+1), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Max.Y-1, rowR.Max.X, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Min.X, rowR.Min.Y, rowR.Min.X+1, rowR.Max.Y), colPLText)
+					fillRect(gtx.Ops, image.Rect(rowR.Max.X-1, rowR.Min.Y, rowR.Max.X, rowR.Max.Y), colPLText)
+				}
+				ac := colPLText
+				if exp {
+					ac = colPLSelText
+				}
+				if img := ui.p.GenreCover(g); img != nil {
+					blit(gtx, img, image.Rect(15, ry+1, 55, ry+41))
+				}
+				ui.textAt(gtx, ui.fontUI, unit.Sp(9), g, ac, image.Pt(59, ry+9))
+				if n := ui.p.GenreTrackCount(g); n > 0 {
+					cnt := fmt.Sprintf(language.T("pl.artist.tracks"), n)
+					ui.textAt(gtx, ui.fontUI, unit.Sp(9), cnt, colPLFile, image.Pt(59, ry+25))
+				}
+				ui.plGenreBtns[gi].scrollFn = func(dy float32) { ui.plGenreScrollAcc += dy }
+				b := &ui.plGenreBtns[gi]
+				if ui.button(gtx, b, rowR, func(gtx layout.Context, down bool) {}) {
+					now := time.Now()
+					dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+					b.lastClick = now
+					if dbl {
+						b.lastClick = time.Time{}
+						if exp {
+							ui.plGenreExpand = ""
+							ui.plGenreExpandIdx = nil
+						} else {
+							ui.plGenreExpand = g
+							ui.plGenreExpandIdx = ui.genreTracks(g, tracks)
+						}
+						saveExpand("genreexp.txt", ui.plGenreExpand)
+					}
+				}
+			}
+			ry += plRowH
+			// músicas do gênero logo abaixo, no formato das linhas de música
+			if exp {
+				for _, ti := range ui.plGenreExpandIdx {
+					if ry > visMin && ry < visMax {
+						ro := op.Offset(image.Pt(54, ry)).Push(gtx.Ops)
+						fillRect(gtx.Ops, image.Rect(0, 0, winW-81, plRowH), colPLExpBg)
+						ui.plRow(gtx, ti, tracks, winW-81, ui.plGenreExpandIdx)
+						ro.Pop()
+					}
+					ry += plRowH
+				}
+			}
+		}
+		cs.Pop()
+		// aplica o scroll acumulado pela roda (botões e área vazia)
+		if ui.plGenreScrollAcc != 0 {
+			ui.plGenreScroll -= ui.plGenreScrollAcc
+			if ui.plGenreScroll > ui.plGenreMax {
+				ui.plGenreScroll = ui.plGenreMax
+			}
+			if ui.plGenreScroll < 0 {
+				ui.plGenreScroll = 0
+			}
+			ui.plGenreScrollAcc = 0
+		}
+		// scrollbar quando o conteúdo excede a área visível
+		if contentH > gH && gH > 0 {
+			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+gH-1)
+			fillRect(gtx.Ops, track, colPLBg)
+			thumbH := gH * gH / contentH
+			if thumbH < 12 {
+				thumbH = 12
+			}
+			if thumbH > gH-2 {
+				thumbH = gH - 2
+			}
+			frac := float32(0)
+			if ui.plGenreMax > 0 {
+				frac = ui.plGenreScroll / ui.plGenreMax
+			}
+			thumbY := areaTop + 1 + int(frac*float32(gH-2-thumbH))
+			fillRect(gtx.Ops, image.Rect(winW-20, thumbY, winW-16, thumbY+thumbH),
+				color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF})
+			ui.plGenreScrollDrag(gtx, track, thumbY, thumbH, gH, ui.plGenreMax)
+		}
 	}
 
 	// fileira de artistas abaixo dos botões GENEX (ARTISTA abre/fecha)
@@ -970,8 +1077,8 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		}
 	}
 
-	// com painel de artistas/pastas/álbuns aberto ele ocupa toda a área da lista
-	if ui.plArtistOpen || ui.plFolderOpen || ui.plAlbumOpen {
+	// com painel de gêneros/artistas/pastas/álbuns aberto ele ocupa toda a área da lista
+	if ui.plGenreOpen || ui.plArtistOpen || ui.plFolderOpen || ui.plAlbumOpen {
 		return
 	}
 
@@ -1003,11 +1110,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	lgtx := gtx
 	lgtx.Constraints.Min = image.Point{}
 	lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
-	gsel := ""
-	if ui.plGenreOn {
-		gsel = ui.plGenreSel
-	}
-	order := ui.p.TracksForGenre(gsel)
+	order := ui.p.TracksForGenre("")
 	// ordem alfabética pelo nome de exibição
 	names := make(map[int]string, len(order))
 	for _, i := range order {
@@ -1249,6 +1352,29 @@ func (ui *uiState) plAlbumWheel(gtx layout.Context, r image.Rectangle) {
 	}
 }
 
+// plGenreWheel rola o painel de gêneros na área vazia.
+func (ui *uiState) plGenreWheel(gtx layout.Context, r image.Rectangle) {
+	cs := clip.Rect(r).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plGenreWheelTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target:  &plGenreWheelTag,
+			Kinds:   pointer.Scroll,
+			ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		ui.plGenreScrollAcc += e.Scroll.Y
+	}
+}
+
 // plAlbumScrollDrag permite arrastar o thumb da scrollbar de álbuns.
 func (ui *uiState) plAlbumScrollDrag(gtx layout.Context, track image.Rectangle, thumbY, thumbH, viewH int, maxScroll float32) {
 	if maxScroll <= 0 {
@@ -1292,6 +1418,70 @@ func (ui *uiState) plAlbumScrollDrag(gtx layout.Context, track image.Rectangle, 
 				frac = 1
 			}
 			ui.plAlbumScroll = frac * maxScroll
+		case pointer.Release, pointer.Cancel:
+			ui.plScrollDragging = false
+		}
+	}
+}
+
+// genreTracks retorna os índices das faixas do gênero em ordem alfabética.
+func (ui *uiState) genreTracks(g string, tracks []string) []int {
+	idx := ui.p.TracksForGenre(g)
+	names := make(map[int]string, len(idx))
+	for _, i := range idx {
+		n, _ := ui.p.TrackTitle(i)
+		if n == "" {
+			n = filepath.Base(tracks[i])
+		}
+		names[i] = strings.ToLower(n)
+	}
+	sort.Slice(idx, func(x, y int) bool { return names[idx[x]] < names[idx[y]] })
+	return idx
+}
+
+// plGenreScrollDrag permite arrastar o thumb da scrollbar de gêneros.
+func (ui *uiState) plGenreScrollDrag(gtx layout.Context, track image.Rectangle, thumbY, thumbH, viewH int, maxScroll float32) {
+	if maxScroll <= 0 {
+		return
+	}
+	travel := viewH - 2 - thumbH
+	if travel <= 0 {
+		return
+	}
+	trackTop := float32(track.Min.Y)
+	cs := clip.Rect(track).Push(gtx.Ops)
+	event.Op(gtx.Ops, &plGenreScrollTag)
+	cs.Pop()
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target: &plGenreScrollTag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			break
+		}
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+		switch e.Kind {
+		case pointer.Press:
+			if e.Position.Y < float32(thumbY) || e.Position.Y > float32(thumbY+thumbH) {
+				continue
+			}
+			ui.plScrollDragging = true
+		case pointer.Drag:
+			if !ui.plScrollDragging {
+				continue
+			}
+			frac := (e.Position.Y - trackTop) / float32(travel)
+			if frac < 0 {
+				frac = 0
+			}
+			if frac > 1 {
+				frac = 1
+			}
+			ui.plGenreScroll = frac * maxScroll
 		case pointer.Release, pointer.Cancel:
 			ui.plScrollDragging = false
 		}

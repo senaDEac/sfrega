@@ -146,7 +146,9 @@ type Player struct {
 	coverCache  map[string]image.Image // thumbs por nome de capa
 	coverPend   map[string]bool        // decodes de thumb em andamento
 	genreMu     sync.Mutex
-	genresList  []string // gêneros distintos (preenchido pelo warmTags)
+	genresList  []string          // gêneros distintos (preenchido pelo warmTags)
+	genreFirst  map[string]string // gênero → path da primeira ocorrência
+	genreCount  map[string]int    // gênero → total de faixas
 	artistMu    sync.Mutex
 	artistsList []string          // artistas distintos (preenchido pelo warmTags)
 	artistFirst map[string]string // artista → path da primeira ocorrência
@@ -245,17 +247,44 @@ func (p *Player) warmTags(paths []string) {
 // computeGenres recalcula a lista de gêneros distintos na ordem das faixas.
 func (p *Player) computeGenres(paths []string) {
 	seen := map[string]bool{}
+	first := map[string]string{}
+	count := map[string]int{}
 	var genres []string
 	for _, path := range paths {
 		t, _ := p.tagPeek(path)
-		if t.Genre != "" && !seen[t.Genre] {
+		if t.Genre == "" {
+			continue
+		}
+		count[t.Genre]++
+		if !seen[t.Genre] {
 			seen[t.Genre] = true
+			first[t.Genre] = path
 			genres = append(genres, t.Genre)
 		}
 	}
+	sort.Slice(genres, func(a, b int) bool {
+		return strings.ToLower(genres[a]) < strings.ToLower(genres[b])
+	})
 	p.genreMu.Lock()
 	p.genresList = genres
+	p.genreFirst = first
+	p.genreCount = count
 	p.genreMu.Unlock()
+}
+
+// GenreTrackCount retorna o total de faixas do gênero.
+func (p *Player) GenreTrackCount(genre string) int {
+	p.genreMu.Lock()
+	defer p.genreMu.Unlock()
+	return p.genreCount[genre]
+}
+
+// GenreCover retorna a capa da primeira faixa do gênero (nil se não houver).
+func (p *Player) GenreCover(genre string) image.Image {
+	p.genreMu.Lock()
+	path := p.genreFirst[genre]
+	p.genreMu.Unlock()
+	return p.coverForPath(path)
 }
 
 // computeArtists recalcula a lista de artistas distintos na ordem das faixas.

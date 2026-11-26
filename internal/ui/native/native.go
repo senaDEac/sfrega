@@ -141,7 +141,12 @@ type uiState struct {
 	plGenreOpen                                          bool
 	plGenreSel                                           string
 	plGenreOn                                            bool
+	plGenreExpand                                        string // gênero expandido ("" = nenhum)
+	plGenreExpandIdx                                     []int  // faixas do gênero expandido
 	plGenreBtns                                          []uibtn
+	plGenreScroll                                        float32
+	plGenreScrollAcc                                     float32
+	plGenreMax                                           float32
 	plArtistOpen                                         bool
 	plArtistExpand                                       string // artista expandido ("" = nenhum)
 	plArtistExpandIdx                                    []int  // faixas do artista expandido
@@ -861,6 +866,7 @@ func Run(p *player.Player) error {
 		plGenreOpen:    loadGenreOpen(),
 		plGenreSel:     loadGenreSel(),
 		plGenreOn:      loadGenreOn(),
+		plGenreExpand:  loadExpand("genreexp.txt"),
 		plArtistOpen:   loadArtistOpen(),
 		plFolderOpen:   loadFolderOpen(),
 		plAlbumOpen:    loadAlbumOpen(),
