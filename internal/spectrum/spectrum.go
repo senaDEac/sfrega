@@ -122,7 +122,7 @@ func (a *Analyzer) Feed(pcm []float32, channels int, sampleRate uint32) [Bands]f
 		// ataque rápido, decaimento mais lento (visual tipo webamp)
 		sm := float32(0.4)
 		if v < a.prev[b] {
-			sm = 0.78
+			sm = 0.69 // queda ~20% mais rápida que 0.74
 		}
 		a.prev[b] = a.prev[b]*sm + v*(1-sm)
 		out[b] = a.prev[b]
