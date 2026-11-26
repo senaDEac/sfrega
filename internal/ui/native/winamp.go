@@ -67,12 +67,8 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
-	bg := color.NRGBA{R: 0x2D, G: 0x32, B: 0x42, A: 0xFF}
-	fillRect(gtx.Ops, r, bg)
-	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1),
-		color.NRGBA{R: 0x5A, G: 0x62, B: 0x78, A: 0xFF})
-	fillRect(gtx.Ops, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y),
-		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
+	// fundo: faixa superior do MAIN.png (0,0)-(275,12) esticada na barra
+	ui.spr(gtx, "MAIN", R(0, 0, 275, 12), r)
 
 	// ---- decorações: ícone de onda (menu) + logotipo "winamp" ----
 	ui.sprFit(gtx, "TITLEBAR", R(144, 5, 40, 6), R(18, 5, 42, 7))
