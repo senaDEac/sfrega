@@ -1538,14 +1538,8 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 		}
 	}
 
-	// divisórias verticais entre colunas de LEDs (por cima p/ não sumir)
-	if spec != nil && spec.Segments > 0 {
-		div := color.NRGBA{R: 0x14, G: 0x14, B: 0x14, A: 0xFF}
-		for i := 1; i < n; i++ {
-			x := r.Min.X + i*r.Dx()/n
-			fillRect(gtx.Ops, image.Rect(x, r.Min.Y, x+1, r.Max.Y), div)
-		}
-	}
+	// divisórias entre colunas de LEDs removidas: transparentes p/ não
+	// cobrir o tema da skin
 
 	if style == "line" && len(linePts) > 1 {
 		path := clip.Path{}
@@ -1613,7 +1607,7 @@ func (ui *uiState) scopeDraw(gtx layout.Context, r image.Rectangle, spec *spectr
 }
 
 // specSegments desenha LEDs em posições fixas no painel: cada um acende
-// quando o nível o atinge (estilo VU). Apagados ficam cinza-escuros.
+// quando o nível o atinge (estilo VU). Apagados ficam transparentes.
 // Com palette "vu"/"fire", a cor vem da posição fixa do LED no painel.
 func (ui *uiState) specSegments(gtx layout.Context, x0, x1 int,
 	spec *spectrum.Spec, r image.Rectangle, dir string, mid, h, v float32, col color.NRGBA) {
@@ -1640,7 +1634,6 @@ func (ui *uiState) specSegments(gtx layout.Context, x0, x1 int,
 	if disp < 0.6/float32(n) {
 		disp = 0
 	}
-	off := color.NRGBA{R: 0x22, G: 0x22, B: 0x22, A: 0xFF}
 	for k := 0; k < n; k++ {
 		lo := float32(k) / float32(n)
 		hi := float32(k+1) / float32(n)
@@ -1653,16 +1646,16 @@ func (ui *uiState) specSegments(gtx layout.Context, x0, x1 int,
 			yBot = r.Max.Y - pad - k*(ledH+1)
 			yTop = yBot - ledH
 		}
-		c := off
-		if disp > lo {
-			t := (lo + hi) / 2
-			if spec.Palette == "vu" {
-				c = vuColor(t)
-			} else if spec.Palette == "fire" {
-				c = fireColor(t)
-			} else {
-				c = col
-			}
+		// LED apagado: transparente (não cobre o tema da skin)
+		if disp <= lo {
+			continue
+		}
+		c := col
+		t := (lo + hi) / 2
+		if spec.Palette == "vu" {
+			c = vuColor(t)
+		} else if spec.Palette == "fire" {
+			c = fireColor(t)
 		}
 		fillRect(gtx.Ops, image.Rect(x0, yTop, x1, yBot), c)
 	}
