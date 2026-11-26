@@ -1501,6 +1501,10 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 			x0 = cx - spec.BarW/2
 			x1 = x0 + spec.BarW
 		}
+		// linha de intervalo transparente entre colunas de LEDs
+		if spec != nil && spec.Segments > 0 && i < n-1 && x1 > x0+1 {
+			x1--
+		}
 		if style == "line" {
 			linePts = append(linePts, pt{float32(x0+x1) / 2, specLevelY(dir, mid, h, v)})
 			continue
