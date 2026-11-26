@@ -224,20 +224,21 @@ func (ui *uiState) infoRight(gtx layout.Context) {
 	if sr == 0 {
 		return // sem faixa carregada
 	}
-	if ui.p.Playing() {
-		ch := ui.p.Channels()
-		if ch == 2 && ui.p.Mono() {
-			ch = 1 // essencialmente mono (L/R correlacionados)
+	if !ui.p.Playing() && ui.p.Position() == 0 {
+		return // parado: sem indicador nem kbps/kHz (pausado segue ligado)
+	}
+	ch := ui.p.Channels()
+	if ch == 2 && ui.p.Mono() {
+		ch = 1 // essencialmente mono (L/R correlacionados)
+	}
+	switch ch {
+	case 0:
+	default:
+		src := R(0, 0, 29, 12) // estéreo aceso
+		if ch == 1 {
+			src = R(29, 0, 29, 12) // mono aceso
 		}
-		switch ch {
-		case 0:
-		default:
-			src := R(0, 0, 29, 12) // estéreo aceso
-			if ch == 1 {
-				src = R(29, 0, 29, 12) // mono aceso
-			}
-			ui.spr(gtx, "MONOSTER", src, R(187, 41, 29, 12))
-		}
+		ui.spr(gtx, "MONOSTER", src, R(187, 41, 29, 12))
 	}
 
 	// valores puros na caixa preta entre o espectro e o indicador
