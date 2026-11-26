@@ -1392,6 +1392,10 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 	} else {
 		fillRect(gtx.Ops, r, color.NRGBA{A: 0xFF})
 	}
+	if spec != nil && spec.Style == "scope" {
+		ui.scopeDraw(gtx, r, spec)
+		return
+	}
 	bands := ui.p.Spectrum()
 
 	// agrega as 48 bandas do analisador em n barras (max por grupo)
@@ -1483,7 +1487,7 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 		}
 		if bar.Dy() > 0 {
 			if spec != nil && spec.Segments > 0 {
-				ui.specSegments(gtx, bar, x0, x1, spec.Segments, h, col)
+				ui.specSegments(gtx, bar, x0, x1, spec, r, dir, mid, h, col)
 			} else {
 				fillRect(gtx.Ops, bar, col)
 			}
@@ -1519,9 +1523,45 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 	}
 }
 
+// scopeDraw desenha a forma de onda do áudio reproduzido (estilo osciloscópio).
+func (ui *uiState) scopeDraw(gtx layout.Context, r image.Rectangle, spec *spectrum.Spec) {
+	wave := ui.p.Wave()
+	if len(wave) < 2 {
+		return
+	}
+	mid := float32(r.Min.Y) + float32(r.Dy())/2
+	amp := float32(r.Dy()) * 0.45
+	path := clip.Path{}
+	path.Begin(gtx.Ops)
+	for i, s := range wave {
+		if s > 1 {
+			s = 1
+		}
+		if s < -1 {
+			s = -1
+		}
+		x := float32(r.Min.X) + float32(i)*(float32(r.Dx()-1)/float32(len(wave)-1))
+		y := mid - s*amp
+		if i == 0 {
+			path.MoveTo(f32.Pt(x, y))
+		} else {
+			path.LineTo(f32.Pt(x, y))
+		}
+	}
+	lc := color.NRGBA{R: 0x30, G: 0xFF, B: 0x50, A: 0xFF}
+	if spec.HasFG {
+		lc = spec.FG
+	} else if len(spec.Grad) > 0 {
+		lc = spec.Grad[0]
+	}
+	paint.FillShape(gtx.Ops, lc, clip.Stroke{Path: path.End(), Width: 1}.Op())
+}
+
 // specSegments desenha a barra em segmentos com vão de 1px (estilo VU LED).
-func (ui *uiState) specSegments(gtx layout.Context, bar image.Rectangle, x0, x1, segs int, h float32, col color.NRGBA) {
-	segH := h / float32(segs)
+// Com palette "vu", cada segmento recebe a cor da sua altura no painel.
+func (ui *uiState) specSegments(gtx layout.Context, bar image.Rectangle, x0, x1 int,
+	spec *spectrum.Spec, r image.Rectangle, dir string, mid, h float32, col color.NRGBA) {
+	segH := h / float32(spec.Segments)
 	if segH < 2 {
 		segH = 2
 	}
@@ -1533,8 +1573,88 @@ func (ui *uiState) specSegments(gtx layout.Context, bar image.Rectangle, x0, x1,
 		if ey-sy < 1 {
 			continue
 		}
-		fillRect(gtx.Ops, image.Rect(x0, int(sy), x1, int(ey)), col)
+		c := col
+		if spec.Palette == "vu" {
+			c = vuColor(specSegLevel(dir, mid, h, r, (sy+ey)/2))
+		} else if spec.Palette == "fire" {
+			c = fireColor(specSegLevel(dir, mid, h, r, (sy+ey)/2))
+		}
+		fillRect(gtx.Ops, image.Rect(x0, int(sy), x1, int(ey)), c)
 	}
+}
+
+// specSegLevel devolve a fração de altura (0..1) do segmento no painel.
+func specSegLevel(dir string, mid, h float32, r image.Rectangle, y float32) float32 {
+	switch dir {
+	case "down":
+		return (y - float32(r.Min.Y)) / h
+	case "center":
+		d := (y - mid) / (h / 2)
+		if d < 0 {
+			d = -d
+		}
+		return d
+	default:
+		return (float32(r.Max.Y) - y) / h
+	}
+}
+
+// vuColor mapeia nível 0..1 para verde -> amarelo -> vermelho (LEDs de VU).
+func vuColor(t float32) color.NRGBA {
+	if t < 0 {
+		t = 0
+	}
+	if t > 1 {
+		t = 1
+	}
+	green := color.NRGBA{R: 0x18, G: 0xC8, B: 0x18, A: 0xFF}
+	yellow := color.NRGBA{R: 0xE8, G: 0xC8, B: 0x10, A: 0xFF}
+	red := color.NRGBA{R: 0xE0, G: 0x18, B: 0x18, A: 0xFF}
+	var a, b color.NRGBA
+	f := t
+	if t < 0.5 {
+		a, b, f = green, yellow, t*2
+	} else {
+		a, b, f = yellow, red, (t-0.5)*2
+	}
+	return color.NRGBA{
+		R: uint8(float32(a.R) + (float32(b.R)-float32(a.R))*f),
+		G: uint8(float32(a.G) + (float32(b.G)-float32(a.G))*f),
+		B: uint8(float32(a.B) + (float32(b.B)-float32(a.B))*f),
+		A: 0xFF,
+	}
+}
+
+// fireColor mapeia nível 0..1 para a paleta de chama (vermelho->laranja->amarelo->claro).
+func fireColor(t float32) color.NRGBA {
+	if t < 0 {
+		t = 0
+	}
+	if t > 1 {
+		t = 1
+	}
+	stops := []struct {
+		t float32
+		c color.NRGBA
+	}{
+		{0.0, color.NRGBA{R: 0xFF, G: 0xCC, B: 0x00, A: 0xFF}},
+		{0.45, color.NRGBA{R: 0xFF, G: 0x66, B: 0x00, A: 0xFF}},
+		{0.8, color.NRGBA{R: 0xFF, G: 0x22, B: 0x00, A: 0xFF}},
+		{1.0, color.NRGBA{R: 0xFF, G: 0x00, B: 0x00, A: 0xFF}},
+	}
+	for i := 1; i < len(stops); i++ {
+		if t <= stops[i].t {
+			f := (t - stops[i-1].t) / (stops[i].t - stops[i-1].t)
+			a, b := stops[i-1].c, stops[i].c
+			return color.NRGBA{
+				R: uint8(float32(a.R) + (float32(b.R)-float32(a.R))*f),
+				G: uint8(float32(a.G) + (float32(b.G)-float32(a.G))*f),
+				B: uint8(float32(a.B) + (float32(b.B)-float32(a.B))*f),
+				A: 0xFF,
+			}
+		}
+	}
+	return stops[len(stops)-1].c
 }
 
 // specLevelY devolve a posição vertical do nível v conforme a direção.
@@ -1554,6 +1674,12 @@ func (ui *uiState) specColor(spec *spectrum.Spec, i, n int, v float32) color.NRG
 	if spec != nil {
 		if spec.HasFG {
 			return spec.FG
+		}
+		if spec.Palette == "vu" {
+			return vuColor(v)
+		}
+		if spec.Palette == "fire" {
+			return fireColor(v)
 		}
 		if len(spec.Grad) > 0 {
 			t := float32(i) / float32(max(1, n-1))

@@ -135,6 +135,8 @@ type Player struct {
 	aqMu        sync.Mutex
 	analyzeQ    []pcmChunk // PCM decodificado aguardando a posição tocada
 	idleN       int        // contador p/ decaimento do espectro parado
+	waveMu      sync.Mutex
+	wave        []float32 // últimas amostras mono p/ osciloscópio
 	tagMu       sync.Mutex
 	tagCache    map[string]tagInfo // cache de metadados de áudio por path
 	artDir      string             // diretório das capas extraídas (covers/)
@@ -1528,6 +1530,11 @@ func (p *Player) pumpAnalyzer() {
 	if dec == nil || !p.playing.Load() {
 		// nada tocando: alimenta silêncio p/ o espectro descer à base
 		p.idleN++
+		if p.idleN == 1 {
+			p.waveMu.Lock()
+			p.wave = p.wave[:0]
+			p.waveMu.Unlock()
+		}
 		if p.idleN%4 == 0 {
 			p.feedAnalyzer(zeroPCM[:], 2, 44100)
 		}
@@ -1563,6 +1570,21 @@ var zeroPCM [8192]float32
 
 // feedAnalyzer roda o FFT em sub-blocos (~23ms) para resposta fluida.
 func (p *Player) feedAnalyzer(pcm []float32, channels int, rate uint32) {
+	// guarda amostras mono p/ o osciloscópio (janela de ~93ms)
+	mono := make([]float32, 0, len(pcm)/channels)
+	for i := 0; i+channels <= len(pcm); i += channels {
+		if channels == 2 {
+			mono = append(mono, (pcm[i]+pcm[i+1])*0.5)
+		} else {
+			mono = append(mono, pcm[i])
+		}
+	}
+	p.waveMu.Lock()
+	p.wave = append(p.wave, mono...)
+	if len(p.wave) > 8192 {
+		p.wave = append([]float32(nil), p.wave[len(p.wave)-8192:]...)
+	}
+	p.waveMu.Unlock()
 	sub := len(pcm) / 4
 	if sub < 1 {
 		sub = len(pcm)
@@ -1623,6 +1645,13 @@ func (p *Player) SeekFrame(frame int64) error {
 	p.clearAnalyzeQ()
 	p.decoded.Store(uint64(frame))
 	return nil
+}
+
+// Wave retorna as últimas amostras mono reproduzidas (osciloscópio).
+func (p *Player) Wave() []float32 {
+	p.waveMu.Lock()
+	defer p.waveMu.Unlock()
+	return append([]float32(nil), p.wave...)
 }
 
 // Spectrum retorna o último espectro calculado.
