@@ -1632,8 +1632,10 @@ func (ui *uiState) specSegments(gtx layout.Context, x0, x1 int,
 	if disp > 1 {
 		disp = 1
 	}
-	if disp < 0.01 {
-		disp = 0 // resíduo de decaimento não acende LED
+	// gate: abaixo de ~60% da 1ª faixa zera — o LED da base não acende
+	// com o piso de ruído do analisador (só com sinal de verdade)
+	if disp < 0.6/float32(n) {
+		disp = 0
 	}
 	off := color.NRGBA{R: 0x22, G: 0x22, B: 0x22, A: 0xFF}
 	for k := 0; k < n; k++ {
