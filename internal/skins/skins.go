@@ -206,8 +206,37 @@ func (s *Skin) loadFile(fileName string, data []byte) {
 	case ".TXT":
 		if strings.EqualFold(filepath.Base(fileName), "VISCOLOR.TXT") {
 			s.vis = parseVisColors(string(data))
+			return
 		}
+		return
 	}
+	if name == "MAIN" {
+		s.imgs[name] = normalizeMain(s.imgs[name])
+	}
+}
+
+// normalizeMain remove a faixa central extra (y74-82) do bitmap MAIN das
+// skins 275x116, deixando 275x107 — o player não tem mais essa faixa.
+// Skins já em 107px (ou menores) não são alteradas.
+func normalizeMain(img *image.RGBA) *image.RGBA {
+	b := img.Bounds()
+	if b.Dy() <= 107 {
+		return img
+	}
+	w := b.Dx()
+	dst := image.NewRGBA(image.Rect(0, 0, w, b.Dy()-9))
+	if b.Dy() > 82 {
+		draw.Draw(dst, image.Rect(0, 0, w, 74), img, image.Pt(0, 0), draw.Src)
+		draw.Draw(dst, image.Rect(0, 74, w, b.Dy()-9), img, image.Pt(0, 83), draw.Src)
+	} else {
+		draw.Draw(dst, dst.Bounds(), img, image.Pt(0, 0), draw.Src)
+	}
+	if dst.Bounds().Dy() > 107 {
+		out := image.NewRGBA(image.Rect(0, 0, w, 107))
+		draw.Draw(out, out.Bounds(), dst, image.Pt(0, 0), draw.Src)
+		return out
+	}
+	return dst
 }
 
 // Get retorna o bitmap completo pelo nome ("MAIN", "VOLUME", ...).
