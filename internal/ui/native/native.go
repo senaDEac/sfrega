@@ -1650,8 +1650,11 @@ func (ui *uiState) specSegments(gtx layout.Context, x0, x1 int,
 			yBot = r.Max.Y - pad - k*(ledH+1)
 			yTop = yBot - ledH
 		}
-		// LED apagado: transparente (não cobre o tema da skin)
+		// LED apagado: sombra cinza clara se a variante pedir, senão transparente
 		if disp <= lo {
+			if spec.HasOffLED {
+				fillRect(gtx.Ops, image.Rect(x0, yTop, x1, yBot), spec.OffLED)
+			}
 			continue
 		}
 		c := col

@@ -59,6 +59,8 @@ type Spec struct {
 	FG        color.NRGBA
 	HasFG     bool
 	Grad      []color.NRGBA
+	OffLED    color.NRGBA // sombra do LED apagado (A já aplicada)
+	HasOffLED bool
 }
 
 type specJSON struct {
@@ -76,6 +78,7 @@ type specJSON struct {
 	Bg          string   `json:"bg"`
 	FG          string   `json:"fg"`
 	Gradient    []string `json:"gradient"`
+	OffLED      string   `json:"offled"`
 }
 
 // LoadSpec carrega a variante name; nil se não existir.
@@ -126,6 +129,10 @@ func LoadSpec(name string) *Spec {
 	}
 	if c, ok := parseHex(j.FG); ok {
 		s.FG, s.HasFG = c, true
+	}
+	if c, ok := parseHex(j.OffLED); ok {
+		c.A = 0x66 // sombra translúcida
+		s.OffLED, s.HasOffLED = c, true
 	}
 	for _, g := range j.Gradient {
 		if c, ok := parseHex(g); ok {
