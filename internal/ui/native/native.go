@@ -169,7 +169,8 @@ type uiState struct {
 	plAlbumScrollAcc                                     float32
 	plAlbumMax                                           float32
 	plGenSel                                             int // botão GENEX selecionado (-1 = nenhum)
-	plCount                                              int // faixas visíveis (após filtro)
+	plCount                                              int // categorias ou faixas visíveis
+	plCount2                                             int // faixas da categoria expandida
 
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 

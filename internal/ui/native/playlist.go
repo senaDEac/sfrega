@@ -477,6 +477,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			gH = 0
 		}
 		ui.plCount = len(genres)
+		ui.plCount2 = expN
 		ui.plGenreMax = float32(contentH - gH)
 		if ui.plGenreMax < 0 {
 			ui.plGenreMax = 0
@@ -640,6 +641,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			artistH = 0
 		}
 		ui.plCount = len(artists)
+		ui.plCount2 = expN
 		ui.plArtistMax = float32(contentH - artistH)
 		if ui.plArtistMax < 0 {
 			ui.plArtistMax = 0
@@ -799,6 +801,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			folderH = 0
 		}
 		ui.plCount = len(folders)
+		ui.plCount2 = expN
 		ui.plFolderMax = float32(contentH - folderH)
 		if ui.plFolderMax < 0 {
 			ui.plFolderMax = 0
@@ -955,6 +958,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			albumH = 0
 		}
 		ui.plCount = len(albums)
+		ui.plCount2 = expN
 		ui.plAlbumMax = float32(contentH - albumH)
 		if ui.plAlbumMax < 0 {
 			ui.plAlbumMax = 0
@@ -1119,6 +1123,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	}
 	sort.Slice(order, func(a, b int) bool { return names[order[a]] < names[order[b]] })
 	ui.plCount = len(order)
+	ui.plCount2 = 0
 	ui.plList.Axis = layout.Vertical
 	ui.plList.Layout(lgtx, len(order), func(gtx layout.Context, i int) layout.Dimensions {
 		return ui.plRow(gtx, order[i], tracks, listR.Dx(), nil)
@@ -1671,20 +1676,32 @@ func (ui *uiState) plBottom(gtx layout.Context, winW, winH, botY int, tracks []s
 		ui.plPosBar(gtx, barR)
 	}
 
-	// caixa LCD com a quantidade de faixas visíveis
+	// contagem: painel aberto = categorias/faixas da categoria expandida;
+	// lista normal = total de faixas
 	if ui.plCount > 0 {
 		bx, by := plMenuX+4*29+4, botY+9
 		box := image.Rect(bx, by, bx+64, by+16)
 		if box.Max.X+8 < barR.Min.X {
-			fillRect(gtx.Ops, box, color.NRGBA{R: 0, G: 0, B: 0, A: 0xFF})
-			fillRect(gtx.Ops, image.Rect(box.Min.X+1, box.Min.Y+1, box.Max.X-1, box.Min.Y+2), colLCDTop)
-			fillRect(gtx.Ops, image.Rect(box.Min.X+1, box.Max.Y-2, box.Max.X-1, box.Max.Y-1), colLCDBot)
+			panelOpen := ui.plGenreOpen || ui.plArtistOpen || ui.plFolderOpen || ui.plAlbumOpen
 			s := fmt.Sprintf("%d", ui.plCount)
+			if panelOpen {
+				s = fmt.Sprintf("%d/%d", ui.plCount, ui.plCount2)
+			}
 			x := box.Max.X - 5 - len(s)*10
+			lcdGreen := color.NRGBA{R: 0, G: 0xF8, B: 0, A: 0xFF}
 			for i, ch := range s {
+				cx := x + i*10
+				if ch == '/' {
+					// '/' em blocos (NUMBERS só tem dígitos)
+					for j := 0; j < 5; j++ {
+						fillRect(gtx.Ops,
+							image.Rect(cx+5-j, by+2+j*2, cx+7-j, by+4+j*2), lcdGreen)
+					}
+					continue
+				}
 				d := int(ch - '0')
 				ui.spr(gtx, "NUMBERS", image.Rect(d*9, 0, d*9+9, 13),
-					image.Rect(x+i*10, by+2, x+i*10+9, by+15))
+					image.Rect(cx, by+2, cx+9, by+15))
 			}
 		}
 	}
