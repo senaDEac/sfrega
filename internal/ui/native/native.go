@@ -1493,12 +1493,10 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 		default:
 			bar = image.Rect(x0, r.Max.Y-int(bh), x1, r.Max.Y)
 		}
-		if bar.Dy() > 0 {
-			if spec != nil && spec.Segments > 0 {
-				ui.specSegments(gtx, bar, x0, x1, spec, r, dir, mid, h, col)
-			} else {
-				fillRect(gtx.Ops, bar, col)
-			}
+		if spec != nil && spec.Segments > 0 {
+			ui.specSegments(gtx, x0, x1, spec, r, dir, mid, h, v, col)
+		} else if bar.Dy() > 0 {
+			fillRect(gtx.Ops, bar, col)
 		}
 		// capa de pico branca, exatamente 1px, na posição atrasada
 		if peakOn && ui.specCap[i] > v+0.01 {
@@ -1511,6 +1509,15 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 			}
 			fillRect(gtx.Ops, image.Rect(x0, py, x1, py+1),
 				color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF})
+		}
+	}
+
+	// divisórias verticais entre colunas de LEDs (por cima p/ não sumir)
+	if spec != nil && spec.Segments > 0 {
+		div := color.NRGBA{R: 0x14, G: 0x14, B: 0x14, A: 0xFF}
+		for i := 1; i < n; i++ {
+			x := r.Min.X + i*r.Dx()/n
+			fillRect(gtx.Ops, image.Rect(x, r.Min.Y, x+1, r.Max.Y), div)
 		}
 	}
 
@@ -1579,45 +1586,57 @@ func (ui *uiState) scopeDraw(gtx layout.Context, r image.Rectangle, spec *spectr
 	}
 }
 
-// specSegments desenha a barra em segmentos com vão de 1px (estilo VU LED).
-// Com palette "vu", cada segmento recebe a cor da sua altura no painel.
-func (ui *uiState) specSegments(gtx layout.Context, bar image.Rectangle, x0, x1 int,
-	spec *spectrum.Spec, r image.Rectangle, dir string, mid, h float32, col color.NRGBA) {
-	segH := h / float32(spec.Segments)
-	if segH < 2 {
-		segH = 2
+// specSegments desenha LEDs em posições fixas no painel: cada um acende
+// quando o nível o atinge (estilo VU). Apagados ficam cinza-escuros.
+// Com palette "vu"/"fire", a cor vem da posição fixa do LED no painel.
+func (ui *uiState) specSegments(gtx layout.Context, x0, x1 int,
+	spec *spectrum.Spec, r image.Rectangle, dir string, mid, h, v float32, col color.NRGBA) {
+	n := spec.Segments
+	// LEDs de altura igual: ledH px + vão de 1px; reduz n se não couber
+	for n > 1 && (r.Dy()-(n-1))/n < 1 {
+		n--
 	}
-	for sy := float32(bar.Min.Y); sy < float32(bar.Max.Y); sy += segH {
-		ey := sy + segH - 1
-		if ey > float32(bar.Max.Y) {
-			ey = float32(bar.Max.Y)
-		}
-		if ey-sy < 1 {
-			continue
-		}
-		c := col
-		if spec.Palette == "vu" {
-			c = vuColor(specSegLevel(dir, mid, h, r, (sy+ey)/2))
-		} else if spec.Palette == "fire" {
-			c = fireColor(specSegLevel(dir, mid, h, r, (sy+ey)/2))
-		}
-		fillRect(gtx.Ops, image.Rect(x0, int(sy), x1, int(ey)), c)
+	if n <= 0 {
+		return
 	}
-}
-
-// specSegLevel devolve a fração de altura (0..1) do segmento no painel.
-func specSegLevel(dir string, mid, h float32, r image.Rectangle, y float32) float32 {
-	switch dir {
-	case "down":
-		return (y - float32(r.Min.Y)) / h
-	case "center":
-		d := (y - mid) / (h / 2)
-		if d < 0 {
-			d = -d
+	ledH := (r.Dy() - (n - 1)) / n
+	if ledH < 1 {
+		ledH = 1
+	}
+	totH := n*ledH + (n - 1)
+	pad := (r.Dy() - totH) / 2 // sobra distribuída nas pontas
+	disp := v * 1.2            // mesmo fator do bh das barras
+	if disp > 1 {
+		disp = 1
+	}
+	if disp < 0.01 {
+		disp = 0 // resíduo de decaimento não acende LED
+	}
+	off := color.NRGBA{R: 0x22, G: 0x22, B: 0x22, A: 0xFF}
+	for k := 0; k < n; k++ {
+		lo := float32(k) / float32(n)
+		hi := float32(k+1) / float32(n)
+		// k=0 na base; "down" inverte (cresce do topo)
+		var yTop, yBot int
+		if dir == "down" {
+			yTop = r.Min.Y + pad + k*(ledH+1)
+			yBot = yTop + ledH
+		} else {
+			yBot = r.Max.Y - pad - k*(ledH+1)
+			yTop = yBot - ledH
 		}
-		return d
-	default:
-		return (float32(r.Max.Y) - y) / h
+		c := off
+		if disp > lo {
+			t := (lo + hi) / 2
+			if spec.Palette == "vu" {
+				c = vuColor(t)
+			} else if spec.Palette == "fire" {
+				c = fireColor(t)
+			} else {
+				c = col
+			}
+		}
+		fillRect(gtx.Ops, image.Rect(x0, yTop, x1, yBot), c)
 	}
 }
 

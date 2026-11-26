@@ -1592,8 +1592,9 @@ func (p *Player) pumpAnalyzer() {
 	p.mu.Lock()
 	dec := p.dec
 	p.mu.Unlock()
-	if dec == nil || !p.playing.Load() {
-		// nada tocando: alimenta silêncio p/ o espectro descer à base
+	if dec == nil || !p.playing.Load() || p.rb.Available() == 0 {
+		// nada tocando (ou buffer vazio): alimenta silêncio p/ o espectro
+		// descer à base — cobre também playing travado em true após stop
 		p.idleN++
 		if p.idleN == 1 {
 			p.waveMu.Lock()
