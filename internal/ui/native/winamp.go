@@ -178,20 +178,30 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 	if title == "" {
 		title = "sfrega"
 	}
+	// mede a largura real uma vez por título (evita intervalo morto no loop)
+	if title != ui.marqueeTitle {
+		ui.marqueeTitle = title
+		ui.marqueeW = ui.measureText(gtx, title)
+		ui.marqueeX = 0
+	}
 	viewW := 154
-	textW := len(title) * 5
-	if textW > viewW {
+	if ui.marqueeW > viewW {
 		ui.marqueeX--
-		if -ui.marqueeX > textW-viewW+30 {
-			ui.marqueeX = 0
+		// saiu totalmente pela esquerda → reaparece na direita e entra
+		// deslizando (loop contínuo, sem salto)
+		if ui.marqueeX <= -ui.marqueeW {
+			ui.marqueeX = viewW
 		}
 	} else {
 		ui.marqueeX = 0
 	}
 	cs := clip.Rect(R(111, 24, viewW, 12)).Push(gtx.Ops)
 	off := op.Offset(image.Pt(111+ui.marqueeX, 26)).Push(gtx.Ops)
+	// constraint largo p/ o Label não truncar títulos longos (o clip já corta)
+	gtxW := gtx
+	gtxW.Constraints = layout.Constraints{Max: image.Pt(8192, 8192)}
 	ui.shapeMu.Lock()
-	widget.Label{MaxLines: 1}.Layout(gtx, ui.shaper, ui.fontMono, unit.Sp(8), title, ui.txtMat(gtx, green))
+	widget.Label{MaxLines: 1}.Layout(gtxW, ui.shaper, ui.fontMono, unit.Sp(8), title, ui.txtMat(gtx, green))
 	ui.shapeMu.Unlock()
 	off.Pop()
 	cs.Pop()
@@ -207,6 +217,29 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 	if ui.p.Playing() {
 		ui.spr(gtx, "PLAYPAUS", R(39, 0, 3, 9), R(24, 28, 3, 9))
 	}
+}
+
+// measureText mede a largura real do texto na fonte do marquee,
+// renderizando num ops descartável (não aparece na tela).
+func (ui *uiState) measureText(gtx layout.Context, txt string) int {
+	ui.shapeMu.Lock()
+	defer ui.shapeMu.Unlock()
+	var mops op.Ops
+	mg := layout.Context{
+		Constraints: layout.Constraints{Max: image.Pt(8192, 8192)},
+		Metric:      gtx.Metric,
+		Now:         gtx.Now,
+		Locale:      gtx.Locale,
+		Values:      gtx.Values,
+		Source:      gtx.Source,
+		Ops:         &mops,
+	}
+	m := op.Record(mg.Ops)
+	paint.ColorOp{Color: color.NRGBA{A: 0xFF}}.Add(mg.Ops)
+	mat := m.Stop()
+	mat.Add(mg.Ops)
+	d := widget.Label{MaxLines: 1}.Layout(mg, ui.shaper, ui.fontMono, unit.Sp(8), txt, mat)
+	return d.Size.X
 }
 
 // txtMat retorna a matriz de material com cor para texto.

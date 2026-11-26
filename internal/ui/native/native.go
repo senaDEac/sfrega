@@ -195,6 +195,8 @@ type uiState struct {
 
 	shuffle, repeat bool
 	marqueeX        int
+	marqueeTitle    string
+	marqueeW        int // largura real do título (medida via shaper)
 	lastTick        time.Time
 
 	// variante do analisador de espectro (~/.local/share/sfrega/spectrum)
