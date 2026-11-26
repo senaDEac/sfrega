@@ -111,18 +111,18 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 		ui.eject()
 	}
 
-	// ---- VU spectrum (placeholder: retângulo preto) ----
-	fillRect(gtx.Ops, R(151, 5, 32, 8), color.NRGBA{A: 0xFF})
+	// ---- VU spectrum: do fim do eject (+2px) até o volume, altura quase total ----
+	ui.spectrumDraw(gtx, R(149, 1, 36, 16))
 
 	// ---- volume (mini slider) ----
-	volR := R(186, 6, 28, 6)
+	volR := R(187, 6, 28, 6)
 	fillRect(gtx.Ops, volR, color.NRGBA{R: 0x18, G: 0x1C, B: 0x28, A: 0xFF})
 	vw := int(ui.volDrag.val * 28)
 	if vw > 0 {
 		fillRect(gtx.Ops, image.Rect(volR.Min.X, volR.Min.Y, volR.Min.X+vw, volR.Max.Y),
 			color.NRGBA{R: 0x5E, G: 0xC8, B: 0x50, A: 0xFF})
 	}
-	ui.scrub(gtx, &ui.volDrag, R(186, 4, 28, 10))
+	ui.scrub(gtx, &ui.volDrag, R(187, 4, 28, 10))
 
 	// ---- EQ / PL ----
 	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(217, 4, 12, 10), ui.eqOpen,
