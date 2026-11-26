@@ -318,17 +318,31 @@ func (ui *uiState) plTopBar(gtx layout.Context, winW int, R func(int, int, int, 
 	}
 }
 
+// plBgColor retorna a cor de fundo da área da lista: o pixel (185,15) do
+// bitmap PLEDIT da skin; fallback para o preto original.
+func (ui *uiState) plBgColor() color.NRGBA {
+	if img := ui.skin.Load().Get("PLEDIT"); img != nil {
+		b := img.Bounds()
+		if b.Dx() > 185 && b.Dy() > 15 {
+			p := img.RGBAAt(b.Min.X+185, b.Min.Y+15)
+			return color.NRGBA{R: p.R, G: p.G, B: p.B, A: 0xFF}
+		}
+	}
+	return colPLBg
+}
+
 // plMiddle desenha a área da lista com tiles laterais.
 func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []string) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 	midH := botY - plTopH
+	plBg := ui.plBgColor()
 
 	// tiles laterais esticados
 	ui.spr(gtx, "PLEDIT", R(0, 42, 12, 29), R(0, plTopH, 12, midH))
 	ui.spr(gtx, "PLEDIT", R(31, 42, 20, 29), R(winW-20, plTopH, 20, midH))
 
 	// fundo preto do miolo inteiro (inclui a fileira dos botões GENEX)
-	fillRect(gtx.Ops, image.Rect(12, plTopH+1, winW-23, botY-3), colPLBg)
+	fillRect(gtx.Ops, image.Rect(12, plTopH, winW-20, botY), plBg)
 
 	// 6 botões GENEX abaixo da linha de título, com rótulos da skin GEN
 	gbtns := []*uibtn{&ui.btnPLG1, &ui.btnPLG2, &ui.btnPLG3,
@@ -343,6 +357,8 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 	for i, gb := range gbtns {
 		bx := 14 + i*47
 		dst := R(bx, plTopH+3, 45, 11)
+		// fundo branco; o sprite GENEX da skin fica por cima
+		fillRect(gtx.Ops, dst, color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF})
 		if ui.spriteBtn(gtx, gb, "GENEX", dst,
 			R(0, 0, 48, 16), R(0, 16, 48, 15)) {
 			if i == 0 { // GENRE: abre/fecha a lista de gêneros
@@ -489,7 +505,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			ui.plGenreScroll = 0
 		}
 		panel := image.Rect(12, areaTop, winW-23, areaTop+gH)
-		fillRect(gtx.Ops, panel, colPLBg)
+		fillRect(gtx.Ops, panel, plBg)
 		cs := clip.Rect(panel).Push(gtx.Ops)
 		// scroll via deslocamento de ry (sem op.Offset: quebrava a área de eventos)
 		ry := areaTop - int(ui.plGenreScroll)
@@ -584,7 +600,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		// scrollbar quando o conteúdo excede a área visível
 		if contentH > gH && gH > 0 {
 			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+gH-1)
-			fillRect(gtx.Ops, track, colPLBg)
+			fillRect(gtx.Ops, track, plBg)
 			thumbH := gH * gH / contentH
 			if thumbH < 12 {
 				thumbH = 12
@@ -653,7 +669,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			ui.plArtistScroll = 0
 		}
 		panel := image.Rect(12, areaTop, winW-23, areaTop+artistH)
-		fillRect(gtx.Ops, panel, colPLBg)
+		fillRect(gtx.Ops, panel, plBg)
 		cs := clip.Rect(panel).Push(gtx.Ops)
 		// scroll via deslocamento de ry (sem op.Offset: quebrava a área de eventos)
 		ry := areaTop - int(ui.plArtistScroll)
@@ -748,7 +764,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		// scrollbar quando o conteúdo excede a área visível
 		if contentH > artistH && artistH > 0 {
 			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+artistH-1)
-			fillRect(gtx.Ops, track, colPLBg)
+			fillRect(gtx.Ops, track, plBg)
 			thumbH := artistH * artistH / contentH
 			if thumbH < 12 {
 				thumbH = 12
@@ -813,7 +829,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			ui.plFolderScroll = 0
 		}
 		panel := image.Rect(12, areaTop, winW-23, areaTop+folderH)
-		fillRect(gtx.Ops, panel, colPLBg)
+		fillRect(gtx.Ops, panel, plBg)
 		cs := clip.Rect(panel).Push(gtx.Ops)
 		// scroll via deslocamento de ry (sem op.Offset: quebrava a área de eventos)
 		ry := areaTop - int(ui.plFolderScroll)
@@ -905,7 +921,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		}
 		if contentH > folderH && folderH > 0 {
 			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+folderH-1)
-			fillRect(gtx.Ops, track, colPLBg)
+			fillRect(gtx.Ops, track, plBg)
 			thumbH := folderH * folderH / contentH
 			if thumbH < 12 {
 				thumbH = 12
@@ -970,7 +986,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 			ui.plAlbumScroll = 0
 		}
 		panel := image.Rect(12, areaTop, winW-23, areaTop+albumH)
-		fillRect(gtx.Ops, panel, colPLBg)
+		fillRect(gtx.Ops, panel, plBg)
 		cs := clip.Rect(panel).Push(gtx.Ops)
 		ry := areaTop - int(ui.plAlbumScroll)
 		// roda primeiro (embaixo): se fosse por cima, engoliria os Press dos botões
@@ -1059,7 +1075,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 		}
 		if contentH > albumH && albumH > 0 {
 			track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+albumH-1)
-			fillRect(gtx.Ops, track, colPLBg)
+			fillRect(gtx.Ops, track, plBg)
 			thumbH := albumH * albumH / contentH
 			if thumbH < 12 {
 				thumbH = 12
@@ -1085,7 +1101,7 @@ func (ui *uiState) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []s
 
 	// fundo da lista
 	listR := image.Rect(12, plTopH+16+genreH+artistH, winW-23, botY-3)
-	fillRect(gtx.Ops, listR, colPLBg)
+	fillRect(gtx.Ops, listR, plBg)
 
 	ui.plWheel(gtx, listR)
 
