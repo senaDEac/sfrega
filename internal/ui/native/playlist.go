@@ -242,6 +242,7 @@ func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int
 	if ui.spriteBtn(gtx, &ui.btnPLSize, "TITLEBAR", R(winW-21, 4, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
 		if w := ui.plWin(); w != nil {
 			toggleWindowScale(&ui.plScale, w, ui.plWidth, ui.plHeight)
+			saveScale("plscale.txt", ui.plScale)
 		}
 	}
 	if ui.spriteBtn(gtx, &ui.btnPLClose, "TITLEBAR", R(winW-11, 4, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
@@ -310,6 +311,7 @@ func (ui *uiState) plTopBar(gtx layout.Context, winW int, R func(int, int, int, 
 	if ui.spriteBtn(gtx, &ui.btnPLSize, "TITLEBAR", R(winW-21, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
 		if w := ui.plWin(); w != nil {
 			toggleWindowScale(&ui.plScale, w, ui.plWidth, ui.plHeight)
+			saveScale("plscale.txt", ui.plScale)
 		}
 	}
 	if ui.spriteBtn(gtx, &ui.btnPLClose, "TITLEBAR", R(winW-11, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {

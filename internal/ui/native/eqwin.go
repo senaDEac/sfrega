@@ -59,12 +59,25 @@ func (ui *uiState) toggleEQ() {
 		w.Option(
 			app.Title("Equalizador"),
 			app.Decorated(false),
-			app.Size(unit.Dp(275), unit.Dp(116)),
+			app.Size(unit.Dp(275*max(1, ui.eqScale)), unit.Dp(116*max(1, ui.eqScale))),
 		)
 		ui.winEQ = w
 		ui.eqOpen = true
 		saveOpenWindows(true, ui.plOpen, ui.menuOpen)
 		go ui.eqLoop()
+		if loadEQShade() {
+			ui.shadeEQ.on = true
+			titleH := shadePx(ui.eqScale, 14)
+			fullH := 116 * max(1, ui.eqScale)
+			go func() {
+				for i := 0; i < 60; i++ {
+					time.Sleep(50 * time.Millisecond)
+					if wmShadeSet("Equalizador", titleH, fullH) {
+						return
+					}
+				}
+			}()
+		}
 		return
 	}
 	ui.eqOpen = false
@@ -194,6 +207,7 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 	if ui.spriteBtn(gtx, &ui.btnEQSize, "TITLEBAR", R(254, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
 		if w := ui.eqWin(); w != nil {
 			toggleWindowScale(&ui.eqScale, w, unit.Dp(275), unit.Dp(116))
+			saveScale("eqscale.txt", ui.eqScale)
 		}
 	}
 

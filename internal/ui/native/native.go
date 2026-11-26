@@ -238,9 +238,9 @@ func configPath(name string) string {
 	return filepath.Join(home, ".local", "share", "sfrega", "configs", name)
 }
 
-// loadMainScale lê a escala persistida da janela principal (1 ou 2).
-func loadMainScale() int {
-	b, err := os.ReadFile(configPath("scale.txt"))
+// loadScale lê a escala persistida de uma janela (1 ou 2).
+func loadScale(file string) int {
+	b, err := os.ReadFile(configPath(file))
 	if err != nil {
 		return 1
 	}
@@ -251,12 +251,15 @@ func loadMainScale() int {
 	return s
 }
 
-// saveMainScale grava a escala da janela principal para a próxima sessão.
-func saveMainScale(s int) {
-	p := configPath("scale.txt")
+// saveScale grava a escala de uma janela para a próxima sessão.
+func saveScale(file string, s int) {
+	p := configPath(file)
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	_ = os.WriteFile(p, []byte(strconv.Itoa(s)+"\n"), 0o644)
 }
+
+func loadMainScale() int  { return loadScale("scale.txt") }
+func saveMainScale(s int) { saveScale("scale.txt", s) }
 
 // loadShade lê se a janela principal deve abrir em modo shade.
 func loadShade() bool {
@@ -284,6 +287,23 @@ func loadPLShade() bool {
 // savePLShade grava o estado shade da janela Playlist.
 func savePLShade(on bool) {
 	p := configPath("plshade.txt")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
+// loadEQShade lê se a janela EQ deve abrir em modo shade.
+func loadEQShade() bool {
+	b, err := os.ReadFile(configPath("eqshade.txt"))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveEQShade grava o estado shade da janela EQ.
+func saveEQShade(on bool) {
+	p := configPath("eqshade.txt")
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	v := "0\n"
 	if on {
@@ -859,8 +879,11 @@ func Run(p *player.Player) error {
 	ui.ontopDone = map[string]bool{}
 	ui.volDrag.commit = func(v float32) { p.SetVolume(v) }
 	ui.eqOn = true
-	ui.mainScale, ui.eqScale, ui.plScale = loadMainScale(), 1, 1
+	ui.mainScale = loadMainScale()
+	ui.eqScale = loadScale("eqscale.txt")
+	ui.plScale = loadScale("plscale.txt")
 	ui.shadePL.onChange = func(on bool) { savePLShade(on) }
+	ui.shadeEQ.onChange = func(on bool) { saveEQShade(on) }
 	ui.plWidth, ui.plHeight = unit.Dp(340), unit.Dp(240)
 	ui.plSizeW, ui.plSizeH = loadPLSize()
 	if ui.plSizeW > 0 && ui.plSizeH > 0 {
