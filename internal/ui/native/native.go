@@ -455,6 +455,23 @@ func saveGenSel(i int) {
 	_ = os.WriteFile(p, []byte(strconv.Itoa(i)), 0o644)
 }
 
+// loadFlag lê uma flag booleana persistida ("1" = true).
+func loadFlag(file string) bool {
+	b, err := os.ReadFile(configPath(file))
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
+// saveFlag grava uma flag booleana para a próxima sessão.
+func saveFlag(file string, on bool) {
+	p := configPath(file)
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	v := "0\n"
+	if on {
+		v = "1\n"
+	}
+	_ = os.WriteFile(p, []byte(v), 0o644)
+}
+
 // loadOntop lê se a janela principal deve abrir sempre no topo.
 func loadOntop() bool {
 	b, err := os.ReadFile(configPath("ontop.txt"))
@@ -875,7 +892,11 @@ func Run(p *player.Player) error {
 		plFolderExpand: loadExpand("folderexp.txt"),
 		plAlbumExpand:  loadExpand("albumexp.txt"),
 		plGenSel:       loadGenSel(),
+		shuffle:        loadFlag("shuffle.txt"),
+		repeat:         loadFlag("repeat.txt"),
 	}
+	p.SetShuffle(ui.shuffle)
+	p.SetRepeat(ui.repeat)
 	ui.volDrag.val = 1.0
 	ui.skin.Store(skin)
 	if sel := loadSkinSel(); sel != "" {

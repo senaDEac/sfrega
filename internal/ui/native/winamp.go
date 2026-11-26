@@ -398,10 +398,10 @@ func (ui *uiState) shuffleRepeat(gtx layout.Context, R func(int, int, int, int) 
 	// repeat em x=0 (28px), shuffle em x=28 (47px); y: 0 norm,15 pressed,30 sel,45 sel+pressed
 	if ui.eqplBtn(gtx, &ui.btnShuf, "SHUFREP", R(211, 79, 28, 15), ui.repeat,
 		R(0, 0, 28, 15), R(0, 15, 28, 15), R(0, 30, 28, 15), R(0, 45, 28, 15),
-		func() { ui.repeat = !ui.repeat; ui.p.SetRepeat(ui.repeat) }) {
+		func() { ui.repeat = !ui.repeat; ui.p.SetRepeat(ui.repeat); saveFlag("repeat.txt", ui.repeat) }) {
 	}
 	if ui.eqplBtn(gtx, &ui.btnRep, "SHUFREP", R(164, 79, 47, 15), ui.shuffle,
 		R(28, 0, 47, 15), R(28, 15, 47, 15), R(28, 30, 47, 15), R(28, 45, 47, 15),
-		func() { ui.shuffle = !ui.shuffle; ui.p.SetShuffle(ui.shuffle) }) {
+		func() { ui.shuffle = !ui.shuffle; ui.p.SetShuffle(ui.shuffle); saveFlag("shuffle.txt", ui.shuffle) }) {
 	}
 }
