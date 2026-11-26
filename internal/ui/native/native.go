@@ -1519,7 +1519,11 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 		if spec != nil && spec.Segments > 0 {
 			ui.specSegments(gtx, x0, x1, spec, r, dir, mid, h, v, col)
 		} else if bar.Dy() > 0 {
-			fillRect(gtx.Ops, bar, col)
+			if spec != nil && spec.Palette == "fire" {
+				ui.fillFireBar(gtx, bar, r, dir, mid, h)
+			} else {
+				fillRect(gtx.Ops, bar, col)
+			}
 		}
 		// capa de pico branca, exatamente 1px, na posição atrasada
 		if peakOn && ui.specCap[i] > v+0.01 {
@@ -1691,7 +1695,34 @@ func vuColor(t float32) color.NRGBA {
 	}
 }
 
-// fireColor mapeia nível 0..1 para a paleta de chama (vermelho->laranja->amarelo->claro).
+// fillFireBar desenha a barra em fatias de ~2px com cor de fogo pela
+// posição no painel: base amarelo vivo -> meio laranja -> topo vermelho.
+func (ui *uiState) fillFireBar(gtx layout.Context, bar image.Rectangle,
+	r image.Rectangle, dir string, mid, h float32) {
+	for y := bar.Min.Y; y < bar.Max.Y; y += 2 {
+		y2 := y + 2
+		if y2 > bar.Max.Y {
+			y2 = bar.Max.Y
+		}
+		yc := (float32(y) + float32(y2)) / 2
+		var t float32
+		switch dir {
+		case "down":
+			t = (yc - float32(r.Min.Y)) / h
+		case "center":
+			t = (yc - mid) / (h / 2)
+			if t < 0 {
+				t = -t
+			}
+		default:
+			t = (float32(r.Max.Y) - yc) / h
+		}
+		fillRect(gtx.Ops, image.Rect(bar.Min.X, y, bar.Max.X, y2), fireColor(t))
+	}
+}
+
+// fireColor mapeia posição 0..1 no painel p/ a paleta de chama
+// (base amarelo vivo -> meio laranja -> topo vermelho vivo).
 func fireColor(t float32) color.NRGBA {
 	if t < 0 {
 		t = 0
@@ -1703,9 +1734,10 @@ func fireColor(t float32) color.NRGBA {
 		t float32
 		c color.NRGBA
 	}{
-		{0.0, color.NRGBA{R: 0xFF, G: 0xCC, B: 0x00, A: 0xFF}},
-		{0.45, color.NRGBA{R: 0xFF, G: 0x66, B: 0x00, A: 0xFF}},
-		{0.8, color.NRGBA{R: 0xFF, G: 0x22, B: 0x00, A: 0xFF}},
+		{0.0, color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}},
+		{0.05, color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}},
+		{0.2, color.NRGBA{R: 0xFF, G: 0xDD, B: 0x00, A: 0xFF}},
+		{0.4, color.NRGBA{R: 0xFF, G: 0x88, B: 0x00, A: 0xFF}},
 		{1.0, color.NRGBA{R: 0xFF, G: 0x00, B: 0x00, A: 0xFF}},
 	}
 	for i := 1; i < len(stops); i++ {
