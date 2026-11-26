@@ -127,6 +127,8 @@ type Player struct {
 	preamp      atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
 	pan         atomic.Uint32 // float32 bits (-1 esquerda .. +1 direita)
 	decoded     atomic.Uint64 // frames decodificados totais da faixa
+	dualMono    atomic.Bool   // faixa com correlação L/R alta (mono/dual-mono)
+	kbpsCache   sync.Map      // path -> kbps estimado
 	durCache    sync.Map      // path -> uint64 frames totais (MP3 exige varredura)
 	done        chan struct{}
 	trackDone   chan struct{} // cancelado ao trocar de faixa
@@ -1075,6 +1077,47 @@ func (p *Player) Channels() uint32 {
 	return p.dec.Channels()
 }
 
+// Mono reporta se a faixa atual é essencialmente mono (canais L/R
+// correlacionados — dual-mono ou mistura quase mono).
+func (p *Player) Mono() bool { return p.dualMono.Load() }
+
+// SampleRate retorna a taxa de amostragem da faixa atual (0 se nenhuma).
+func (p *Player) SampleRate() uint32 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.dec == nil {
+		return 0
+	}
+	return p.dec.SampleRate()
+}
+
+// BitrateKbps estima o bitrate médio da faixa atual (tamanho/duração).
+// Retorna 0 enquanto a duração ainda não foi calculada.
+func (p *Player) BitrateKbps() int {
+	p.mu.Lock()
+	if p.dec == nil || p.index < 0 || p.index >= len(p.tracks) {
+		p.mu.Unlock()
+		return 0
+	}
+	path := p.tracks[p.index]
+	rate := p.dec.SampleRate()
+	dur := p.durationFrames(path)
+	p.mu.Unlock()
+	if dur == 0 || rate == 0 {
+		return 0
+	}
+	if v, ok := p.kbpsCache.Load(path); ok {
+		return v.(int)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	kbps := int(float64(fi.Size()) * 8 / (float64(dur) / float64(rate)) / 1000)
+	p.kbpsCache.Store(path, kbps)
+	return kbps
+}
+
 // SeekFraction posiciona em fração 0..1 da duração.
 func (p *Player) SeekFraction(f float64) error {
 	if f < 0 {
@@ -1326,6 +1369,7 @@ func (p *Player) openCurrentLocked() error {
 	dev.SetPan(p.Balance())
 	p.dec = dec
 	p.dev = dev
+	p.dualMono.Store(false)
 	if !dev.Start() {
 		dec.Close()
 		dev.Close()
@@ -1389,6 +1433,8 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 	eq := p.eq.Load().(*eqState)
 	preamp := p.Preamp()
 	shufCounted := false
+	// correlação L/R acumulada p/ detectar faixa essencialmente mono
+	var cN, cSl, cSr, cSll, cSrr, cSlr float64
 	for {
 		select {
 		case <-p.done:
@@ -1409,6 +1455,25 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 		}
 		samples := int(frames) * int(channels)
 		chunk := chBuf[:samples]
+		if channels == 2 {
+			for i := 0; i+1 < samples; i += 2 {
+				l, r := float64(chunk[i]), float64(chunk[i+1])
+				if l*l+r*r < 1e-6 { // ignora silêncio (não infla correlação)
+					continue
+				}
+				cN++
+				cSl += l
+				cSr += r
+				cSll += l * l
+				cSrr += r * r
+				cSlr += l * r
+			}
+			if cN > 4096 {
+				num := cSlr - cSl*cSr/cN
+				den := math.Sqrt((cSll - cSl*cSl/cN) * (cSrr - cSr*cSr/cN))
+				p.dualMono.Store(den > 0 && num/den > 0.95)
+			}
+		}
 		// EQ + preamp (recarrega estado a cada chunk p/ sliders ao vivo)
 		if eq2, ok := p.eq.Load().(*eqState); ok && eq2 != eq {
 			eq = eq2

@@ -1,6 +1,7 @@
 package native
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 
@@ -215,11 +216,43 @@ func (ui *uiState) txtMat(gtx layout.Context, c color.NRGBA) op.CallOp {
 	return m.Stop()
 }
 
-// infoRight desenha indicador stereo.
+// infoRight desenha indicador stereo/mono (aceso conforme os canais da faixa;
+// nada quando não há faixa carregada) + kbps/kHz à direita.
 func (ui *uiState) infoRight(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
-	stSrc := R(0, 12, 29, 12) // stereo sempre no estado desligado
-	ui.spr(gtx, "MONOSTER", stSrc, R(187, 41, 29, 12))
+	sr := ui.p.SampleRate()
+	if sr == 0 {
+		return // sem faixa carregada
+	}
+	if ui.p.Playing() {
+		ch := ui.p.Channels()
+		if ch == 2 && ui.p.Mono() {
+			ch = 1 // essencialmente mono (L/R correlacionados)
+		}
+		switch ch {
+		case 0:
+		default:
+			src := R(0, 0, 29, 12) // estéreo aceso
+			if ch == 1 {
+				src = R(29, 0, 29, 12) // mono aceso
+			}
+			ui.spr(gtx, "MONOSTER", src, R(187, 41, 29, 12))
+		}
+	}
+
+	// valores puros na caixa preta entre o espectro e o indicador
+	// (acima do volume): bitrate kbps + sample rate kHz
+	green := color.NRGBA{R: 0, G: 0xFF, B: 0, A: 0xFF}
+	khz := fmt.Sprintf("%.0f", float64(sr)/1000)
+	if kbps := ui.p.BitrateKbps(); kbps > 0 {
+		s := fmt.Sprintf("%d", kbps)
+		ui.textAt(gtx, ui.fontMono, unit.Sp(8), s, green, image.Pt(110, 41))
+		// kHz 10px à direita da posição original (após "kbps  ")
+		x := 110 + len(s)*5 + 30
+		ui.textAt(gtx, ui.fontMono, unit.Sp(8), khz, green, image.Pt(x, 41))
+	} else {
+		ui.textAt(gtx, ui.fontMono, unit.Sp(8), khz, green, image.Pt(140, 41))
+	}
 }
 
 // volBal desenha sliders de volume e balance com thumbs da skin.
