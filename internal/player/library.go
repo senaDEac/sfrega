@@ -10,10 +10,10 @@ import (
 
 // TrackMeta são os metadados persistidos de uma faixa.
 type TrackMeta struct {
-	Plays   int      `json:"plays"`
-	Rating  int      `json:"rating"` // 0..5
-	Tags    []string `json:"tags"`
-	Shuffle int      `json:"shuffle"` // plays >=15s no ciclo de shuffle atual
+	Plays    int      `json:"plays"`
+	Rating   int      `json:"rating"` // 0..5
+	Hashtags []string `json:"hashtags"`
+	Shuffle  int      `json:"shuffle"` // plays >=15s no ciclo de shuffle atual
 }
 
 // trackLibrary persiste metadados por caminho de faixa em JSON.
@@ -47,7 +47,7 @@ func (l *trackLibrary) ensure(path string) *TrackMeta {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Tags: randomTags()}
+		m = &TrackMeta{Hashtags: randomTags()}
 		l.meta[path] = m
 		l.dirty = true
 	}
@@ -60,7 +60,7 @@ func (l *trackLibrary) get(path string) *TrackMeta {
 	defer l.mu.Unlock()
 	if m, ok := l.meta[path]; ok {
 		cp := *m
-		cp.Tags = append([]string(nil), m.Tags...)
+		cp.Hashtags = append([]string(nil), m.Hashtags...)
 		return &cp
 	}
 	return nil
@@ -78,7 +78,7 @@ func (l *trackLibrary) setRating(path string, r int) {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Tags: randomTags()}
+		m = &TrackMeta{Hashtags: randomTags()}
 		l.meta[path] = m
 	}
 	m.Rating = r
@@ -91,7 +91,7 @@ func (l *trackLibrary) addPlay(path string) {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Tags: randomTags()}
+		m = &TrackMeta{Hashtags: randomTags()}
 		l.meta[path] = m
 	}
 	m.Plays++
@@ -114,7 +114,7 @@ func (l *trackLibrary) addShuffle(path string) {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Tags: randomTags()}
+		m = &TrackMeta{Hashtags: randomTags()}
 		l.meta[path] = m
 	}
 	m.Shuffle++
@@ -131,6 +131,39 @@ func (l *trackLibrary) resetShuffle(path string) {
 	}
 	m.Shuffle = 0
 	l.dirty = true
+}
+
+// resetAllShuffle zera o contador de shuffle de todas as faixas.
+func (l *trackLibrary) resetAllShuffle() {
+	l.mu.Lock()
+	for _, m := range l.meta {
+		m.Shuffle = 0
+	}
+	l.dirty = true
+	l.mu.Unlock()
+	l.flush()
+}
+
+// resetAllPlays zera o contador de plays de todas as faixas.
+func (l *trackLibrary) resetAllPlays() {
+	l.mu.Lock()
+	for _, m := range l.meta {
+		m.Plays = 0
+	}
+	l.dirty = true
+	l.mu.Unlock()
+	l.flush()
+}
+
+// resetAllTags remove as hashtags de todas as faixas.
+func (l *trackLibrary) resetAllTags() {
+	l.mu.Lock()
+	for _, m := range l.meta {
+		m.Hashtags = nil
+	}
+	l.dirty = true
+	l.mu.Unlock()
+	l.flush()
 }
 
 // flush grava no disco se houver mudanças. Seguro chamar sempre.

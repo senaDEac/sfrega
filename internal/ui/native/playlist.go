@@ -1645,7 +1645,7 @@ func (ui *uiState) plRow(gtx layout.Context, i int, tracks []string, w int, orde
 		if m.Plays > 0 {
 			fmt.Fprintf(&sb, "x%d ", m.Plays)
 		}
-		for j, t := range m.Tags {
+		for j, t := range m.Hashtags {
 			if j == 2 {
 				break
 			}

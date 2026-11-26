@@ -40,7 +40,7 @@ import (
 // Paleta Winamp 2.x (skin clássica cinza).
 
 // ontopWinNames são as janelas que seguem o flag always-on-top.
-var ontopWinNames = []string{"sfrega", "Equalizador", "Playlist", "Menu"}
+var ontopWinNames = []string{"sfrega", "Equalizador", "Playlist", "Menu", "Confirmar"}
 
 var (
 	colWindowTop   = color.NRGBA{R: 0xC0, G: 0xC0, B: 0xC0, A: 0xFF}
@@ -81,13 +81,17 @@ type uiState struct {
 	fontMenuBold font.Font
 
 	// janelas
-	winMain  *app.Window
-	winEQ    *app.Window
-	winPL    *app.Window
-	winMenu  *app.Window
-	eqOpen   bool
-	plOpen   bool
-	menuOpen bool
+	winMain      *app.Window
+	winEQ        *app.Window
+	winPL        *app.Window
+	winMenu      *app.Window
+	winConfirm   *app.Window
+	eqOpen       bool
+	plOpen       bool
+	menuOpen     bool
+	confirmOpen  bool
+	confirmKind  int // 1 = shuffle, 2 = plays
+	confirmScale int
 
 	mainScale, eqScale, plScale int
 	plWidth, plHeight           unit.Dp
@@ -175,6 +179,7 @@ type uiState struct {
 	menuCfg      bool
 	menuLang     bool
 	menuSkins    bool
+	menuCnt      bool
 	menuAbout    bool
 	alwaysOnTop  bool
 	menuScale    int
@@ -183,6 +188,7 @@ type uiState struct {
 	menuBarGrab  float32
 	menuWheelTag event.Tag
 	menuBarTag   event.Tag
+	confirmBtns  [2]uibtn
 	ontopDone    map[string]bool
 
 	shuffle, repeat bool
@@ -545,7 +551,7 @@ func (ui *uiState) applySkin(code string) {
 		return true
 	})
 	ui.mu.Lock()
-	for _, w := range []*app.Window{ui.winMain, ui.winEQ, ui.winPL, ui.winMenu} {
+	for _, w := range []*app.Window{ui.winMain, ui.winEQ, ui.winPL, ui.winMenu, ui.winConfirm} {
 		if w != nil {
 			w.Invalidate()
 		}
@@ -916,6 +922,9 @@ func Run(p *player.Player) error {
 				}
 				if ui.winMenu != nil {
 					ui.winMenu.Invalidate()
+				}
+				if ui.winConfirm != nil {
+					ui.winConfirm.Invalidate()
 				}
 				ui.mu.Unlock()
 			}

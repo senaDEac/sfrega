@@ -122,6 +122,7 @@ func (ui *uiState) menuLoop() {
 			ui.menuCfg = false
 			ui.menuLang = false
 			ui.menuSkins = false
+			ui.menuCnt = false
 			ui.menuScroll = 0
 			return
 		case app.FrameEvent:
@@ -296,6 +297,16 @@ func (ui *uiState) menuRows() []mrow {
 					checked: code == curSkin,
 					act:     func() { ui.applySkin(code); saveSkinSel(code) }})
 			}
+		}
+		rows = append(rows, mrow{label: "Contadores", indent: 1, kind: 2,
+			act: func() { ui.menuCnt = !ui.menuCnt }})
+		if ui.menuCnt {
+			rows = append(rows, mrow{label: "Zerar contadores de shuffle", indent: 2,
+				act: func() { ui.openConfirm(1) }})
+			rows = append(rows, mrow{label: "Zerar vezes tocadas", indent: 2,
+				act: func() { ui.openConfirm(2) }})
+			rows = append(rows, mrow{label: "Zerar hashtags", indent: 2,
+				act: func() { ui.openConfirm(3) }})
 		}
 	}
 	rows = append(rows, mrow{label: language.T("menu.about"),

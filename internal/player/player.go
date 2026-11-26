@@ -101,8 +101,8 @@ type Player struct {
 	mu       sync.Mutex
 	tracks   []string
 	index    int
-	queue    []int // ordem de reprodução de um grupo (nil = playlist inteira)
-	qpos     int   // posição atual dentro de queue (-1 = sem fila)
+	queue    []int         // ordem de reprodução de um grupo (nil = playlist inteira)
+	qpos     int           // posição atual dentro de queue (-1 = sem fila)
 	listFile string        // playlist persistida em m3u ("" = desativado)
 	tagsFile string        // cache de tags persistido em tags.json
 	lib      *trackLibrary // metadados por faixa (plays/rating/tags)
@@ -111,29 +111,29 @@ type Player struct {
 	dev      *audio.Device
 	analyzer *spectrum.Analyzer
 
-	playing    atomic.Bool
-	repeat     atomic.Bool
-	shuffle    atomic.Bool
-	shufRemain []int // faixas restantes da lista ativa em ordem embaralhada
-	volume     atomic.Uint32 // float32 bits
-	eq         atomic.Value  // *eqState
-	preamp     atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
-	pan        atomic.Uint32 // float32 bits (-1 esquerda .. +1 direita)
-	decoded    atomic.Uint64 // frames decodificados totais da faixa
-	durCache   sync.Map      // path -> uint64 frames totais (MP3 exige varredura)
-	done       chan struct{}
-	trackDone  chan struct{} // cancelado ao trocar de faixa
-	events     chan Event
-	lastBands  atomic.Value // [spectrum.Bands]float32
-	tagMu      sync.Mutex
-	tagCache   map[string]tagInfo // cache de metadados de áudio por path
-	artDir     string             // diretório das capas extraídas (covers/)
-	coverMu    sync.Mutex
-	coverCache map[string]image.Image // thumbs por nome de capa
-	coverPend  map[string]bool        // decodes de thumb em andamento
-	genreMu    sync.Mutex
-	genresList []string // gêneros distintos (preenchido pelo warmTags)
-	artistMu   sync.Mutex
+	playing     atomic.Bool
+	repeat      atomic.Bool
+	shuffle     atomic.Bool
+	shufRemain  []int         // faixas restantes da lista ativa em ordem embaralhada
+	volume      atomic.Uint32 // float32 bits
+	eq          atomic.Value  // *eqState
+	preamp      atomic.Uint32 // float32 bits (ganho pré-EQ em dB, clamp ±12)
+	pan         atomic.Uint32 // float32 bits (-1 esquerda .. +1 direita)
+	decoded     atomic.Uint64 // frames decodificados totais da faixa
+	durCache    sync.Map      // path -> uint64 frames totais (MP3 exige varredura)
+	done        chan struct{}
+	trackDone   chan struct{} // cancelado ao trocar de faixa
+	events      chan Event
+	lastBands   atomic.Value // [spectrum.Bands]float32
+	tagMu       sync.Mutex
+	tagCache    map[string]tagInfo // cache de metadados de áudio por path
+	artDir      string             // diretório das capas extraídas (covers/)
+	coverMu     sync.Mutex
+	coverCache  map[string]image.Image // thumbs por nome de capa
+	coverPend   map[string]bool        // decodes de thumb em andamento
+	genreMu     sync.Mutex
+	genresList  []string // gêneros distintos (preenchido pelo warmTags)
+	artistMu    sync.Mutex
 	artistsList []string          // artistas distintos (preenchido pelo warmTags)
 	artistFirst map[string]string // artista → path da primeira ocorrência
 	artistCount map[string]int    // artista → total de faixas
@@ -792,6 +792,36 @@ func (p *Player) SetRating(path string, r int) {
 	}
 	lib.setRating(path, r)
 	lib.flush()
+}
+
+// ResetShuffleCounts zera o contador de shuffle de todas as faixas.
+func (p *Player) ResetShuffleCounts() {
+	p.mu.Lock()
+	lib := p.lib
+	p.mu.Unlock()
+	if lib != nil {
+		lib.resetAllShuffle()
+	}
+}
+
+// ResetPlayCounts zera o contador de plays de todas as faixas.
+func (p *Player) ResetPlayCounts() {
+	p.mu.Lock()
+	lib := p.lib
+	p.mu.Unlock()
+	if lib != nil {
+		lib.resetAllPlays()
+	}
+}
+
+// ResetTags remove as hashtags de todas as faixas.
+func (p *Player) ResetTags() {
+	p.mu.Lock()
+	lib := p.lib
+	p.mu.Unlock()
+	if lib != nil {
+		lib.resetAllTags()
+	}
 }
 
 func (p *Player) currentTitle() string {
