@@ -112,6 +112,13 @@ func (a *Analyzer) Feed(pcm []float32, channels int, sampleRate uint32) [Bands]f
 		if v < 0 {
 			v = 0
 		}
+		// atenua os graves: peso sobe de 0.55 (banda 0) a 1.0 (banda 12+);
+		// bandas 12-23 (região das barras 3-4 do VU-leds) com desconto leve
+		if b < 12 {
+			v *= float32(0.55 + 0.45*float64(b)/12)
+		} else if b < 24 {
+			v *= 0.9
+		}
 		// ataque rápido, decaimento mais lento (visual tipo webamp)
 		sm := float32(0.4)
 		if v < a.prev[b] {
