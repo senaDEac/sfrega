@@ -10,6 +10,8 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
+
+	"sfrega/internal/language"
 )
 
 // Janela de confirmação para ações destrutivas do menu Config>Contadores.
@@ -97,11 +99,11 @@ func (ui *uiState) layoutConfirm(gtx layout.Context) {
 	var msg string
 	switch ui.confirmKind {
 	case 1:
-		msg = "Zerar contadores de shuffle de todas as faixas?"
+		msg = language.T("confirm.reset_shuffle")
 	case 2:
-		msg = "Zerar vezes tocadas (plays) de todas as faixas?"
+		msg = language.T("confirm.reset_plays")
 	case 3:
-		msg = "Zerar hashtags (#) de todas as faixas?"
+		msg = language.T("confirm.reset_tags")
 	default:
 		msg = "?"
 	}
@@ -130,7 +132,7 @@ func (ui *uiState) layoutConfirm(gtx layout.Context) {
 				bg = colGreenD
 			}
 			fillRect(gtx.Ops, R(0, 0, 60, 20), bg)
-			ui.textAt(gtx, ui.fontMenuBold, unit.Sp(12), "Não", colBlk, image.Pt(23, 4))
+			ui.textAt(gtx, ui.fontMenuBold, unit.Sp(12), language.T("confirm.no"), colBlk, image.Pt(23, 4))
 		})
 	yes := ui.button(gtx, &ui.confirmBtns[1], R(130, 50, 60, 20),
 		func(gtx layout.Context, down bool) {
@@ -140,7 +142,7 @@ func (ui *uiState) layoutConfirm(gtx layout.Context) {
 				bg = colRedD
 			}
 			fillRect(gtx.Ops, R(0, 0, 60, 20), bg)
-			ui.textAt(gtx, ui.fontMenuBold, unit.Sp(12), "Sim", colBlk, image.Pt(23, 4))
+			ui.textAt(gtx, ui.fontMenuBold, unit.Sp(12), language.T("confirm.yes"), colBlk, image.Pt(23, 4))
 		})
 	if yes {
 		switch ui.confirmKind {

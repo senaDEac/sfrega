@@ -16,6 +16,8 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
+
+	"sfrega/internal/language"
 )
 
 // Coordenadas canônicas da skin base-2.91 (EQMAIN.png, 275x315 = folha de sprites;
@@ -194,7 +196,7 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 	ui.spr(gtx, "EQMAIN", R(0, 0, 275, 116), R(0, 0, 275, 116))
 
 	// título na barra superior
-	ui.textAt(gtx, ui.fontUI, unit.Sp(8), "Equalizer",
+	ui.textAt(gtx, ui.fontUI, unit.Sp(8), language.T("eq.title"),
 		color.NRGBA{R: 0xCC, G: 0xCC, B: 0xCC, A: 0xFF}, image.Pt(20, 4))
 
 	dragArea(gtx, R(16, 0, 44, 14))

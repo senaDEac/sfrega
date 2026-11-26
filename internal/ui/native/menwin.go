@@ -283,46 +283,46 @@ func (ui *uiState) menuRows() []mrow {
 					act:     func() { language.Set(code) }})
 			}
 		}
-		rows = append(rows, mrow{label: "Skins", indent: 1, kind: 2,
+		rows = append(rows, mrow{label: language.T("menu.skins"), indent: 1, kind: 2,
 			act: func() { ui.menuSkins = !ui.menuSkins }})
 		if ui.menuSkins {
 			curSkin := loadSkinSel()
 			if curSkin == "" {
 				curSkin = "padrao"
 			}
-			rows = append(rows, mrow{label: "padrão", indent: 2,
+			rows = append(rows, mrow{label: language.T("menu.default"), indent: 2,
 				checked: curSkin == "padrao",
 				act:     func() { ui.applySkin("padrao"); saveSkinSel("padrao") }})
 			for _, n := range skins.WszNames() {
 				code := n
-				rows = append(rows, mrow{label: n, indent: 2,
+				rows = append(rows, mrow{label: trMenuName("skin.", n), indent: 2,
 					checked: code == curSkin,
 					act:     func() { ui.applySkin(code); saveSkinSel(code) }})
 			}
 		}
-		rows = append(rows, mrow{label: "Contadores", indent: 1, kind: 2,
+		rows = append(rows, mrow{label: language.T("menu.counters"), indent: 1, kind: 2,
 			act: func() { ui.menuCnt = !ui.menuCnt }})
 		if ui.menuCnt {
-			rows = append(rows, mrow{label: "Zerar contadores de shuffle", indent: 2,
+			rows = append(rows, mrow{label: language.T("menu.counters.reset_shuffle"), indent: 2,
 				act: func() { ui.openConfirm(1) }})
-			rows = append(rows, mrow{label: "Zerar vezes tocadas", indent: 2,
+			rows = append(rows, mrow{label: language.T("menu.counters.reset_plays"), indent: 2,
 				act: func() { ui.openConfirm(2) }})
-			rows = append(rows, mrow{label: "Zerar hashtags", indent: 2,
+			rows = append(rows, mrow{label: language.T("menu.counters.reset_tags"), indent: 2,
 				act: func() { ui.openConfirm(3) }})
 		}
-		rows = append(rows, mrow{label: "Spectrum", indent: 1, kind: 2,
+		rows = append(rows, mrow{label: language.T("menu.spectrum"), indent: 1, kind: 2,
 			act: func() { ui.menuSpec = !ui.menuSpec }})
 		if ui.menuSpec {
 			cur := ui.specName
 			if cur == "" {
 				cur = "padrao"
 			}
-			rows = append(rows, mrow{label: "padrão", indent: 2,
+			rows = append(rows, mrow{label: language.T("menu.default"), indent: 2,
 				checked: cur == "padrao",
 				act:     func() { ui.applySpec("padrao"); saveSpecSel("padrao") }})
 			for _, n := range spectrum.SpecNames() {
 				code := n
-				rows = append(rows, mrow{label: n, indent: 2,
+				rows = append(rows, mrow{label: trMenuName("spec.", n), indent: 2,
 					checked: code == cur,
 					act:     func() { ui.applySpec(code); saveSpecSel(code) }})
 			}
@@ -333,6 +333,16 @@ func (ui *uiState) menuRows() []mrow {
 	rows = append(rows, mrow{label: language.T("about.close"),
 		act: func() { ui.closeMenu() }})
 	return rows
+}
+
+// trMenuName traduz um nome de variante (skin/espectro) pela chave
+// prefix+nome; sem tradução, mostra o nome original.
+func trMenuName(prefix, n string) string {
+	k := prefix + n
+	if t := language.T(k); t != k {
+		return t
+	}
+	return n
 }
 
 // menuDrawRow desenha uma linha do menu (item, separador ou pai).
