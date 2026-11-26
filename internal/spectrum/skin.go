@@ -53,6 +53,7 @@ type Spec struct {
 	Peak      bool
 	Fall      float64 // decaimento do pico por frame (0..1)
 	Segments  int     // segmentos por barra estilo VU LED (0 = barra sólida)
+	BarW      int     // espessura da barra em px, centrada no slot (0 = slot todo)
 	Palette   string  // "" | "vu" (verde/amarelo/vermelho por altura)
 	BgImg     image.Image
 	FG        color.NRGBA
@@ -70,6 +71,7 @@ type specJSON struct {
 	Peak        bool     `json:"peak"`
 	Fall        float64  `json:"fall"`
 	Segments    int      `json:"segments"`
+	BarW        int      `json:"width"`
 	Palette     string   `json:"palette"`
 	Bg          string   `json:"bg"`
 	FG          string   `json:"fg"`
@@ -115,6 +117,9 @@ func LoadSpec(name string) *Spec {
 	}
 	if j.Segments > 0 {
 		s.Segments = j.Segments
+	}
+	if j.BarW > 0 {
+		s.BarW = j.BarW
 	}
 	if j.Palette != "" {
 		s.Palette = j.Palette

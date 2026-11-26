@@ -1471,6 +1471,12 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 		if x1 <= x0 {
 			x1 = x0 + 1
 		}
+		// barra extrafina: largura fixa centrada no slot ("width" no config)
+		if spec != nil && spec.BarW > 0 {
+			cx := (x0 + x1) / 2
+			x0 = cx - spec.BarW/2
+			x1 = x0 + spec.BarW
+		}
 		if style == "line" {
 			linePts = append(linePts, pt{float32(x0+x1) / 2, specLevelY(dir, mid, h, v)})
 			continue
@@ -1524,6 +1530,8 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 }
 
 // scopeDraw desenha a forma de onda do áudio reproduzido (estilo osciloscópio).
+// Renderiza min/max por coluna de pixels — cada faixa vertical mostra o
+// envelope da onda, como num osciloscópio real (sem empilhar amostras).
 func (ui *uiState) scopeDraw(gtx layout.Context, r image.Rectangle, spec *spectrum.Spec) {
 	wave := ui.p.Wave()
 	if len(wave) < 2 {
@@ -1531,30 +1539,42 @@ func (ui *uiState) scopeDraw(gtx layout.Context, r image.Rectangle, spec *spectr
 	}
 	mid := float32(r.Min.Y) + float32(r.Dy())/2
 	amp := float32(r.Dy()) * 0.45
-	path := clip.Path{}
-	path.Begin(gtx.Ops)
-	for i, s := range wave {
-		if s > 1 {
-			s = 1
-		}
-		if s < -1 {
-			s = -1
-		}
-		x := float32(r.Min.X) + float32(i)*(float32(r.Dx()-1)/float32(len(wave)-1))
-		y := mid - s*amp
-		if i == 0 {
-			path.MoveTo(f32.Pt(x, y))
-		} else {
-			path.LineTo(f32.Pt(x, y))
-		}
-	}
 	lc := color.NRGBA{R: 0x30, G: 0xFF, B: 0x50, A: 0xFF}
 	if spec.HasFG {
 		lc = spec.FG
 	} else if len(spec.Grad) > 0 {
 		lc = spec.Grad[0]
 	}
-	paint.FillShape(gtx.Ops, lc, clip.Stroke{Path: path.End(), Width: 1}.Op())
+	n := len(wave)
+	for cx := 0; cx < r.Dx(); cx++ {
+		lo := cx * n / r.Dx()
+		hi := (cx + 1) * n / r.Dx()
+		if hi <= lo {
+			hi = lo + 1
+		}
+		mn, mx := float32(1), float32(-1)
+		for i := lo; i < hi && i < n; i++ {
+			s := wave[i]
+			if s > 1 {
+				s = 1
+			}
+			if s < -1 {
+				s = -1
+			}
+			if s < mn {
+				mn = s
+			}
+			if s > mx {
+				mx = s
+			}
+		}
+		y0 := int(mid - mx*amp)
+		y1 := int(mid - mn*amp)
+		if y1 <= y0 {
+			y1 = y0 + 1
+		}
+		fillRect(gtx.Ops, image.Rect(r.Min.X+cx, y0, r.Min.X+cx+1, y1), lc)
+	}
 }
 
 // specSegments desenha a barra em segmentos com vão de 1px (estilo VU LED).
@@ -1663,7 +1683,7 @@ func specLevelY(dir string, mid, h, v float32) float32 {
 	case "down":
 		return mid - h/2 + v*h*1.2
 	case "center":
-		return mid - v*h*0.6
+		return mid + (0.5-v)*h*0.9
 	default:
 		return mid + h/2 - v*h*1.2
 	}
