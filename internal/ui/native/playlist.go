@@ -206,11 +206,8 @@ func (ui *uiState) layoutPL(gtx layout.Context) {
 // do player (18px), começando com a decoração/título "Playlist".
 func (ui *uiState) plShadeBar(gtx layout.Context, winW int, R func(int, int, int, int) image.Rectangle) {
 	bar := R(0, 0, winW, 18)
-	fillRect(gtx.Ops, bar, color.NRGBA{R: 0x2D, G: 0x32, B: 0x42, A: 0xFF})
-	fillRect(gtx.Ops, image.Rect(bar.Min.X, bar.Min.Y, bar.Max.X, bar.Min.Y+1),
-		color.NRGBA{R: 0x5A, G: 0x62, B: 0x78, A: 0xFF})
-	fillRect(gtx.Ops, image.Rect(bar.Min.X, bar.Max.Y-1, bar.Max.X, bar.Max.Y),
-		color.NRGBA{R: 0x14, G: 0x17, B: 0x22, A: 0xFF})
+	// fundo: região PLEDIT (179,1)-(204,38) esticada até o fim da barra
+	ui.sprFit(gtx, "PLEDIT", image.Rect(179, 1, 204, 38), bar)
 
 	// decoração PLEDIT (0,0-15,15) + nome "Playlist" (75,0-122,15) em sequência
 	ui.sprFit(gtx, "PLEDIT", image.Rect(0, 0, 16, 16), R(2, 1, 16, 16))
