@@ -100,7 +100,19 @@ func main() {
 					os.Exit(1)
 				}
 				if frac > 0 {
-					_ = p.SeekFraction(frac)
+					// a duração é calculada em background; tenta o seek
+					// até o cache ficar pronto (senão a posição se perde)
+					go func() {
+						for try := 0; try < 150; try++ {
+							if p.Index() != i {
+								return // usuário trocou de faixa
+							}
+							if p.SeekFraction(frac) == nil {
+								return
+							}
+							time.Sleep(100 * time.Millisecond)
+						}
+					}()
 				}
 				found = true
 				break

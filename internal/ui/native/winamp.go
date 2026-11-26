@@ -53,7 +53,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	ui.spr(gtx, "TITLEBAR", R(304, 22, 8, 8), R(10, 44, 8, 8))
 
 	ui.lcdContent(gtx)
-	ui.spectrumDraw(gtx, R(12, 40, 92, 21))
+	ui.spectrumDraw(gtx, R(22, 39, 82, 22))
 	ui.infoRight(gtx)
 	ui.volBal(gtx, R)
 	ui.eqplBtns(gtx, R)

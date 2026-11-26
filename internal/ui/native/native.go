@@ -1414,9 +1414,8 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 	spec := ui.spec
 	if spec != nil && spec.BgImg != nil {
 		blit(gtx, spec.BgImg, r)
-	} else {
-		fillRect(gtx.Ops, r, color.NRGBA{A: 0xFF})
 	}
+	// sem fundo: a área fica transparente (mostra o que estiver atrás)
 	if spec != nil && spec.Style == "scope" {
 		ui.scopeDraw(gtx, r, spec)
 		return
