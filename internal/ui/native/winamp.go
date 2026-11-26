@@ -26,7 +26,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 		return
 	}
 
-	ui.spr(gtx, "MAIN", R(0, 0, 275, 116), R(0, 0, 275, 116))
+	ui.spr(gtx, "MAIN", R(0, 0, 275, 107), R(0, 0, 275, 107))
 
 	// ---- titlebar ----
 	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, 222, 11)) // contend
@@ -39,7 +39,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 		minimizeWindow(ui.winMain)
 	}
 	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(254, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
-		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), unit.Dp(116))
+		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), unit.Dp(107))
 		saveMainScale(ui.mainScale)
 	}
 	if ui.spriteBtn(gtx, &ui.btnClose, "TITLEBAR", R(264, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
@@ -132,13 +132,13 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	// ---- 2x/1x (mesmo sprite do botão size da titlebar) ----
 	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(247, 3, 12, 12),
 		R(0, 18, 9, 9), R(9, 18, 9, 9)) {
-		h := unit.Dp(116)
+		h := unit.Dp(107)
 		if ui.shadeMain.on {
 			h = unit.Dp(18)
 		}
 		toggleWindowScale(&ui.mainScale, ui.winMain, unit.Dp(275), h)
 		saveMainScale(ui.mainScale)
-		wmShadeFull("sfrega", shadePx(ui.mainScale, 116))
+		wmShadeFull("sfrega", shadePx(ui.mainScale, 107))
 	}
 
 	// ---- fechar ----
@@ -361,8 +361,8 @@ func (ui *uiState) posBar(gtx layout.Context, R func(int, int, int, int) image.R
 		ui.posDrag.val = float32(frac)
 	}
 	tx := 16 + int(float32(ui.posDrag.val)*219)
-	ui.spr(gtx, "POSBAR", R(248, 0, 29, 10), R(tx, 73, 29, 10))
-	ui.scrub(gtx, &ui.posDrag, R(16, 64, 248, 20))
+	ui.spr(gtx, "POSBAR", R(248, 0, 29, 10), R(tx, 64, 29, 10))
+	ui.scrub(gtx, &ui.posDrag, R(16, 64, 248, 12))
 }
 
 // transport desenha prev/play/pause/stop/next/eject (CBUTTONS.png).
@@ -382,12 +382,12 @@ func (ui *uiState) transport(gtx layout.Context, R func(int, int, int, int) imag
 		{&ui.btnNext, 108, 92, 22, func() { ui.p.Next(); ui.p.Play() }},
 	}
 	for _, b := range btns {
-		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 88, b.w, 18),
+		if ui.spriteBtn(gtx, b.b, "CBUTTONS", R(b.x, 79, b.w, 18),
 			R(b.col, 0, b.w, 18), R(b.col, 18, b.w, 18)) {
 			b.fn()
 		}
 	}
-	if ui.spriteBtn(gtx, &ui.btnEject, "CBUTTONS", R(136, 89, 22, 16),
+	if ui.spriteBtn(gtx, &ui.btnEject, "CBUTTONS", R(136, 80, 22, 16),
 		R(114, 0, 22, 16), R(114, 16, 22, 16)) {
 		ui.eject()
 	}
@@ -396,11 +396,11 @@ func (ui *uiState) transport(gtx layout.Context, R func(int, int, int, int) imag
 // shuffleRepeat desenha botões repeat/shuffle (SHUFREP.png).
 func (ui *uiState) shuffleRepeat(gtx layout.Context, R func(int, int, int, int) image.Rectangle) {
 	// repeat em x=0 (28px), shuffle em x=28 (47px); y: 0 norm,15 pressed,30 sel,45 sel+pressed
-	if ui.eqplBtn(gtx, &ui.btnShuf, "SHUFREP", R(164, 88, 28, 15), ui.repeat,
+	if ui.eqplBtn(gtx, &ui.btnShuf, "SHUFREP", R(211, 79, 28, 15), ui.repeat,
 		R(0, 0, 28, 15), R(0, 15, 28, 15), R(0, 30, 28, 15), R(0, 45, 28, 15),
 		func() { ui.repeat = !ui.repeat; ui.p.SetRepeat(ui.repeat) }) {
 	}
-	if ui.eqplBtn(gtx, &ui.btnRep, "SHUFREP", R(192, 88, 47, 15), ui.shuffle,
+	if ui.eqplBtn(gtx, &ui.btnRep, "SHUFREP", R(164, 79, 47, 15), ui.shuffle,
 		R(28, 0, 47, 15), R(28, 15, 47, 15), R(28, 30, 47, 15), R(28, 45, 47, 15),
 		func() { ui.shuffle = !ui.shuffle; ui.p.SetShuffle(ui.shuffle) }) {
 	}

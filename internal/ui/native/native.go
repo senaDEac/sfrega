@@ -911,7 +911,7 @@ func Run(p *player.Player) error {
 	ui.winMain.Option(
 		app.Title("sfrega"),
 		app.Decorated(false),
-		app.Size(unit.Dp(275*ui.mainScale), unit.Dp(116*ui.mainScale)),
+		app.Size(unit.Dp(275*ui.mainScale), unit.Dp(107*ui.mainScale)),
 	)
 
 	// restaura estado shade persistido
@@ -931,7 +931,7 @@ func Run(p *player.Player) error {
 			wmNoDecorations()
 			wmRestoreGeometry()
 			if shadePending && wmShadeSet("sfrega",
-				shadePx(ui.mainScale, 18), shadePx(ui.mainScale, 116)) {
+				shadePx(ui.mainScale, 18), shadePx(ui.mainScale, 107)) {
 				shadePending = false
 			}
 			if ontopPending && ontopTicks < 40 {
@@ -1009,7 +1009,7 @@ func Run(p *player.Player) error {
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
-			gtx = beginScaledFrame(gtx, ui.mainScale, image.Pt(275, 116))
+			gtx = beginScaledFrame(gtx, ui.mainScale, image.Pt(275, 107))
 			ui.layoutMain(gtx)
 			e.Frame(gtx.Ops)
 		}

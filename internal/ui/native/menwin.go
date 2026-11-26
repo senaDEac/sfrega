@@ -141,11 +141,11 @@ func (ui *uiState) menuLoop() {
 func (ui *uiState) layoutMenu(gtx layout.Context) {
 	R := func(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+w, y+h) }
 
-	ui.spr(gtx, "MAIN", R(0, 0, 275, 116), R(0, 0, 275, 116))
+	ui.spr(gtx, "MAIN", R(0, 0, 275, 107), R(0, 0, 275, 107))
 	// altura dobrada: estende laterais e base com as bordas do MAIN
-	ui.spr(gtx, "MAIN", R(0, 0, 2, 116), R(0, 116, 2, 116))
-	ui.spr(gtx, "MAIN", R(273, 0, 2, 116), R(273, 116, 2, 116))
-	ui.spr(gtx, "MAIN", R(0, 106, 275, 10), R(0, 222, 275, 10))
+	ui.spr(gtx, "MAIN", R(0, 0, 2, 107), R(0, 107, 2, 125))
+	ui.spr(gtx, "MAIN", R(273, 0, 2, 107), R(273, 107, 2, 125))
+	ui.spr(gtx, "MAIN", R(0, 97, 275, 10), R(0, 222, 275, 10))
 	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, 222, 11))
 	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))
 
