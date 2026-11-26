@@ -52,6 +52,7 @@ type Spec struct {
 	Gain      float64
 	Peak      bool
 	Fall      float64 // decaimento do pico por frame (0..1)
+	Segments  int     // segmentos por barra estilo VU LED (0 = barra sólida)
 	BgImg     image.Image
 	FG        color.NRGBA
 	HasFG     bool
@@ -67,6 +68,7 @@ type specJSON struct {
 	Gain        float64  `json:"gain"`
 	Peak        bool     `json:"peak"`
 	Fall        float64  `json:"fall"`
+	Segments    int      `json:"segments"`
 	Bg          string   `json:"bg"`
 	FG          string   `json:"fg"`
 	Gradient    []string `json:"gradient"`
@@ -108,6 +110,9 @@ func LoadSpec(name string) *Spec {
 	s.Peak = j.Peak
 	if j.Fall > 0 && j.Fall < 1 {
 		s.Fall = j.Fall
+	}
+	if j.Segments > 0 {
+		s.Segments = j.Segments
 	}
 	if c, ok := parseHex(j.FG); ok {
 		s.FG, s.HasFG = c, true

@@ -1482,7 +1482,11 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 			bar = image.Rect(x0, r.Max.Y-int(bh), x1, r.Max.Y)
 		}
 		if bar.Dy() > 0 {
-			fillRect(gtx.Ops, bar, col)
+			if spec != nil && spec.Segments > 0 {
+				ui.specSegments(gtx, bar, x0, x1, spec.Segments, h, col)
+			} else {
+				fillRect(gtx.Ops, bar, col)
+			}
 		}
 		// capa de pico branca, exatamente 1px, na posição atrasada
 		if peakOn && ui.specCap[i] > v+0.01 {
@@ -1512,6 +1516,24 @@ func (ui *uiState) spectrumDraw(gtx layout.Context, r image.Rectangle) {
 			lc = spec.Grad[0]
 		}
 		paint.FillShape(gtx.Ops, lc, clip.Stroke{Path: path.End(), Width: 1}.Op())
+	}
+}
+
+// specSegments desenha a barra em segmentos com vão de 1px (estilo VU LED).
+func (ui *uiState) specSegments(gtx layout.Context, bar image.Rectangle, x0, x1, segs int, h float32, col color.NRGBA) {
+	segH := h / float32(segs)
+	if segH < 2 {
+		segH = 2
+	}
+	for sy := float32(bar.Min.Y); sy < float32(bar.Max.Y); sy += segH {
+		ey := sy + segH - 1
+		if ey > float32(bar.Max.Y) {
+			ey = float32(bar.Max.Y)
+		}
+		if ey-sy < 1 {
+			continue
+		}
+		fillRect(gtx.Ops, image.Rect(x0, int(sy), x1, int(ey)), col)
 	}
 }
 
