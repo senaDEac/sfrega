@@ -653,6 +653,13 @@ func (p *Player) resumePath() string {
 	return filepath.Join(filepath.Dir(p.listFile), "resume.txt")
 }
 
+// streamPath é onde o PlayStream grava a última estação tocada
+// (name<TAB>url). Qualquer reprodução de arquivo o remove — assim, no
+// boot, a existência do arquivo indica que a rádio foi a última a tocar.
+func (p *Player) streamPath() string {
+	return filepath.Join(filepath.Dir(p.listFile), "stream.txt")
+}
+
 // saveResume grava path + fração de posição da faixa atual.
 func (p *Player) saveResume() {
 	if p.listFile == "" || p.noPersist.Load() {
@@ -1457,6 +1464,10 @@ func (p *Player) closeTrackLocked() {
 }
 
 func (p *Player) openCurrentLocked() error {
+	// uma faixa de arquivo passou a tocar: a rádio não é mais a última
+	if p.listFile != "" {
+		_ = os.Remove(p.streamPath())
+	}
 	path := p.tracks[p.index]
 	dec, err := audio.OpenDecoder(path)
 	if err != nil {
@@ -1536,6 +1547,10 @@ func (p *Player) PlayStream(name, url string) error {
 	p.trackDone = make(chan struct{})
 	p.emit(Event{Kind: "track-change", Index: -1, Title: name})
 	go p.decodeLoop(dec, 44100, 2, p.trackDone, name, true)
+	// persiste p/ retomar no próximo boot (última coisa tocada = rádio)
+	if p.listFile != "" {
+		_ = os.WriteFile(p.streamPath(), []byte(name+"\t"+url), 0o644)
+	}
 	return nil
 }
 

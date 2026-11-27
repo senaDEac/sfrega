@@ -329,8 +329,18 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 	}
 	dark := color.NRGBA{R: 0x10, G: 0x10, B: 0x18, A: 0xFF}
 	genGreen := color.NRGBA{R: 0x80, G: 0x00, B: 0x20, A: 0xFF} // bordeaux
+	// janela Radio não tem pastas/artistas/álbuns: esconde esses botões
+	hidden := map[int]bool{}
+	if pl.key == "rd" {
+		hidden[2], hidden[3], hidden[4] = true, true, true
+	}
+	vi := 0
 	for i, gb := range gbtns {
-		bx := 14 + i*47
+		if hidden[i] {
+			continue
+		}
+		bx := 14 + vi*47
+		vi++
 		dst := R(bx, plTopH+3, 45, 11)
 		// fundo branco; o sprite GENEX da skin fica por cima
 		fillRect(gtx.Ops, dst, color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF})

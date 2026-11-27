@@ -84,7 +84,17 @@ func main() {
 	}
 	defer p.Close()
 	p.SetPlaylistFile(player.PlaylistFilePath())
-	if len(tracks) > 0 {
+	// stream.txt: a última coisa tocada foi uma rádio — retoma a estação
+	// e ignora o resume de faixa (que é mais antigo).
+	streamResumed := false
+	if b, err := os.ReadFile(filepath.Join(filepath.Dir(player.PlaylistFilePath()), "stream.txt")); err == nil {
+		if parts := strings.SplitN(strings.TrimSpace(string(b)), "\t", 2); len(parts) == 2 && parts[1] != "" {
+			if err := p.PlayStream(parts[0], parts[1]); err == nil {
+				streamResumed = true
+			}
+		}
+	}
+	if !streamResumed && len(tracks) > 0 {
 		// lê resume.txt ANTES do SetTracks: o emit de track-change
 		// sobrescreveria o arquivo com a faixa 0
 		var last, fracStr string
