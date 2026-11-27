@@ -5,6 +5,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gioui.org/app"
@@ -26,6 +27,7 @@ type plw struct {
 	jsonPath string
 
 	tracks []string // lista de faixas desta janela
+	dirs   []string // diretórios importados (re-varridos no Update lists)
 	meta   *plMeta  // índices (gêneros/artistas/álbuns/pastas) desta lista
 	dirty  bool     // tracks mudou; meta é recalculado no próximo frame
 
@@ -109,6 +111,7 @@ type plState struct {
 	Scale        int      `json:"scale"`
 	Shade        bool     `json:"shade"`
 	Tracks       []string `json:"tracks"`
+	Dirs         []string `json:"dirs"`
 	GenreOpen    bool     `json:"genreOpen"`
 	GenreSel     string   `json:"genreSel"`
 	GenreOn      bool     `json:"genreOn"`
@@ -154,6 +157,7 @@ func (ui *uiState) newPLW(name, key string) *plw {
 		pl.shadePL.on = loadPLShade()
 		pl.shadePL.onChange = func(on bool) { savePLShade(on) }
 		pl.tracks = ui.p.Tracks()
+		pl.dirs = loadDirList("pldirs.txt")
 	} else {
 		pl.jsonPath = configPath(key + ".json")
 		pl.plWidth, pl.plHeight = unit.Dp(340), unit.Dp(240)
@@ -335,6 +339,7 @@ func (pl *plw) saveJSON() {
 		Scale:        pl.plScale,
 		Shade:        pl.shadePL.on,
 		Tracks:       pl.tracks,
+		Dirs:         pl.dirs,
 		GenreOpen:    pl.plGenreOpen,
 		GenreSel:     pl.plGenreSel,
 		GenreOn:      pl.plGenreOn,
@@ -372,6 +377,7 @@ func (pl *plw) loadJSON() {
 	}
 	pl.shadePL.on = st.Shade
 	pl.tracks = st.Tracks
+	pl.dirs = st.Dirs
 	pl.plGenreOpen = st.GenreOpen
 	pl.plGenreSel = st.GenreSel
 	pl.plGenreOn = st.GenreOn
@@ -529,6 +535,67 @@ func (pl *plw) persist() {
 	pl.saveJSON()
 	if pl.key == "pl" {
 		pl.ui.p.SavePlaylistFile(pl.tracks)
+		pl.saveDirsFile()
+	}
+}
+
+// ---- diretórios importados (Update lists) ----
+
+// loadDirList lê um arquivo texto com um diretório por linha.
+func loadDirList(file string) []string {
+	b, err := os.ReadFile(configPath(file))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// saveDirList grava dirs em file (um por linha).
+func saveDirList(file string, dirs []string) {
+	p := configPath(file)
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(strings.Join(dirs, "\n")+"\n"), 0o644)
+}
+
+// addDir registra um diretório importado (dedup por caminho).
+func (pl *plw) addDir(dir string) {
+	dir = filepath.Clean(dir)
+	for _, d := range pl.dirs {
+		if filepath.Clean(d) == dir {
+			return
+		}
+	}
+	pl.dirs = append(pl.dirs, dir)
+	if pl.jsonPath != "" {
+		pl.saveJSON()
+	} else {
+		pl.saveDirsFile()
+	}
+}
+
+// saveDirsFile persiste os dirs da playlist principal (pldirs.txt).
+func (pl *plw) saveDirsFile() {
+	saveDirList("pldirs.txt", pl.dirs)
+}
+
+// updateFromDirs re-varre os diretórios importados desta janela e anexa
+// as faixas novas (addTracks já deduplica por caminho — só entra o inédito).
+func (pl *plw) updateFromDirs() {
+	if len(pl.dirs) == 0 {
+		return
+	}
+	var files []string
+	for _, d := range pl.dirs {
+		files = append(files, audioFilesInDir(d)...)
+	}
+	if len(files) > 0 {
+		pl.addTracks(files)
 	}
 }
 
@@ -545,9 +612,11 @@ func (pl *plw) addPicked(dir bool) {
 	go func() {
 		ui := pl.ui
 		var files []string
+		var pickedDir string
 		if dir {
 			pick := func() []string {
 				if d := pickAudioDir(); d != "" {
+					pickedDir = d
 					return audioFilesInDir(d)
 				}
 				return nil
@@ -555,6 +624,9 @@ func (pl *plw) addPicked(dir bool) {
 			files = ui.dialogWrap(pick)
 		} else {
 			files = ui.dialogWrap(pickAudioFiles)
+		}
+		if pickedDir != "" {
+			pl.addDir(pickedDir)
 		}
 		pl.addTracks(files)
 	}()

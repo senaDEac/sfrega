@@ -620,6 +620,16 @@ func (ui *uiState) applySkin(code string) {
 	ui.mu.Unlock()
 }
 
+// updateAllLists re-varre os diretórios importados por cada janela de
+// playlist (Playlist/Radio/Video) em background, anexando só faixas novas.
+func (ui *uiState) updateAllLists() {
+	for _, pl := range []*plw{ui.plMain, ui.plRadio, ui.plVideo} {
+		if pl != nil {
+			pl.updateFromDirs()
+		}
+	}
+}
+
 // toggleWindowScale alterna a janela entre 1x e 2x. A chamada vai para uma
 // goroutine porque Window.Option precisa retornar à thread de eventos.
 func toggleWindowScale(scale *int, w *app.Window, width, height unit.Dp) {
@@ -836,7 +846,7 @@ func loadFonts() ([]text.FontFace, error) {
 }
 
 // Run inicia a aplicação nativa.
-func Run(p *player.Player) error {
+func Run(p *player.Player, musicDirs []string) error {
 	skin, err := skins.Default()
 	if err != nil {
 		return err
@@ -874,6 +884,13 @@ func Run(p *player.Player) error {
 	ui.plRadio = ui.newPLW("Radio", "rd")
 	ui.plVideo = ui.newPLW("Video", "vd")
 	ui.activePL = ui.plMain
+	// diretórios do scan inicial entram nos dirs da Playlist p/ Update lists
+	for _, d := range musicDirs {
+		ui.plMain.addDir(d)
+	}
+	// Update lists automático na abertura: busca músicas novas nos dirs
+	// já importados (dedup por caminho — só entra o inédito).
+	go ui.updateAllLists()
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }

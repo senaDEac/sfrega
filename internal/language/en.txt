@@ -2,6 +2,7 @@ lang.name=English
 menu.file=File
 menu.file.exit=Exit
 menu.ontop=Always on top
+menu.update_lists=Update lists
 menu.config=Config
 menu.about=About
 menu.counters=Counters

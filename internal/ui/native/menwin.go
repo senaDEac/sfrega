@@ -268,6 +268,8 @@ func (ui *uiState) menuRows() []mrow {
 				wmOntop(n, on)
 			}
 		}})
+	rows = append(rows, mrow{label: language.T("menu.update_lists"),
+		act: func() { go ui.updateAllLists() }})
 	rows = append(rows, mrow{label: language.T("menu.config"), kind: 2,
 		act: func() { ui.menuCfg = !ui.menuCfg }})
 	if ui.menuCfg {

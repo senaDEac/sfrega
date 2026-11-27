@@ -44,6 +44,7 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	var tracks []string
+	var musicDirs []string // dirs importados (scan inicial ou args) p/ Update lists
 	if len(args) == 0 {
 		// sem argumentos: restaura a playlist persistida; se o arquivo não
 		// existe (primeira execução), cai no scan dos diretórios de música.
@@ -54,6 +55,7 @@ func main() {
 			tracks = player.LoadPlaylist(plPath)
 		} else {
 			for _, d := range defaultMusicDirs() {
+				musicDirs = append(musicDirs, d)
 				tracks = append(tracks, collect(d)...)
 			}
 		}
@@ -61,6 +63,7 @@ func main() {
 		for _, a := range args {
 			a = fileURIToPath(a)
 			if st, err := os.Stat(a); err == nil && st.IsDir() {
+				musicDirs = append(musicDirs, a)
 				tracks = append(tracks, collect(a)...)
 			} else if err == nil {
 				tracks = append(tracks, a)
@@ -141,7 +144,7 @@ func main() {
 
 	// modo nativo (padrão): janela Winamp via Gio
 	fmt.Println("sfrega — interface nativa (feche a janela para sair)")
-	if err := native.Run(p); err != nil {
+	if err := native.Run(p, musicDirs); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
