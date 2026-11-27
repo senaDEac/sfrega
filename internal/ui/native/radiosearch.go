@@ -293,8 +293,8 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 	}
 	results := all[pStart:pEnd]
 
-	// navegação ◀ ▶ + "página/total" (só com mais de uma página)
-	if len(all) > radioSrchPageN {
+	// navegação ◀ ▶ + "página/total"
+	if len(all) > 0 {
 		pgBtn := func(idx int, r image.Rectangle, label string, enabled bool, fn func()) {
 			fillRect(gtx.Ops, r, color.NRGBA{R: 0x30, G: 0x30, B: 0x3A, A: 0xFF})
 			fg := colRadioDim
