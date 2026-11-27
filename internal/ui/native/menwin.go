@@ -69,13 +69,13 @@ func (ui *uiState) toggleMenu() {
 		)
 		ui.winMenu = w
 		ui.menuOpen = true
-		saveOpenWindows(ui.eqOpen, ui.plOpen, true)
+		saveOpenWindows(ui.eqOpen, ui.plMain.plOpen, true, ui.plRadio.plOpen, ui.plVideo.plOpen)
 		go ui.menuPlaceLoop()
 		go ui.menuLoop()
 		return
 	}
 	ui.menuOpen = false
-	saveOpenWindows(ui.eqOpen, ui.plOpen, false)
+	saveOpenWindows(ui.eqOpen, ui.plMain.plOpen, false, ui.plRadio.plOpen, ui.plVideo.plOpen)
 	ui.winMenu.Perform(system.ActionClose)
 	ui.winMenu = nil
 }
@@ -116,7 +116,7 @@ func (ui *uiState) menuLoop() {
 			ui.winMenu = nil
 			ui.menuOpen = false
 			delete(ui.ontopDone, "Menu")
-			saveOpenWindows(ui.eqOpen, ui.plOpen, false)
+			saveOpenWindows(ui.eqOpen, ui.plMain.plOpen, false, ui.plRadio.plOpen, ui.plVideo.plOpen)
 			ui.mu.Unlock()
 			ui.menuAbout = false
 			ui.menuFile = false

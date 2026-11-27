@@ -12,15 +12,26 @@ go build -ldflags="-s -w" -o sfrega ./cmd/sfrega
 mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
 install -m 755 sfrega "$HOME/.local/bin/sfrega"
 
+# Ícone: assets/icon.png vai para o tema hicolor e o .desktop aponta para ele.
+ICON_NAME="multimedia-audio-player"
+if [ -f "$ROOT/assets/icon.png" ]; then
+	for size in 16 32 48 64 128 256 512; do
+		dir="$HOME/.local/share/icons/hicolor/${size}x${size}/apps"
+		mkdir -p "$dir"
+		cp "$ROOT/assets/icon.png" "$dir/sfrega.png"
+	done
+	ICON_NAME="sfrega"
+fi
+
 DESKTOP_FILE="$HOME/.local/share/applications/sfrega.desktop"
 if [ -w "$(dirname "$DESKTOP_FILE")" ]; then
-cat > "$DESKTOP_FILE" <<'EOF'
+cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Type=Application
 Name=sfrega
 Comment=Player de áudio estilo Winamp
 Exec=sfrega %U
-Icon=multimedia-audio-player
+Icon=${ICON_NAME}
 Categories=AudioVideo;Audio;Player;
 MimeType=audio/mpeg;audio/x-wav;audio/flac;audio/ogg;audio/mp4;audio/aac;audio/x-ms-wma;
 Terminal=false

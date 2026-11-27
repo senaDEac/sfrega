@@ -36,10 +36,10 @@ static Display *open_display(void)
  * flags, functions, decorations, input_mode, status — 5 cardinais. */
 static const unsigned long motif_hints[5] = { 2 /*MWM_HINTS_DECORATIONS*/, 0, 0, 0, 0 };
 
-static const char *window_names[] = { "sfrega", "Equalizador", "Playlist" };
+static const char *window_names[] = { "sfrega", "Equalizador", "Playlist", "Radio", "Video" };
 
 /* janelas que recebem undecorate (inclui Menu, que não tem geometria salva) */
-static const char *ui_names[] = { "sfrega", "Equalizador", "Playlist", "Menu" };
+static const char *ui_names[] = { "sfrega", "Equalizador", "Playlist", "Radio", "Video", "Menu" };
 
 static Window find_by_name(Display *dpy, const char *want, Atom ncl, Atom nwn, Atom u8);
 

@@ -43,3 +43,6 @@ secrets/
 /sfrega
 *.test
 .fuse_hidden*
+/pkg/
+/src/sfrega-*/
+*.pkg.tar.zst

@@ -125,9 +125,9 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(217, 4, 12, 10), ui.eqOpen,
 		R(0, 62, 23, 11), R(46, 61, 23, 11), R(0, 73, 23, 11), R(46, 72, 23, 11),
 		func() { ui.toggleEQ() })
-	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(231, 4, 12, 10), ui.plOpen,
+	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(231, 4, 12, 10), ui.plMain.plOpen,
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
-		func() { ui.togglePL() })
+		func() { ui.plMain.toggle() })
 
 	// ---- 2x/1x (mesmo sprite do botão size da titlebar) ----
 	if ui.spriteBtn(gtx, &ui.btnSize, "TITLEBAR", R(247, 3, 12, 12),
@@ -301,16 +301,21 @@ func (ui *uiState) eqplBtns(gtx layout.Context, R func(int, int, int, int) image
 	ui.eqplBtn(gtx, &ui.btnEQ, "SHUFREP", R(219, 51, 23, 11), ui.eqOpen,
 		R(0, 62, 23, 11), R(46, 61, 23, 11), R(0, 73, 23, 11), R(46, 72, 23, 11),
 		func() { ui.toggleEQ() })
-	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(242, 51, 23, 11), ui.plOpen,
+	ui.eqplBtn(gtx, &ui.btnPL, "SHUFREP", R(242, 51, 23, 11), ui.plMain.plOpen,
 		R(23, 62, 23, 11), R(69, 61, 23, 11), R(23, 73, 23, 11), R(69, 72, 23, 11),
-		func() { ui.togglePL() })
+		func() { ui.plMain.toggle() })
 
 	// botões GENEX (solto/pressionado) acima do EQ e do PL, sem função;
 	// letras da skin GEN: "RD" sobre o EQ, "VD" sobre o PL
-	ui.spriteBtn(gtx, &ui.btnGenex, "GENEX", R(219, 38, 23, 11),
-		R(0, 0, 48, 16), R(0, 16, 48, 15))
-	ui.spriteBtn(gtx, &ui.btnGenex2, "GENEX", R(242, 38, 23, 11),
-		R(0, 0, 48, 16), R(0, 16, 48, 15))
+	// GENEX: abre/fecha as janelas Radio (RD) e Video (VD).
+	if ui.spriteBtn(gtx, &ui.btnGenex, "GENEX", R(219, 38, 23, 11),
+		R(0, 0, 48, 16), R(0, 16, 48, 15)) {
+		ui.plRadio.toggle()
+	}
+	if ui.spriteBtn(gtx, &ui.btnGenex2, "GENEX", R(242, 38, 23, 11),
+		R(0, 0, 48, 16), R(0, 16, 48, 15)) {
+		ui.plVideo.toggle()
+	}
 	ltrR := image.Rect(125, 89, 130, 95)
 	ltrD := image.Rect(25, 89, 29, 95)
 	ltrV := image.Rect(153, 89, 158, 95)

@@ -105,18 +105,19 @@ type pcmChunk struct {
 
 // Player é o núcleo do player.
 type Player struct {
-	mu       sync.Mutex
-	tracks   []string
-	index    int
-	queue    []int         // ordem de reprodução de um grupo (nil = playlist inteira)
-	qpos     int           // posição atual dentro de queue (-1 = sem fila)
-	listFile string        // playlist persistida em m3u ("" = desativado)
-	tagsFile string        // cache de tags persistido em tags.json
-	lib      *trackLibrary // metadados por faixa (plays/rating/tags)
-	dec      *audio.Decoder
-	rb       *audio.RingBuffer
-	dev      *audio.Device
-	analyzer *spectrum.Analyzer
+	mu        sync.Mutex
+	tracks    []string
+	index     int
+	queue     []int         // ordem de reprodução de um grupo (nil = playlist inteira)
+	qpos      int           // posição atual dentro de queue (-1 = sem fila)
+	listFile  string        // playlist persistida em m3u ("" = desativado)
+	noPersist atomic.Bool   // outra lista ativa (Radio/Video): não gravar m3u/resume
+	tagsFile  string        // cache de tags persistido em tags.json
+	lib       *trackLibrary // metadados por faixa (plays/rating/tags)
+	dec       *audio.Decoder
+	rb        *audio.RingBuffer
+	dev       *audio.Device
+	analyzer  *spectrum.Analyzer
 
 	playing     atomic.Bool
 	repeat      atomic.Bool
@@ -192,6 +193,14 @@ func (p *Player) tagForPath(path string) tagInfo {
 func (p *Player) warmTags(paths []string) {
 	cp := append([]string(nil), paths...)
 	p.computeGenres(cp) // cache pré-carregado do tags.json: gêneros instantâneos
+	p.warmPaths(cp, true)
+}
+
+// warmPaths preenche tags e capas das faixas em background. withIndices=true
+// recalcula os índices do player (só a lista ativa); uma lista que pertence a
+// outra janela usa false — os índices dela são da própria janela (plMeta).
+// Não pode ser chamado com p.mu segurado.
+func (p *Player) warmPaths(cp []string, withIndices bool) {
 	jobs := make(chan string)
 	var wg sync.WaitGroup
 	for w := 0; w < 8; w++ {
@@ -226,8 +235,10 @@ func (p *Player) warmTags(paths []string) {
 			case <-done:
 				return
 			case <-tk.C:
-				p.computeGenres(cp)
-				p.computeArtists(cp)
+				if withIndices {
+					p.computeGenres(cp)
+					p.computeArtists(cp)
+				}
 			}
 		}
 	}()
@@ -238,8 +249,10 @@ func (p *Player) warmTags(paths []string) {
 		close(jobs)
 		wg.Wait()
 		close(done)
-		p.computeGenres(cp)
-		p.computeArtists(cp)
+		if withIndices {
+			p.computeGenres(cp)
+			p.computeArtists(cp)
+		}
 		p.saveTags()
 	}()
 }
@@ -613,7 +626,8 @@ func (p *Player) Events() <-chan Event { return p.events }
 
 func (p *Player) emit(e Event) {
 	// persiste a última faixa tocada (Title carrega o path) para retomada
-	if e.Kind == "track-change" && e.Title != "" && p.listFile != "" {
+	if e.Kind == "track-change" && e.Title != "" && p.listFile != "" &&
+		!p.noPersist.Load() {
 		_ = os.WriteFile(p.resumePath(), []byte(e.Title), 0o644)
 	}
 	select {
@@ -629,7 +643,7 @@ func (p *Player) resumePath() string {
 
 // saveResume grava path + fração de posição da faixa atual.
 func (p *Player) saveResume() {
-	if p.listFile == "" {
+	if p.listFile == "" || p.noPersist.Load() {
 		return
 	}
 	p.mu.Lock()
@@ -729,7 +743,7 @@ func (p *Player) saveTags() {
 
 // saveTracksLocked grava a playlist em p.listFile (formato m3u).
 func (p *Player) saveTracksLocked() {
-	if p.listFile == "" {
+	if p.listFile == "" || p.noPersist.Load() {
 		return
 	}
 	_ = os.MkdirAll(filepath.Dir(p.listFile), 0o755)

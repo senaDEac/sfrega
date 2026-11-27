@@ -65,7 +65,7 @@ func (ui *uiState) toggleEQ() {
 		)
 		ui.winEQ = w
 		ui.eqOpen = true
-		saveOpenWindows(true, ui.plOpen, ui.menuOpen)
+		saveOpenWindows(true, ui.plMain.plOpen, ui.menuOpen, ui.plRadio.plOpen, ui.plVideo.plOpen)
 		go ui.eqLoop()
 		if loadEQShade() {
 			ui.shadeEQ.on = true
@@ -83,47 +83,8 @@ func (ui *uiState) toggleEQ() {
 		return
 	}
 	ui.eqOpen = false
-	saveOpenWindows(false, ui.plOpen, ui.menuOpen)
+	saveOpenWindows(false, ui.plMain.plOpen, ui.menuOpen, ui.plRadio.plOpen, ui.plVideo.plOpen)
 	ui.winEQ.Perform(system.ActionClose)
-}
-
-// togglePL abre/fecha a janela da playlist.
-func (ui *uiState) togglePL() {
-	ui.mu.Lock()
-	defer ui.mu.Unlock()
-	if ui.winPL == nil {
-		w := new(app.Window)
-		w.Option(
-			app.Title("Playlist"),
-			app.Decorated(false),
-			app.Size(ui.plWidth*unit.Dp(max(1, ui.plScale)),
-				ui.plHeight*unit.Dp(max(1, ui.plScale))),
-		)
-		ui.winPL = w
-		ui.plOpen = true
-		saveOpenWindows(ui.eqOpen, true, ui.menuOpen)
-		go ui.plLoop(w)
-		if loadPLShade() {
-			ui.shadePL.on = true
-			titleH := shadePx(ui.plScale, 18)
-			fullH := int(ui.plHeight) * ui.plScale
-			go func() {
-				for i := 0; i < 60; i++ {
-					time.Sleep(50 * time.Millisecond)
-					if wmShadeSet("Playlist", titleH, fullH) {
-						return
-					}
-				}
-			}()
-		}
-		return
-	}
-	ui.plOpen = false
-	saveOpenWindows(ui.eqOpen, false, ui.menuOpen)
-	// A referência fica até o DestroyEvent do plLoop: zerar aqui criaria uma
-	// janela nova no clique seguinte enquanto a atual ainda existe (playlist
-	// duplicada/órfã).
-	ui.winPL.Perform(system.ActionClose)
 }
 
 // eqLoop é o loop de eventos da janela EQ.
@@ -139,7 +100,7 @@ func (ui *uiState) eqLoop() {
 			ui.eqOpen = false
 			ui.eqPresOpen = false
 			delete(ui.ontopDone, "Equalizador")
-			saveOpenWindows(false, ui.plOpen, ui.menuOpen)
+			saveOpenWindows(false, ui.plMain.plOpen, ui.menuOpen, ui.plRadio.plOpen, ui.plVideo.plOpen)
 			ui.mu.Unlock()
 			return
 		case app.FrameEvent:

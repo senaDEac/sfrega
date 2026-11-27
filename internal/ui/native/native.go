@@ -41,7 +41,7 @@ import (
 // Paleta Winamp 2.x (skin clássica cinza).
 
 // ontopWinNames são as janelas que seguem o flag always-on-top.
-var ontopWinNames = []string{"sfrega", "Equalizador", "Playlist", "Menu", "Confirmar"}
+var ontopWinNames = []string{"sfrega", "Equalizador", "Playlist", "Radio", "Video", "Menu", "Confirmar"}
 
 var (
 	colWindowTop   = color.NRGBA{R: 0xC0, G: 0xC0, B: 0xC0, A: 0xFF}
@@ -71,7 +71,7 @@ var (
 
 // uiState concentra widgets e fontes.
 type uiState struct {
-	mu           sync.Mutex // protege winEQ/winPL
+	mu           sync.Mutex // protege winEQ e as janelas pl*
 	p            *player.Player
 	skin         atomic.Pointer[skins.Skin]
 	shaper       *text.Shaper
@@ -82,21 +82,23 @@ type uiState struct {
 	fontMenuBold font.Font
 
 	// janelas
-	winMain      *app.Window
-	winEQ        *app.Window
-	winPL        *app.Window
-	winMenu      *app.Window
-	winConfirm   *app.Window
-	eqOpen       bool
-	plOpen       bool
-	menuOpen     bool
+	winMain    *app.Window
+	winEQ      *app.Window
+	winMenu    *app.Window
+	winConfirm *app.Window
+	eqOpen     bool
+	menuOpen   bool
+
+	// janelas de playlist: uma lista ativa por vez (activePL), cada uma com
+	// sua própria lista de faixas persistida no seu json.
+	plMain, plRadio, plVideo *plw
+	activePL                 *plw
+
 	confirmOpen  bool
 	confirmKind  int // 1 = shuffle, 2 = plays
 	confirmScale int
 
-	mainScale, eqScale, plScale int
-	plWidth, plHeight           unit.Dp
-	plSizeW, plSizeH            int // tamanho lógico persistido (0 = padrão)
+	mainScale, eqScale int
 
 	// widgets main
 	btnPrev, btnPlay, btnPause, btnStop, btnNext uibtn
@@ -106,10 +108,8 @@ type uiState struct {
 	btnShuf, btnRep                              uibtn
 	btnGenex, btnGenex2                          uibtn
 	volDrag, balDrag, posDrag                    fader
-	plPosDrag                                    fader // seek na barra da Playlist
 
 	// widgets EQ
-	plRowClicks                     []uibtn
 	eqSliders                       [10]fader
 	preampSlide                     fader
 	eqGains                         [10]float64 // dB
@@ -120,61 +120,9 @@ type uiState struct {
 	eqPresOpen                      bool
 	eqPresetBtns                    [6]uibtn
 
-	// widgets playlist
-	plList                                               widget.List
-	btnPLRemove, btnPLRand, btnPLSort, btnPLWrite        uibtn
-	btnPLClose, btnPLMin, btnPLSize                      uibtn
-	btnPLClear                                           uibtn
-	btnPLShade                                           uibtn
-	btnPLMAdd, btnPLMRem, btnPLMSel                      uibtn
-	btnPLMMisc, btnPLMList                               uibtn
-	btnPLPrev, btnPLPlay, btnPLPause                     uibtn
-	btnPLStop, btnPLNext, btnPLEject                     uibtn
-	btnPLG1, btnPLG2, btnPLG3, btnPLG4, btnPLG5, btnPLG6 uibtn
-	plMenuClicks                                         [5][]uibtn
-	plMenuOpen                                           int
-	plSel                                                int
-	plScrollAcc                                          float32
-	plScrollDragging                                     bool     // arraste na scrollbar da lista
-	plScrollDragLast                                     float32  // último offset de scroll (px) no arraste
-	plScrollSink                                         *float32 // acumulador de roda p/ linhas expandidas (nil = plScrollAcc)
-	plGenreOpen                                          bool
-	plGenreSel                                           string
-	plGenreOn                                            bool
-	plGenreExpand                                        string // gênero expandido ("" = nenhum)
-	plGenreExpandIdx                                     []int  // faixas do gênero expandido
-	plGenreBtns                                          []uibtn
-	plGenreScroll                                        float32
-	plGenreScrollAcc                                     float32
-	plGenreMax                                           float32
-	plArtistOpen                                         bool
-	plArtistExpand                                       string // artista expandido ("" = nenhum)
-	plArtistExpandIdx                                    []int  // faixas do artista expandido
-	plArtistBtns                                         []uibtn
-	plArtistScroll                                       float32 // offset vertical da fileira (px)
-	plArtistScrollAcc                                    float32
-	plArtistMax                                          float32 // conteúdo - área visível
-	plFolderOpen                                         bool
-	plFolderExpand                                       string // diretório expandido ("" = nenhum)
-	plFolderExpandIdx                                    []int  // faixas do diretório expandido
-	plFolderBtns                                         []uibtn
-	plFolderScroll                                       float32
-	plFolderScrollAcc                                    float32
-	plFolderMax                                          float32
-	plAlbumOpen                                          bool
-	plAlbumExpand                                        string // álbum expandido ("" = nenhum)
-	plAlbumExpandIdx                                     []int  // faixas do álbum expandido
-	plAlbumBtns                                          []uibtn
-	plAlbumScroll                                        float32
-	plAlbumScrollAcc                                     float32
-	plAlbumMax                                           float32
-	plGenSel                                             int // botão GENEX selecionado (-1 = nenhum)
-	plCount                                              int // categorias ou faixas visíveis
-	plCount2                                             int // faixas da categoria expandida
-
 	shapeMu sync.Mutex // text.Shaper não é thread-safe (3 janelas)
 
-	shadeMain, shadeEQ, shadePL shadeClk
+	shadeMain, shadeEQ shadeClk
 
 	// menu suspenso do winshade (ícone de onda → janela Menu)
 	btnWave      uibtn
@@ -502,9 +450,13 @@ func loadPLSize() (int, int) {
 	return w, h
 }
 
-// savePLSize grava o tamanho lógico da janela Playlist.
-func (ui *uiState) savePLSize() {
-	w, h := int(ui.plWidth), int(ui.plHeight)
+// savePLSize grava o tamanho lógico da janela Playlist (principal).
+func (pl *plw) savePLSize() {
+	if pl.key != "pl" {
+		pl.saveJSON()
+		return
+	}
+	w, h := int(pl.plWidth), int(pl.plHeight)
 	if w <= 0 || h <= 0 {
 		return
 	}
@@ -515,8 +467,12 @@ func (ui *uiState) savePLSize() {
 
 // savePLWidth grava só a largura da Playlist, preservando a altura salva
 // (usado no resize pela barra de shade, onde a altura lógica é a da barra).
-func (ui *uiState) savePLWidth() {
-	w := int(ui.plWidth)
+func (pl *plw) savePLWidth() {
+	if pl.key != "pl" {
+		pl.saveJSON()
+		return
+	}
+	w := int(pl.plWidth)
 	if w <= 0 {
 		return
 	}
@@ -530,10 +486,10 @@ func (ui *uiState) savePLWidth() {
 }
 
 // loadOpenWindows lê quais janelas secundárias estavam abertas.
-func loadOpenWindows() (eq, pl, menu bool) {
+func loadOpenWindows() (eq, pl, menu, rd, vd bool) {
 	b, err := os.ReadFile(configPath("windows.txt"))
 	if err != nil {
-		return false, false, false
+		return
 	}
 	for _, f := range strings.Fields(string(b)) {
 		switch f {
@@ -543,19 +499,29 @@ func loadOpenWindows() (eq, pl, menu bool) {
 			pl = true
 		case "menu":
 			menu = true
+		case "rd":
+			rd = true
+		case "vd":
+			vd = true
 		}
 	}
 	return
 }
 
 // saveOpenWindows grava quais janelas secundárias estão abertas.
-func saveOpenWindows(eq, pl, menu bool) {
+func saveOpenWindows(eq, pl, menu, rd, vd bool) {
 	var names []string
 	if eq {
 		names = append(names, "eq")
 	}
 	if pl {
 		names = append(names, "pl")
+	}
+	if rd {
+		names = append(names, "rd")
+	}
+	if vd {
+		names = append(names, "vd")
 	}
 	if menu {
 		names = append(names, "menu")
@@ -640,7 +606,13 @@ func (ui *uiState) applySkin(code string) {
 		return true
 	})
 	ui.mu.Lock()
-	for _, w := range []*app.Window{ui.winMain, ui.winEQ, ui.winPL, ui.winMenu, ui.winConfirm} {
+	var plWins []*app.Window
+	for _, pl := range []*plw{ui.plMain, ui.plRadio, ui.plVideo} {
+		if pl != nil && pl.win != nil {
+			plWins = append(plWins, pl.win)
+		}
+	}
+	for _, w := range append([]*app.Window{ui.winMain, ui.winEQ, ui.winMenu, ui.winConfirm}, plWins...) {
 		if w != nil {
 			w.Invalidate()
 		}
@@ -872,28 +844,15 @@ func Run(p *player.Player) error {
 	faces, _ := loadFonts()
 	shaper := text.NewShaper(text.WithCollection(faces))
 	ui := &uiState{
-		p:              p,
-		shaper:         shaper,
-		fontUI:         font.Font{Typeface: "DejaVu Sans"},
-		fontBold:       font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
-		fontMono:       font.Font{Typeface: "DejaVu Sans Mono"},
-		fontMenu:       font.Font{Typeface: "Liberation Sans"},
-		fontMenuBold:   font.Font{Typeface: "Liberation Sans", Weight: font.Bold},
-		plSel:          -1,
-		plMenuOpen:     -1,
-		plGenreOpen:    loadGenreOpen(),
-		plGenreSel:     loadGenreSel(),
-		plGenreOn:      loadGenreOn(),
-		plGenreExpand:  loadExpand("genreexp.txt"),
-		plArtistOpen:   loadArtistOpen(),
-		plFolderOpen:   loadFolderOpen(),
-		plAlbumOpen:    loadAlbumOpen(),
-		plArtistExpand: loadExpand("artistexp.txt"),
-		plFolderExpand: loadExpand("folderexp.txt"),
-		plAlbumExpand:  loadExpand("albumexp.txt"),
-		plGenSel:       loadGenSel(),
-		shuffle:        loadFlag("shuffle.txt"),
-		repeat:         loadFlag("repeat.txt"),
+		p:            p,
+		shaper:       shaper,
+		fontUI:       font.Font{Typeface: "DejaVu Sans"},
+		fontBold:     font.Font{Typeface: "DejaVu Sans", Weight: font.Bold},
+		fontMono:     font.Font{Typeface: "DejaVu Sans Mono"},
+		fontMenu:     font.Font{Typeface: "Liberation Sans"},
+		fontMenuBold: font.Font{Typeface: "Liberation Sans", Weight: font.Bold},
+		shuffle:      loadFlag("shuffle.txt"),
+		repeat:       loadFlag("repeat.txt"),
 	}
 	p.SetShuffle(ui.shuffle)
 	p.SetRepeat(ui.repeat)
@@ -909,20 +868,16 @@ func Run(p *player.Player) error {
 	ui.eqOn = true
 	ui.mainScale = loadMainScale()
 	ui.eqScale = loadScale("eqscale.txt")
-	ui.plScale = loadScale("plscale.txt")
-	ui.shadePL.onChange = func(on bool) { savePLShade(on) }
 	ui.shadeEQ.onChange = func(on bool) { saveEQShade(on) }
-	ui.plWidth, ui.plHeight = unit.Dp(340), unit.Dp(240)
-	ui.plSizeW, ui.plSizeH = loadPLSize()
-	if ui.plSizeW > 0 && ui.plSizeH > 0 {
-		ui.plWidth, ui.plHeight = unit.Dp(ui.plSizeW), unit.Dp(ui.plSizeH)
-	}
+	// três janelas de playlist independentes (Playlist, Radio, Video)
+	ui.plMain = ui.newPLW("Playlist", "pl")
+	ui.plRadio = ui.newPLW("Radio", "rd")
+	ui.plVideo = ui.newPLW("Video", "vd")
+	ui.activePL = ui.plMain
 	ui.balDrag.val = 0.5
 	ui.balDrag.commit = func(v float32) { p.SetBalance(v*2 - 1) }
 	ui.posDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
 	ui.posDrag.releaseCommit = true
-	ui.plPosDrag.commit = func(v float32) { p.SeekFraction(float64(v)) }
-	ui.plPosDrag.releaseCommit = true
 
 	ui.preampSlide.val = 0.5
 	ui.preampSlide.commit = func(v float32) {
@@ -985,15 +940,21 @@ func Run(p *player.Player) error {
 	// reabre as janelas secundárias que estavam abertas na sessão anterior
 	go func() {
 		time.Sleep(700 * time.Millisecond)
-		eq, pl, menu := loadOpenWindows()
+		eq, pl, menu, rd, vd := loadOpenWindows()
 		if eq {
 			ui.toggleEQ()
 		}
 		if pl {
-			ui.togglePL()
+			ui.plMain.toggle()
 		}
 		if menu {
 			ui.toggleMenu()
+		}
+		if rd {
+			ui.plRadio.toggle()
+		}
+		if vd {
+			ui.plVideo.toggle()
 		}
 	}()
 
@@ -1015,8 +976,10 @@ func Run(p *player.Player) error {
 				if ui.winEQ != nil {
 					ui.winEQ.Invalidate()
 				}
-				if ui.winPL != nil {
-					ui.winPL.Invalidate()
+				for _, pl := range []*plw{ui.plMain, ui.plRadio, ui.plVideo} {
+					if pl != nil && pl.win != nil {
+						pl.win.Invalidate()
+					}
 				}
 				if ui.winMenu != nil {
 					ui.winMenu.Invalidate()
@@ -1841,12 +1804,12 @@ func (ui *uiState) eject() {
 		if len(files) == 0 {
 			return
 		}
-		ui.p.AddTracks(files)
+		ui.plMain.addTracks(files)
 		ui.mu.Lock()
-		open := ui.plOpen
+		open := ui.plMain.plOpen
 		ui.mu.Unlock()
 		if !open {
-			ui.togglePL()
+			ui.plMain.toggle()
 		}
 	}()
 }
@@ -1870,26 +1833,4 @@ func (ui *uiState) dialogWrap(fn func() []string) []string {
 		}
 	}()
 	return fn()
-}
-
-// addPicked abre diálogo de arquivos (dir=false) ou de pasta com
-// recursão (dir=true) e anexa as faixas à playlist.
-func (ui *uiState) addPicked(dir bool) {
-	go func() {
-		var files []string
-		if dir {
-			pick := func() []string {
-				if d := pickAudioDir(); d != "" {
-					return audioFilesInDir(d)
-				}
-				return nil
-			}
-			files = ui.dialogWrap(pick)
-		} else {
-			files = ui.dialogWrap(pickAudioFiles)
-		}
-		if len(files) > 0 {
-			ui.p.AddTracks(files)
-		}
-	}()
 }
