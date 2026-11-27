@@ -162,9 +162,15 @@ func (pl *plw) plShadeBar(gtx layout.Context, winW int, R func(int, int, int, in
 	// fundo: região PLEDIT (179,1)-(204,38) esticada até o fim da barra
 	pl.ui.sprFit(gtx, "PLEDIT", image.Rect(179, 1, 204, 38), bar)
 
-	// decoração PLEDIT (0,0-15,15) + nome "Playlist" (75,0-122,15) em sequência
+	// decoração PLEDIT (0,0-15,15) + nome da janela: sprite "Playlist" na
+	// principal; texto para Radio/Video (a skin só tem o sprite da Playlist)
 	pl.ui.sprFit(gtx, "PLEDIT", image.Rect(0, 0, 16, 16), R(2, 1, 16, 16))
-	pl.ui.sprFit(gtx, "PLEDIT", image.Rect(75, 0, 123, 16), R(20, 1, 48, 16))
+	if pl.key == "pl" {
+		pl.ui.sprFit(gtx, "PLEDIT", image.Rect(75, 0, 123, 16), R(20, 1, 48, 16))
+	} else {
+		pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(9), pl.name,
+			color.NRGBA{R: 0x00, G: 0xFF, B: 0x00, A: 0xFF}, image.Pt(22, 4))
+	}
 
 	// caixa do nome da música: capa esq. + meio elástico + capa dir.
 	// sprites PLEDIT: (73,43-77,55), (72,58-96,71), (120,42-129,55)
@@ -267,7 +273,11 @@ func (pl *plw) plTopBar(gtx layout.Context, winW int, R func(int, int, int, int)
 	if pl.ui.spriteBtn(gtx, &pl.btnPLSize, "TITLEBAR", R(winW-21, 3, 9, 9), R(0, 18, 9, 9), R(9, 18, 9, 9)) {
 		if w := pl.window(); w != nil {
 			toggleWindowScale(&pl.plScale, w, pl.plWidth, pl.plHeight)
-			saveScale("plscale.txt", pl.plScale)
+			if pl.key == "pl" {
+				saveScale("plscale.txt", pl.plScale)
+			} else {
+				pl.saveJSON()
+			}
 		}
 	}
 	if pl.ui.spriteBtn(gtx, &pl.btnPLClose, "TITLEBAR", R(winW-11, 3, 9, 9), R(18, 0, 9, 9), R(18, 9, 9, 9)) {
@@ -320,81 +330,53 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 			R(0, 0, 48, 16), R(0, 16, 48, 15)) {
 			if i == 0 { // GENRE: abre/fecha a lista de gêneros
 				pl.plGenreOpen = !pl.plGenreOpen
-				saveGenreOpen(pl.plGenreOpen)
 				// só um painel por vez; as seleções são mantidas
 				pl.plArtistOpen = false
-				saveArtistOpen(false)
 				pl.plFolderOpen = false
-				saveFolderOpen(false)
 				pl.plAlbumOpen = false
-				saveAlbumOpen(false)
 			}
 			if i == 2 { // ARTISTA: abre/fecha a lista de artistas
 				pl.plArtistOpen = !pl.plArtistOpen
-				saveArtistOpen(pl.plArtistOpen)
 				pl.plGenreOpen = false
-				saveGenreOpen(false)
 				pl.plFolderOpen = false
-				saveFolderOpen(false)
 				pl.plAlbumOpen = false
-				saveAlbumOpen(false)
 			}
 			if i == 3 { // PASTAS: abre/fecha a lista de diretórios
 				pl.plFolderOpen = !pl.plFolderOpen
-				saveFolderOpen(pl.plFolderOpen)
 				pl.plGenreOpen = false
-				saveGenreOpen(false)
 				pl.plArtistOpen = false
-				saveArtistOpen(false)
 				pl.plAlbumOpen = false
-				saveAlbumOpen(false)
 			}
 			if i == 4 { // ÁLBUNS: abre/fecha a lista de álbuns
 				pl.plAlbumOpen = !pl.plAlbumOpen
-				saveAlbumOpen(pl.plAlbumOpen)
 				pl.plGenreOpen = false
-				saveGenreOpen(false)
 				pl.plArtistOpen = false
-				saveArtistOpen(false)
 				pl.plFolderOpen = false
-				saveFolderOpen(false)
 			}
 			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha os painéis
 				pl.plGenreOpen = false
-				saveGenreOpen(false)
 				pl.plArtistOpen = false
 				pl.plArtistExpand = ""
 				pl.plArtistExpandIdx = nil
-				saveArtistOpen(false)
 				pl.plFolderOpen = false
 				pl.plFolderExpand = ""
 				pl.plFolderExpandIdx = nil
-				saveFolderOpen(false)
 				pl.plAlbumOpen = false
 				pl.plAlbumExpand = ""
 				pl.plAlbumExpandIdx = nil
-				saveAlbumOpen(false)
 			}
 			if i == 5 { // LIST: fecha painéis e desliga o filtro, mantendo as seleções
 				pl.plGenreOpen = false
-				saveGenreOpen(false)
 				pl.plArtistOpen = false
-				saveArtistOpen(false)
 				pl.plFolderOpen = false
-				saveFolderOpen(false)
 				pl.plAlbumOpen = false
-				saveAlbumOpen(false)
 			}
 			if pl.plGenSel == i {
 				pl.plGenSel = -1
 			} else {
 				pl.plGenSel = i
 			}
-			saveGenSel(pl.plGenSel)
-			saveExpand("genreexp.txt", pl.plGenreExpand)
-			saveExpand("artistexp.txt", pl.plArtistExpand)
-			saveExpand("folderexp.txt", pl.plFolderExpand)
-			saveExpand("albumexp.txt", pl.plAlbumExpand)
+			pl.savePanel()
 		}
 		lc := dark
 		sel := pl.plGenSel == i || (i == 0 && pl.plGenreOpen) || (i == 2 && pl.plArtistOpen) || (i == 3 && pl.plFolderOpen) || (i == 4 && pl.plAlbumOpen)
@@ -524,7 +506,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 							pl.plGenreExpand = g
 							pl.plGenreExpandIdx = pl.genreTracks(g, tracks)
 						}
-						saveExpand("genreexp.txt", pl.plGenreExpand)
+						pl.savePanel()
 					}
 				}
 			}
@@ -688,7 +670,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 							pl.plArtistExpand = a
 							pl.plArtistExpandIdx = pl.artistTracks(a, tracks)
 						}
-						saveExpand("artistexp.txt", pl.plArtistExpand)
+						pl.savePanel()
 					}
 				}
 			}
@@ -848,7 +830,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 							pl.plFolderExpand = dir
 							pl.plFolderExpandIdx = pl.folderTracks(dir, tracks)
 						}
-						saveExpand("folderexp.txt", pl.plFolderExpand)
+						pl.savePanel()
 					}
 				}
 			}
@@ -1002,7 +984,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 							pl.plAlbumExpand = al
 							pl.plAlbumExpandIdx = pl.albumTracks(al, tracks)
 						}
-						saveExpand("albumexp.txt", pl.plAlbumExpand)
+						pl.savePanel()
 					}
 				}
 			}

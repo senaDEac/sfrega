@@ -158,6 +158,9 @@ func (ui *uiState) newPLW(name, key string) *plw {
 		pl.plWidth, pl.plHeight = unit.Dp(340), unit.Dp(240)
 		pl.plScale = 1
 		pl.loadJSON()
+		// quem reabre a janela é o windows.txt; o flag Open do json é só
+		// informativo — zerar evita botão marcado/janela fantasma no boot
+		pl.plOpen = false
 		pl.shadePL.onChange = func(on bool) { pl.saveJSON() }
 	}
 	pl.plPosDrag.commit = func(v float32) {
@@ -287,6 +290,27 @@ func (pl *plw) tracksAt(i int) string {
 		return ""
 	}
 	return pl.tracks[i]
+}
+
+// savePanel persiste o estado dos painéis (gêneros/artistas/pastas/álbuns,
+// expansões e botão GENEX selecionado). A playlist principal usa os arquivos
+// legados; Radio/Video gravam tudo no próprio json — nada é compartilhado.
+func (pl *plw) savePanel() {
+	if pl.key == "pl" {
+		saveGenreOpen(pl.plGenreOpen)
+		saveArtistOpen(pl.plArtistOpen)
+		saveFolderOpen(pl.plFolderOpen)
+		saveAlbumOpen(pl.plAlbumOpen)
+		saveGenreSel(pl.plGenreSel)
+		saveGenreOn(pl.plGenreOn)
+		saveExpand("genreexp.txt", pl.plGenreExpand)
+		saveExpand("artistexp.txt", pl.plArtistExpand)
+		saveExpand("folderexp.txt", pl.plFolderExpand)
+		saveExpand("albumexp.txt", pl.plAlbumExpand)
+		saveGenSel(pl.plGenSel)
+		return
+	}
+	pl.saveJSON()
 }
 
 // saveJSON grava o estado da janela no seu json.
