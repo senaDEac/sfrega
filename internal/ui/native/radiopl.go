@@ -66,7 +66,7 @@ var (
 )
 
 // radioPlBuiltin são os grupos criados por padrão.
-var radioPlBuiltin = []string{"Rock", "Pop", "NewAge"}
+var radioPlBuiltin = []string{"Favoritos", "Rock", "Pop", "NewAge"}
 
 func radioPlPath() string { return configPath("radioPlaylists.json") }
 
@@ -315,8 +315,8 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 	// altura total do conteúdo e altura útil da janela
 	fullH := 8 + radioPopRow*3
 	if pop.mode == 0 {
-		// header + Tocar + Adicionar + sep + "playlists" + grupos + "+ adicionar"
-		fullH = 120 + len(groups)*radioPopRow
+		// header + Adicionar + sep + grupos + "+ adicionar"
+		fullH = 80 + len(groups)*radioPopRow
 	}
 	topMin := plTopH + 20
 	botMax := winH - plBotH - 4
@@ -399,7 +399,7 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 				break
 			}
 			if e, ok := ev.(pointer.Event); ok {
-				pop.scrollAcc += e.Scroll.Y
+				pop.scrollAcc += e.Scroll.Y * wheelMul
 			}
 		}
 	}
@@ -459,20 +459,16 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 		full := radioPlEntryOf(pop.pick)
 		inCatalog := radioCatalogHas(pop.pick)
 
-		line("Tocar", true, func() { pl.playRadioPick(pop.pick) })
 		addLbl := "Adicionar"
 		if inCatalog {
 			addLbl = "já adicionada"
 		}
 		line(addLbl, !inCatalog, func() { pl.radioAddToCatalog() })
 
-		// separador + rótulo "playlists"
+		// separador antes das categorias
 		fillRect(gtx.Ops, image.Rect(menuR.Min.X+4, rowY+8, menuR.Max.X-4, rowY+10),
 			color.NRGBA{R: 0x50, G: 0x50, B: 0x60, A: 0xFF})
 		rowY += 12
-		ui.textAt(gtx, ui.fontUI, unit.Sp(8), "playlists", colRadioDim,
-			image.Pt(menuR.Min.X+6, rowY+6))
-		rowY += radioPopRow
 
 		for _, g := range groups {
 			lbl := g

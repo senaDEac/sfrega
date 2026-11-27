@@ -58,9 +58,9 @@ func (pl *plw) plWheel(gtx layout.Context, r image.Rectangle) {
 			continue // balão aberto: a roda é dele
 		}
 		if pl.key == "rd" && (pl.showRadios || pl.radioSearch) {
-			pl.radioScrollAcc += e.Scroll.Y
+			pl.radioScrollAcc += e.Scroll.Y * wheelMul
 		} else {
-			pl.plList.ScrollBy(e.Scroll.Y / plRowH)
+			pl.plList.ScrollBy(e.Scroll.Y * wheelMul / plRowH)
 		}
 	}
 }
@@ -84,7 +84,7 @@ func (pl *plw) plArtistWheel(gtx layout.Context, r image.Rectangle) {
 		if !ok {
 			continue
 		}
-		pl.plArtistScrollAcc += e.Scroll.Y
+		pl.plArtistScrollAcc += e.Scroll.Y * wheelMul
 	}
 }
 
@@ -107,7 +107,7 @@ func (pl *plw) plFolderWheel(gtx layout.Context, r image.Rectangle) {
 		if !ok {
 			continue
 		}
-		pl.plFolderScrollAcc += e.Scroll.Y
+		pl.plFolderScrollAcc += e.Scroll.Y * wheelMul
 	}
 }
 
@@ -1371,7 +1371,7 @@ func (pl *plw) plAlbumWheel(gtx layout.Context, r image.Rectangle) {
 		if !ok {
 			continue
 		}
-		pl.plAlbumScrollAcc += e.Scroll.Y
+		pl.plAlbumScrollAcc += e.Scroll.Y * wheelMul
 	}
 }
 
@@ -1397,7 +1397,7 @@ func (pl *plw) plGenreWheel(gtx layout.Context, r image.Rectangle) {
 		if pl.radioPop != nil {
 			continue
 		}
-		pl.plGenreScrollAcc += e.Scroll.Y
+		pl.plGenreScrollAcc += e.Scroll.Y * wheelMul
 	}
 }
 

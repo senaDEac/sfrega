@@ -467,7 +467,7 @@ func (ui *uiState) menuWheel(gtx layout.Context, r image.Rectangle, maxScroll in
 		if !ok {
 			continue
 		}
-		ui.menuScroll -= int(e.Scroll.Y)
+		ui.menuScroll -= int(e.Scroll.Y * wheelMul)
 		if ui.menuScroll < 0 {
 			ui.menuScroll = 0
 		}
@@ -549,7 +549,7 @@ func (ui *uiState) menuScrollbar(gtx layout.Context, winW, top, availH, totalH, 
 			ui.menuScrollTo(e.Position.Y-ui.menuBarGrab,
 				float32(top), availH, thumbH, maxScroll)
 		case pointer.Scroll:
-			ui.menuScroll -= int(e.Scroll.Y)
+			ui.menuScroll -= int(e.Scroll.Y * wheelMul)
 			if ui.menuScroll < 0 {
 				ui.menuScroll = 0
 			}

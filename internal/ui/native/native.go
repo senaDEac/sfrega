@@ -162,6 +162,9 @@ type uiState struct {
 	specCap   [spectrum.Bands]float32 // capa branca: persegue o pico com atraso
 }
 
+// wheelMul amplifica o delta da roda (o X11 entrega ~10px por notch).
+const wheelMul = 5
+
 // uibtn é um botão simples via pointer events (sem macro do Clickable).
 type uibtn struct {
 	tag       event.Tag
@@ -803,7 +806,7 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 			b.down = false
 		case pointer.Scroll:
 			if b.scrollFn != nil {
-				b.scrollFn(e.Scroll.Y)
+				b.scrollFn(e.Scroll.Y * wheelMul)
 			}
 		}
 	}

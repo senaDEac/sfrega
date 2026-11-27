@@ -117,20 +117,29 @@ func searchTuneIn(query string) ([]radioResult, error) {
 	return out, nil
 }
 
-// resolveRadioStream resolve o GuideId num URL de stream reproduzível
-// (Tune.ashx → guide_id → listen.stream → Streams[0].Url).
+// resolveRadioStream resolve o GuideId num URL de stream reproduzível.
+// O Tune.ashx já devolve a url direta do áudio; o endpoint listen.stream
+// da cadeia original do site está fora do ar (DNS morto) — fica como
+// fallback para o caso de voltar.
 func resolveRadioStream(guideID string) (streamURL string, err error) {
 	u := "https://opml.radiotime.com/Tune.ashx?id=" + url.QueryEscape(guideID) +
 		"&render=json&formats=mp3,aac,ogg,flash,html,hls&partnerId=RadioTime"
 	var tune struct {
 		Body []struct {
 			GuideID string `json:"guide_id"`
+			URL     string `json:"url"`
 		} `json:"body"`
 	}
 	if err := getJSON(u, &tune); err != nil {
 		return "", err
 	}
-	if len(tune.Body) == 0 || tune.Body[0].GuideID == "" {
+	if len(tune.Body) == 0 {
+		return "", errStatus("sem body")
+	}
+	if tune.Body[0].URL != "" {
+		return tune.Body[0].URL, nil
+	}
+	if tune.Body[0].GuideID == "" {
 		return "", errStatus("sem guide_id")
 	}
 	// JS faz guide_id.replace('e','') — remove o 'e' inicial do id
