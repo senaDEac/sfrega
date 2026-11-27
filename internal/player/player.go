@@ -638,7 +638,7 @@ func (p *Player) Events() <-chan Event { return p.events }
 
 func (p *Player) emit(e Event) {
 	// persiste a última faixa tocada (Title carrega o path) para retomada
-	if e.Kind == "track-change" && e.Title != "" && p.listFile != "" &&
+	if e.Kind == "track-change" && e.Title != "" && e.Index >= 0 && p.listFile != "" &&
 		!p.noPersist.Load() {
 		_ = os.WriteFile(p.resumePath(), []byte(e.Title), 0o644)
 	}
@@ -829,7 +829,9 @@ func (p *Player) SetTracks(tracks []string) {
 	p.queue = nil
 	p.qpos = -1
 	p.shufRemain = nil
-	if len(tracks) > 0 {
+	// com stream ao vivo (liveTitle) não assume a faixa 0: index=-1 mantém
+	// o título do stream e evita que TrackTitle de uma música o sobreponha
+	if len(tracks) > 0 && p.liveTitle == "" {
 		p.index = 0
 	}
 	p.ensureMetaLocked()
@@ -866,7 +868,8 @@ func (p *Player) AddTracks(tracks []string) {
 	if len(added) == 0 {
 		return
 	}
-	if p.index < 0 {
+	// com stream ao vivo não assume a faixa 0 (mesmo motivo do SetTracks)
+	if p.index < 0 && p.liveTitle == "" {
 		p.index = 0
 	}
 	p.ensureMetaLocked()

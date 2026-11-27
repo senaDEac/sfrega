@@ -170,9 +170,10 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 	fillRect(gtx.Ops, R(64, 32, 1, 2), green)
 
 	// título com marquee em (111,24,154,12)
+	streamTitle := ui.p.StreamTitle()
 	title, _ := ui.p.TrackTitle(ui.p.Index())
 	if title == "" {
-		title = ui.p.StreamTitle() // rádio ao vivo (PlayStream)
+		title = streamTitle // rádio ao vivo (PlayStream)
 	}
 	if title == "" {
 		title = "sfrega"
@@ -184,7 +185,8 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 		ui.marqueeX = 0
 	}
 	viewW := 154
-	if ui.marqueeW > viewW {
+	// stream sempre rola (nome de rádio); faixas só quando excedem a área
+	if ui.marqueeW > viewW || streamTitle != "" {
 		ui.marqueeX--
 		// saiu totalmente pela esquerda → reaparece na direita e entra
 		// deslizando (loop contínuo, sem salto)

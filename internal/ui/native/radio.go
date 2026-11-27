@@ -199,7 +199,7 @@ func fetchRadioIcon(icon string) image.Image {
 const radioRowH = 48 // altura de cada linha (ícone 40px + nome + info)
 
 var (
-	colRadioBg   = color.NRGBA{R: 0x14, G: 0x14, B: 0x1C, A: 0xFF}
+	colRadioBg   = color.NRGBA{A: 0x00} // linhas transparentes
 	colRadioLine = color.NRGBA{R: 0x80, G: 0x00, B: 0x20, A: 0xFF} // bordeaux ( playing )
 	colRadioTxt  = color.NRGBA{R: 0xFF, G: 0xE8, B: 0x00, A: 0xFF} // amarelo
 	colRadioDim  = color.NRGBA{R: 0xC0, G: 0xB0, B: 0x40, A: 0xFF} // amarelo apagado
