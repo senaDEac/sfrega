@@ -129,6 +129,7 @@ type plState struct {
 	AlbumOpen    bool     `json:"albumOpen"`
 	AlbumExpand  string   `json:"albumExpand"`
 	GenSel       int      `json:"genSel"`
+	Radios       bool     `json:"radios"`
 }
 
 // newPLW cria uma janela de playlist. A principal (key "pl") carrega o estado
@@ -357,6 +358,7 @@ func (pl *plw) saveJSON() {
 		AlbumOpen:    pl.plAlbumOpen,
 		AlbumExpand:  pl.plAlbumExpand,
 		GenSel:       pl.plGenSel,
+		Radios:       pl.showRadios,
 	}
 	b, err := json.MarshalIndent(&st, "", "  ")
 	if err != nil {
@@ -395,6 +397,7 @@ func (pl *plw) loadJSON() {
 	pl.plAlbumOpen = st.AlbumOpen
 	pl.plAlbumExpand = st.AlbumExpand
 	pl.plGenSel = st.GenSel
+	pl.showRadios = st.Radios && pl.key == "rd"
 	pl.plOpen = st.Open
 }
 

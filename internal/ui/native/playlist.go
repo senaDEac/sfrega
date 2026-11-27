@@ -347,6 +347,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 		if pl.ui.spriteBtn(gtx, gb, "GENEX", dst,
 			R(0, 0, 48, 16), R(0, 16, 48, 15)) {
 			if i == 0 { // GENRE: abre/fecha a lista de gêneros
+				pl.showRadios = false
 				pl.plGenreOpen = !pl.plGenreOpen
 				// só um painel por vez; as seleções são mantidas
 				pl.plArtistOpen = false
@@ -391,6 +392,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 				pl.plAlbumExpandIdx = nil
 			}
 			if i == 5 { // LIST: fecha painéis e desliga o filtro, mantendo as seleções
+				pl.showRadios = false
 				pl.plGenreOpen = false
 				pl.plArtistOpen = false
 				pl.plFolderOpen = false
@@ -403,17 +405,26 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 			}
 			pl.savePanel()
 		}
+		// RADIOS ativo na janela Radio: botão fica vermelho
+		radiosOn := pl.key == "rd" && i == 1 && pl.showRadios
+		if radiosOn {
+			fillRect(gtx.Ops, dst, color.NRGBA{R: 0xC0, G: 0x10, B: 0x10, A: 0x70})
+		}
 		lc := dark
-		sel := pl.plGenSel == i || (i == 0 && pl.plGenreOpen) || (i == 2 && pl.plArtistOpen) || (i == 3 && pl.plFolderOpen) || (i == 4 && pl.plAlbumOpen)
+		sel := pl.plGenSel == i || radiosOn || (i == 0 && pl.plGenreOpen) || (i == 2 && pl.plArtistOpen) || (i == 3 && pl.plFolderOpen) || (i == 4 && pl.plAlbumOpen)
 		if sel {
 			pl.ui.btnTextB(gtx, labels[i], dst, genGreen)
-			// borda bordeaux no botão selecionado
+			// borda no botão selecionado (vermelha no RADIOS ativo)
+			bc := genGreen
+			if radiosOn {
+				bc = color.NRGBA{R: 0xFF, G: 0x30, B: 0x30, A: 0xFF}
+			}
 			bx0, by0 := dst.Min.X, dst.Min.Y
 			bx1, by1 := dst.Max.X, dst.Max.Y
-			fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), genGreen)
-			fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), genGreen)
-			fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), genGreen)
-			fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), genGreen)
+			fillRect(gtx.Ops, image.Rect(bx0, by0, bx1, by0+2), bc)
+			fillRect(gtx.Ops, image.Rect(bx0, by1-2, bx1, by1), bc)
+			fillRect(gtx.Ops, image.Rect(bx0, by0, bx0+2, by1), bc)
+			fillRect(gtx.Ops, image.Rect(bx1-2, by0, bx1, by1), bc)
 		} else {
 			pl.ui.btnText(gtx, labels[i], dst, lc)
 		}
