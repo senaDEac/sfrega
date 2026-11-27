@@ -172,6 +172,9 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 	// título com marquee em (111,24,154,12)
 	title, _ := ui.p.TrackTitle(ui.p.Index())
 	if title == "" {
+		title = ui.p.StreamTitle() // rádio ao vivo (PlayStream)
+	}
+	if title == "" {
 		title = "sfrega"
 	}
 	// mede a largura real uma vez por título (evita intervalo morto no loop)

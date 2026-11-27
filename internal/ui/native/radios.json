@@ -1,142 +1,239 @@
 {
  "stations": [
   {
+   "icon": "assets/images/logos/radio80fm.png",
    "name": "Radio 80FM",
+   "type": "general",
    "url": "http://104.247.221.130:9020/;",
-   "type": "general",
-   "icon": "assets/images/logos/radio80fm.png"
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "80FM"
   },
   {
+   "icon": "assets/images/logos/jovempan.png",
    "name": "JovemPan Noticias SP",
+   "type": "general",
    "url": "https://ice.fabricahost.com.br/jovempanourinhos/",
-   "type": "general",
-   "icon": "assets/images/logos/jovempan.png"
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "jovempan"
   },
   {
+   "icon": "assets/images/logos/antena1.png",
    "name": "Antena 1 São Paulo",
+   "type": "general",
    "url": "https://antenaone.crossradio.com.br/stream/1",
-   "type": "general",
-   "icon": "assets/images/logos/antena1.png"
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "antena1"
   },
   {
+   "icon": "assets/images/logos/transamerica.png",
    "name": "transamerica",
+   "type": "general",
    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RT_SPAAC.aac",
-   "type": "general",
-   "icon": "assets/images/logos/transamerica.png"
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "transamerica"
   },
   {
+   "icon": "assets/images/logos/kissfm.png",
    "name": "KISS FM São Paulo",
+   "type": "general",
    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_KISSFMAAC.aac",
-   "type": "general",
-   "icon": "assets/images/logos/kissfm.png"
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "Kiss FM São Paulo"
   },
   {
+   "icon": "assets/images/logos/89fm.png",
    "name": "89FM São Paulo",
+   "type": "generalB",
    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_89FM.mp3",
-   "type": "generalB",
-   "icon": "assets/images/logos/89fm.png"
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "89 fm a radio rock"
   },
   {
+   "icon": "assets/images/logos/cidade.png",
    "name": "Cidade",
+   "type": "general",
    "url": "https://s06.hstbr.net:8042/live",
-   "type": "general",
-   "icon": "assets/images/logos/cidade.png"
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "cidade"
   },
   {
+   "icon": "assets/images/logos/alphafmsp.png",
    "name": "Alpha FM São Paulo",
-   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_ALPHAFM.mp3",
    "type": "generalB",
-   "icon": "assets/images/logos/alphafmsp.png"
+   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_ALPHAFM.mp3",
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "Alpha FM São Paulo",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-profiles.tunein.com/s7065/images/logoq.png?t=156590",
    "name": "Rádio Globo Rio 98.1",
+   "type": "m3u8",
    "url": "http://medias.sgr.globo.com/hls/aRGloboRJ/aRGloboRJ.m3u8",
-   "type": "m3u8",
-   "icon": "https://cdn-profiles.tunein.com/s7065/images/logoq.png?t=156590"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "A rádio que vibra com vc!",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-profiles.tunein.com/s1143/images/logoq.png?t=156589",
    "name": "Rádio CBN Rio 92.5",
+   "type": "m3u8",
    "url": "https://medias.sgr.globo.com/hls/aCBNRJ/aCBNRJ.m3u8",
-   "type": "m3u8",
-   "icon": "https://cdn-profiles.tunein.com/s1143/images/logoq.png?t=156589"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "A rádio que toca notícia",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-profiles.tunein.com/s98810/images/logoq.png",
    "name": "BandNews FM Rio 90.3",
-   "url": "http://evpp.mm.uol.com.br/band/bandnewsfm_rj/playlist.m3u8",
    "type": "m3u8",
-   "icon": "https://cdn-profiles.tunein.com/s98810/images/logoq.png"
+   "url": "http://evpp.mm.uol.com.br/band/bandnewsfm_rj/playlist.m3u8",
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "Em 20 minutos, tudo pode mudar",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-radiotime-logos.tunein.com/s100068q.png",
    "name": "Rádio Rio de Janeiro 1400",
+   "type": "general",
    "url": "https://sc1s.cdn.upx.com:8258/stream",
-   "type": "general",
-   "icon": "https://cdn-radiotime-logos.tunein.com/s100068q.png"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "De Volta a Portugal",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-radiotime-logos.tunein.com/s17776q.png",
    "name": "Rádio MEC FM Rio 99.3",
+   "type": "m3u8",
    "url": "https://22722d.ha.azioncdn.net/hls-radio/STsEBCECFM/index.m3u8",
-   "type": "m3u8",
-   "icon": "https://cdn-radiotime-logos.tunein.com/s17776q.png"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "MEC Notícias",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-radiotime-logos.tunein.com/s235990q.png",
    "name": "Rádio Rio de Janeiro Light Hits",
+   "type": "general",
    "url": "https://freeuk5.listen2myradio.com/live.mp3?typeportmount=s2_14525_stream",
-   "type": "general",
-   "icon": "https://cdn-radiotime-logos.tunein.com/s235990q.png"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "O Melhor do Flash Back",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-radiotime-logos.tunein.com/s127715q.png",
    "name": "Rádio Terê FM 93.7",
+   "type": "general",
    "url": "http://cast.hoost.com.br:9093/stream",
-   "type": "general",
-   "icon": "https://cdn-radiotime-logos.tunein.com/s127715q.png"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "Terê Toca Todas",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-profiles.tunein.com/s97340/images/logoq.png?t=159041",
    "name": "Rádio Mundo Livre FM Curitiba 93.9",
+   "type": "general",
    "url": "https://rrdns-continental.webnow.com.br/mundolivre.aac",
-   "type": "general",
-   "icon": "https://cdn-profiles.tunein.com/s97340/images/logoq.png?t=159041"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "Programação Musical",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-profiles.tunein.com/s16621/images/logoq.png?t=636324",
    "name": "Radio 98 FM Curitiba 98.9",
+   "type": "general",
    "url": "https://rrdns-continental.webnow.com.br/98fm.mp3",
-   "type": "general",
-   "icon": "https://cdn-profiles.tunein.com/s16621/images/logoq.png?t=636324"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "Dia Lindo",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-radiotime-logos.tunein.com/s7002q.png",
    "name": "Rádio T Curitiba 104.9",
+   "type": "m3u8",
    "url": "http://wz1.dnip.com.br/radiotaacp/radiotaacp.stream/playlist.m3u8",
-   "type": "m3u8",
-   "icon": "https://cdn-radiotime-logos.tunein.com/s7002q.png"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "A Rádio mais T do Brasil",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-profiles.tunein.com/s97942/images/logoq.jpg?t=153554",
    "name": "Rádio BBN Curitiba 92.3",
+   "type": "m3u8",
    "url": "https://bbnportuguese-lh.akamaihd.net/i/BibleBroadcasting_Portugueseios@87758/master.m3u8",
-   "type": "m3u8",
-   "icon": "https://cdn-profiles.tunein.com/s97942/images/logoq.jpg?t=153554"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "O Arauto de Deus",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "https://cdn-profiles.tunein.com/s95342/images/logoq.png?t=157800",
    "name": "Light FM Curitiba 95.1",
+   "type": "general",
    "url": "https://shout25.crossradio.com.br:19120/1;",
-   "type": "general",
-   "icon": "https://cdn-profiles.tunein.com/s95342/images/logoq.png?t=157800"
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "Curitiba, Brasil",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "assets/images/logos/90s90s.png",
    "name": "90s90s",
-   "url": "http://streams.90s90s.de/techno/mp3-192/tunein/artRadio;",
    "type": "general",
-   "icon": "assets/images/logos/90s90s.png"
+   "url": "http://streams.90s90s.de/techno/mp3-192/tunein/artRadio;",
+   "vol": ".9",
+   "status": "onLine",
+   "desc": "90s90s",
+   "estado": "estado",
+   "cidade": "cidade"
   },
   {
+   "icon": "assets/images/logos/bandnewsfm_rj.png",
    "name": "Bandnews FM Rio de Janeiro",
-   "url": "http://evpp.mm.uol.com.br/band/bandnewsfm_rj/playlist.m3u8",
    "type": "m3u8",
-   "icon": "assets/images/logos/bandnewsfm_rj.png"
+   "url": "http://evpp.mm.uol.com.br/band/bandnewsfm_rj/playlist.m3u8",
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "BandNews FM São Paulo"
   },
   {
+   "icon": "assets/images/logos/aCBNSP.png",
    "name": "CBN São Paulo",
-   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/CBN_RJAAC.aac?dist=tunein",
    "type": "m3u8",
-   "icon": "assets/images/logos/aCBNSP.png"
+   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/CBN_RJAAC.aac?dist=tunein",
+   "vol": ".0",
+   "status": "offLine",
+   "desc": "Rádio CBN São Paulo"
   }
  ]
 }

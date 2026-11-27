@@ -36,10 +36,15 @@ var radioIconFS embed.FS
 
 // radioStation é uma estação de rádio do catálogo.
 type radioStation struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-	Type string `json:"type"`
-	Icon string `json:"icon"`
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	Type   string `json:"type"`
+	Icon   string `json:"icon"`
+	Vol    string `json:"vol,omitempty"`    // volume original do site
+	Status string `json:"status,omitempty"` // onLine/offLine (informativo)
+	Desc   string `json:"desc,omitempty"`   // descrição/tagline do site
+	Estado string `json:"estado,omitempty"`
+	Cidade string `json:"cidade,omitempty"`
 }
 
 var (
@@ -188,30 +193,56 @@ func fetchRadioIcon(icon string) image.Image {
 	return img
 }
 
-// ---- grade de estações na janela Radio ----
 
-const (
-	radioCellW = 62 // largura de cada célula da grade
-	radioIconS = 40 // lado do ícone
-	radioRowH  = 58 // altura da linha (ícone + nome)
-)
+// ---- lista de estações na janela Radio ----
+
+const radioRowH = 48 // altura de cada linha (ícone 40px + nome + info)
 
 var (
 	colRadioBg   = color.NRGBA{R: 0x14, G: 0x14, B: 0x1C, A: 0xFF}
 	colRadioLine = color.NRGBA{R: 0x80, G: 0x00, B: 0x20, A: 0xFF} // bordeaux ( playing )
-	colRadioTxt  = color.NRGBA{R: 0xC8, G: 0xC8, B: 0xC8, A: 0xFF}
+	colRadioTxt  = color.NRGBA{R: 0xFF, G: 0xE8, B: 0x00, A: 0xFF} // amarelo
+	colRadioDim  = color.NRGBA{R: 0xC0, G: 0xB0, B: 0x40, A: 0xFF} // amarelo apagado
 	colRadioPh   = color.NRGBA{R: 0x30, G: 0x30, B: 0x38, A: 0xFF}
+	colRadioOk   = color.NRGBA{R: 0x50, G: 0xB0, B: 0x50, A: 0xFF}
+	colRadioOff  = color.NRGBA{R: 0xB0, G: 0x50, B: 0x50, A: 0xFF}
 )
 
-// plRadioGrid desenha a grade de estações no lugar da lista de faixas
-// (janela Radio, botão RADIOS ativo). Duplo-clique toca o stream.
+// radioInfo monta a linha de informações da estação (tudo que veio do site).
+func radioInfo(st radioStation) string {
+	var parts []string
+	if st.Type != "" {
+		parts = append(parts, st.Type)
+	}
+	if st.Status != "" {
+		parts = append(parts, st.Status)
+	}
+	if st.Desc != "" {
+		parts = append(parts, st.Desc)
+	}
+	loc := st.Cidade
+	if st.Estado != "" {
+		if loc != "" {
+			loc += "/" + st.Estado
+		} else {
+			loc = st.Estado
+		}
+	}
+	if loc != "" {
+		parts = append(parts, loc)
+	}
+	if st.URL != "" {
+		parts = append(parts, st.URL)
+	}
+	return strings.Join(parts, "  ·  ")
+}
+
+// plRadioGrid desenha a lista de estações no lugar da lista de faixas
+// (janela Radio, botão RADIOS ativo): uma rádio por linha com ícone e
+// todas as informações do catálogo. Duplo-clique toca o stream.
 func (pl *plw) plRadioGrid(gtx layout.Context, listR image.Rectangle) {
 	stations := loadRadios()
-	cols := listR.Dx() / radioCellW
-	if cols < 1 {
-		cols = 1
-	}
-	rows := (len(stations) + cols - 1) / cols
+	rows := len(stations)
 	contentH := rows * radioRowH
 	maxScroll := contentH - listR.Dy()
 	if maxScroll < 0 {
@@ -244,67 +275,66 @@ func (pl *plw) plRadioGrid(gtx layout.Context, listR image.Rectangle) {
 		if row < 0 {
 			continue
 		}
-		for col := 0; col < cols; col++ {
-			idx := row*cols + col
-			if idx >= len(stations) {
-				continue
-			}
-			st := stations[idx]
-			cx := listR.Min.X + col*radioCellW
-			cy := listR.Min.Y + row*radioRowH - int(pl.radioScroll)
-			cell := image.Rect(cx, cy, cx+radioCellW-4, cy+radioRowH-2)
-			if cell.Max.Y < listR.Min.Y || cell.Min.Y > listR.Max.Y {
-				continue
-			}
-			playing := streamTitle != "" && streamTitle == st.Name
+		idx := row
+		st := stations[idx]
+		ry := listR.Min.Y + row*radioRowH - int(pl.radioScroll)
+		line := image.Rect(listR.Min.X, ry, listR.Max.X, ry+radioRowH-1)
+		if line.Max.Y < listR.Min.Y || line.Min.Y > listR.Max.Y {
+			continue
+		}
+		playing := streamTitle != "" && streamTitle == st.Name
 
-			// fundo da célula + borda se estiver tocando
-			fillRect(gtx.Ops, cell, colRadioBg)
-			if playing {
-				fillRect(gtx.Ops, image.Rect(cell.Min.X, cell.Min.Y, cell.Max.X, cell.Min.Y+2), colRadioLine)
-				fillRect(gtx.Ops, image.Rect(cell.Min.X, cell.Max.Y-2, cell.Max.X, cell.Max.Y), colRadioLine)
-				fillRect(gtx.Ops, image.Rect(cell.Min.X, cell.Min.Y, cell.Min.X+2, cell.Max.Y), colRadioLine)
-				fillRect(gtx.Ops, image.Rect(cell.Max.X-2, cell.Min.Y, cell.Max.X, cell.Max.Y), colRadioLine)
+		fillRect(gtx.Ops, line, colRadioBg)
+		if playing {
+			fillRect(gtx.Ops, image.Rect(line.Min.X, line.Min.Y, line.Max.X, line.Min.Y+1), colRadioLine)
+			fillRect(gtx.Ops, image.Rect(line.Min.X, line.Max.Y-1, line.Max.X, line.Max.Y), colRadioLine)
+		}
+
+		// ícone 40x40 à esquerda
+		ir := image.Rect(line.Min.X+4, ry+4, line.Min.X+44, ry+44)
+		if img := radioIcon(st); img != nil {
+			blit(gtx, img, ir)
+		} else {
+			fillRect(gtx.Ops, ir, colRadioPh)
+			if st.Name != "" {
+				pl.ui.textAt(gtx, pl.ui.fontBold, unit.Sp(16), strings.ToUpper(st.Name[:1]),
+					colRadioTxt, image.Pt(ir.Min.X+15, ir.Min.Y+12))
 			}
+		}
 
-			// ícone (40x40) centrado na célula
-			ix := cx + (radioCellW-4-radioIconS)/2
-			iy := cy + 2
-			ir := image.Rect(ix, iy, ix+radioIconS, iy+radioIconS)
-			if img := radioIcon(st); img != nil {
-				blit(gtx, img, ir)
-			} else {
-				// placeholder: caixa escura com a inicial da estação
-				fillRect(gtx.Ops, ir, colRadioPh)
-				if st.Name != "" {
-					initial := strings.ToUpper(st.Name[:1])
-					pl.ui.textAt(gtx, pl.ui.fontBold, unit.Sp(14), initial,
-						colRadioTxt, image.Pt(ix+radioIconS/2-4, iy+radioIconS/2-8))
-				}
+		// nome na 1ª linha, infos na 2ª — clipados à direita do ícone
+		// (coordenadas absolutas: clip.Rect não translada a origem)
+		nc := clip.Rect(image.Rect(line.Min.X+50, ry+2, line.Max.X-16, ry+radioRowH-2)).Push(gtx.Ops)
+		pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(10), st.Name, colRadioTxt,
+			image.Pt(line.Min.X+50, ry+8))
+		if info := radioInfo(st); info != "" {
+			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(8), info, colRadioDim,
+				image.Pt(line.Min.X+50, ry+28))
+		}
+		nc.Pop()
+
+		// status colorido no canto direito
+		if st.Status == "onLine" {
+			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(9), "●", colRadioOk, image.Pt(line.Max.X-14, ry+4))
+		} else if st.Status == "offLine" {
+			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(9), "○", colRadioOff, image.Pt(line.Max.X-14, ry+4))
+		}
+
+		// botão invisível: duplo-clique toca a rádio
+		b := &pl.radioBtns[idx]
+		b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
+		if pl.ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
+			if down {
+				fillRect(gtx.Ops, image.Rect(0, 0, line.Dx(), line.Dy()),
+					color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 			}
-
-			// nome embaixo do ícone (clipado na célula)
-			nameR := image.Rect(cx+2, iy+radioIconS+2, cx+radioCellW-6, cy+radioRowH-2)
-			nc := clip.Rect(nameR).Push(gtx.Ops)
-			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(8), st.Name, colRadioTxt, image.Pt(0, 0))
-			nc.Pop()
-
-			// botão invisível por cima: duplo-clique toca a rádio
-			b := &pl.radioBtns[idx]
-			b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
-			if pl.ui.button(gtx, b, cell, func(gtx layout.Context, down bool) {
-				if down {
-					fillRect(gtx.Ops, image.Rect(0, 0, cell.Dx(), cell.Dy()),
-						color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x18})
-				}
-			}) {
-				now := time.Now()
-				dbl := now.Sub(b.lastClick) < 500*time.Millisecond
-				b.lastClick = now
-				if dbl {
-					b.lastClick = time.Time{}
-					_ = pl.ui.p.PlayStream(st.Name, st.URL)
-				}
+		}) {
+			now := time.Now()
+			dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+			b.lastClick = now
+			if dbl {
+				b.lastClick = time.Time{}
+				_ = pl.ui.p.PlayStream(st.Name, st.URL)
 			}
 		}
 	}
