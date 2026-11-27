@@ -102,7 +102,7 @@ func (ui *uiState) togglePL() {
 		ui.winPL = w
 		ui.plOpen = true
 		saveOpenWindows(ui.eqOpen, true, ui.menuOpen)
-		go ui.plLoop()
+		go ui.plLoop(w)
 		if loadPLShade() {
 			ui.shadePL.on = true
 			titleH := shadePx(ui.plScale, 18)
@@ -120,8 +120,10 @@ func (ui *uiState) togglePL() {
 	}
 	ui.plOpen = false
 	saveOpenWindows(ui.eqOpen, false, ui.menuOpen)
+	// A referência fica até o DestroyEvent do plLoop: zerar aqui criaria uma
+	// janela nova no clique seguinte enquanto a atual ainda existe (playlist
+	// duplicada/órfã).
 	ui.winPL.Perform(system.ActionClose)
-	ui.winPL = nil
 }
 
 // eqLoop é o loop de eventos da janela EQ.

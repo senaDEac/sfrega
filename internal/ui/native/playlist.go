@@ -150,19 +150,24 @@ func (ui *uiState) closePL() {
 	}
 }
 
-// plLoop é o loop de eventos da janela playlist.
-func (ui *uiState) plLoop() {
+// plLoop é o loop de eventos da janela playlist. Recebe a janela criada
+// (em vez de ler ui.winPL) para não capturar uma referência já substituída.
+func (ui *uiState) plLoop(w *app.Window) {
 	var ops op.Ops
-	w := ui.winPL
 	for {
 		switch e := w.Event().(type) {
 		case app.DestroyEvent:
 			wmSaveGeometry()
 			ui.mu.Lock()
-			ui.winPL = nil
-			ui.plMenuOpen = -1
-			delete(ui.ontopDone, "Playlist")
-			saveOpenWindows(ui.eqOpen, false, ui.menuOpen)
+			// Limpa só se esta janela ainda é a atual: um DestroyEvent
+			// atrasado não pode anular a referência de uma janela mais nova.
+			if ui.winPL == w {
+				ui.winPL = nil
+				ui.plOpen = false
+				ui.plMenuOpen = -1
+				delete(ui.ontopDone, "Playlist")
+				saveOpenWindows(ui.eqOpen, false, ui.menuOpen)
+			}
 			ui.mu.Unlock()
 			return
 		case app.FrameEvent:
