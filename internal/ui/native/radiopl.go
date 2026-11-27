@@ -18,6 +18,7 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
+	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 )
@@ -738,11 +739,42 @@ const (
 
 // plRadioGroupPanel desenha o painel de grupos (Rock/Pop/NewAge/...)
 // com as estações de cada playlist; clique no grupo expande/fecha,
-// clique na estação toca. Devolve a altura usada (genreH).
+// clique na estação troca o balão (direito) ou toca (duplo-clique).
+// No topo fica o box de Favoritos: borda branca arredondada, só ícones;
+// clique esquerdo abre o balão da estação, duplo-clique toca.
+// Devolve a altura usada (genreH).
 func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 	ui := pl.ui
+
+	// clique simples pendente num ícone de Favoritos: virou balão
+	if pl.favPendOk && time.Since(pl.favPendT) > 350*time.Millisecond {
+		pl.favPendOk = false
+		p := pl.favPendP
+		x, y := pl.favPendX, pl.favPendY
+		pl.openRadioPop(x, y, p)
+	}
+
 	groups := radioPlGroups()
 	pls := loadRadioPls()
+	favs := pls["Favoritos"]
+
+	// métricas do box de favoritos (mesma largura das linhas)
+	const (
+		favIconSz = 28
+		favCellW  = 32
+		favPadX   = 4
+		favPadY   = 4
+	)
+	boxW := winW - 41
+	favPerRow := (boxW - 2*favPadX) / favCellW
+	if favPerRow < 1 {
+		favPerRow = 1
+	}
+	favRows := (len(favs) + favPerRow - 1) / favPerRow
+	if favRows < 1 {
+		favRows = 1
+	}
+	favBoxH := favPadY*2 + favRows*favCellW
 
 	type row struct {
 		entry bool
@@ -751,6 +783,9 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 	}
 	var rows []row
 	for _, g := range groups {
+		if g == "Favoritos" {
+			continue // virou o box do topo
+		}
 		rows = append(rows, row{group: g})
 		if pl.plGenreExpand == g {
 			for _, e := range pls[g] {
@@ -760,6 +795,9 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 	}
 	for len(pl.plGenreBtns) < len(rows) {
 		pl.plGenreBtns = append(pl.plGenreBtns, uibtn{})
+	}
+	for len(pl.genreFavBtns) < len(favs) {
+		pl.genreFavBtns = append(pl.genreFavBtns, uibtn{})
 	}
 
 	areaTop := plTopH + 16
@@ -772,7 +810,19 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 			contentH += radioGrpRowH
 		}
 	}
-	gH := contentH
+	// o box é fixo no topo; as linhas rolam na área restante
+	rowsAvail := avail - favBoxH
+	if rowsAvail < 0 {
+		rowsAvail = 0
+	}
+	viewH := contentH
+	if viewH > rowsAvail {
+		viewH = rowsAvail
+	}
+	if viewH < 0 {
+		viewH = 0
+	}
+	gH := favBoxH + viewH
 	if gH > avail {
 		gH = avail
 	}
@@ -784,7 +834,11 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 	if exp := pls[pl.plGenreExpand]; pl.plGenreExpand != "" {
 		pl.plCount2 = len(exp)
 	}
-	pl.plGenreMax = float32(contentH - gH)
+	rowsView := gH - favBoxH
+	if rowsView < 0 {
+		rowsView = 0
+	}
+	pl.plGenreMax = float32(contentH - rowsView)
 	if pl.plGenreMax < 0 {
 		pl.plGenreMax = 0
 	}
@@ -798,11 +852,71 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 	panel := image.Rect(12, areaTop, winW-23, areaTop+gH)
 	fillRect(gtx.Ops, panel, pl.plBgColor())
 	cs := clip.Rect(panel).Push(gtx.Ops)
-	ry := areaTop - int(pl.plGenreScroll)
 	pl.plGenreWheel(gtx, panel)
+
+	// ---- box de Favoritos: borda branca 1px, cantos arredondados ----
+	{
+		boxR := image.Rect(14, areaTop+1, winW-27, areaTop+favBoxH-1)
+		white := color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+		paint.FillShape(gtx.Ops, white, clip.UniformRRect(boxR, 3).Op(gtx.Ops))
+		paint.FillShape(gtx.Ops, color.NRGBA{R: 0x0C, G: 0x0C, B: 0x12, A: 0xFF},
+			clip.UniformRRect(boxR.Inset(1), 2).Op(gtx.Ops))
+		for i, e := range favs {
+			col := i % favPerRow
+			rw := i / favPerRow
+			ix := boxR.Min.X + favPadX + col*favCellW + (favCellW-favIconSz)/2
+			iy := boxR.Min.Y + favPadY + rw*favCellW + (favCellW-favIconSz)/2
+			ir := image.Rect(ix, iy, ix+favIconSz, iy+favIconSz)
+			st := radioStation{Icon: e.Icon, Name: e.Name}
+			if img := radioIcon(st); img != nil {
+				blit(gtx, img, ir)
+			} else {
+				fillRect(gtx.Ops, ir, colRadioPh)
+				if e.Name != "" {
+					ui.textAt(gtx, ui.fontBold, unit.Sp(12),
+						strings.ToUpper(e.Name[:1]), colRadioTxt,
+						image.Pt(ir.Min.X+8, ir.Min.Y+8))
+				}
+			}
+			cellR := image.Rect(
+				boxR.Min.X+favPadX+col*favCellW, boxR.Min.Y+favPadY+rw*favCellW,
+				boxR.Min.X+favPadX+(col+1)*favCellW, boxR.Min.Y+favPadY+(rw+1)*favCellW)
+			b := &pl.genreFavBtns[i]
+			if ui.button(gtx, b, cellR, func(gtx layout.Context, down bool) {
+				if down {
+					fillRect(gtx.Ops, image.Rect(0, 0, cellR.Dx(), cellR.Dy()),
+						color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
+				}
+			}) {
+				pick := radioPickOfEntry(e)
+				if b.lastBtns.Contain(pointer.ButtonSecondary) {
+					pl.openRadioPop(cellR.Min.X+8, cellR.Min.Y+8, pick)
+				} else {
+					now := time.Now()
+					if now.Sub(b.lastClick) < 500*time.Millisecond {
+						b.lastClick = time.Time{}
+						pl.favPendOk = false
+						ui.playRadioEntry(e)
+					} else {
+						b.lastClick = now
+						pl.favPendP = pick
+						pl.favPendX = cellR.Min.X + favCellW/2
+						pl.favPendY = cellR.Min.Y + favCellW/2
+						pl.favPendT = now
+						pl.favPendOk = true
+					}
+				}
+			}
+		}
+	}
+
+	// ---- linhas de grupos/estações (roláveis, abaixo do box) ----
+	rowsTop := areaTop + favBoxH
+	rcs := clip.Rect(image.Rect(panel.Min.X, rowsTop, panel.Max.X, panel.Max.Y)).Push(gtx.Ops)
+	ry := rowsTop - int(pl.plGenreScroll)
 	pl.plScrollSink = &pl.plGenreScrollAcc
 
-	visMin := areaTop - radioGrpRowH
+	visMin := rowsTop - radioGrpRowH
 	visMax := areaTop + gH
 	ri := 0
 	for _, rw := range rows {
@@ -880,6 +994,7 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		ry += rh
 		ri++
 	}
+	rcs.Pop()
 	cs.Pop()
 
 	// aplica scroll acumulado
@@ -893,25 +1008,26 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		}
 		pl.plGenreScrollAcc = 0
 	}
-	// scrollbar
-	if contentH > gH && gH > 0 {
-		track := image.Rect(winW-20, areaTop+1, winW-16, areaTop+gH-1)
+	// scrollbar (só na área das linhas, abaixo do box)
+	if contentH > rowsView && rowsView > 0 {
+		trackTop := areaTop + favBoxH
+		track := image.Rect(winW-20, trackTop+1, winW-16, areaTop+gH-1)
 		fillRect(gtx.Ops, track, pl.plBgColor())
-		thumbH := gH * gH / contentH
+		thumbH := rowsView * rowsView / contentH
 		if thumbH < 12 {
 			thumbH = 12
 		}
-		if thumbH > gH-2 {
-			thumbH = gH - 2
+		if thumbH > rowsView-2 {
+			thumbH = rowsView - 2
 		}
 		frac := float32(0)
 		if pl.plGenreMax > 0 {
 			frac = pl.plGenreScroll / pl.plGenreMax
 		}
-		thumbY := areaTop + 1 + int(frac*float32(gH-2-thumbH))
+		thumbY := trackTop + 1 + int(frac*float32(rowsView-2-thumbH))
 		fillRect(gtx.Ops, image.Rect(winW-20, thumbY, winW-16, thumbY+thumbH),
 			color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xFF})
-		pl.plGenreScrollDrag(gtx, track, thumbY, thumbH, gH, pl.plGenreMax)
+		pl.plGenreScrollDrag(gtx, track, thumbY, thumbH, rowsView, pl.plGenreMax)
 	}
 	return gH
 }

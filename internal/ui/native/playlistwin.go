@@ -82,6 +82,14 @@ type plw struct {
 	plGenreScrollAcc float32
 	plGenreMax       float32
 
+	// box de Favoritos no topo do painel GENRE (janela Radio)
+	genreFavBtns  []uibtn
+	favPendOk     bool
+	favPendT      time.Time
+	favPendX      int
+	favPendY      int
+	favPendP      radioPick
+
 	plArtistOpen      bool
 	plArtistExpand    string
 	plArtistExpandIdx []int
