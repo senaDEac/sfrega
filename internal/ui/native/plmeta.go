@@ -98,6 +98,12 @@ func (pl *plw) rebuildMeta() {
 	sort.Slice(m.folders, func(a, b int) bool {
 		return strings.ToLower(filepath.Base(m.folders[a])) < strings.ToLower(filepath.Base(m.folders[b]))
 	})
+	// os índices expandidos guardam posições na lista — invalidar para
+	// que pastas/gêneros/artistas/álbuns abertos mostrem as faixas novas
+	pl.plGenreExpandIdx = nil
+	pl.plArtistExpandIdx = nil
+	pl.plFolderExpandIdx = nil
+	pl.plAlbumExpandIdx = nil
 	pl.dirty = false
 }
 

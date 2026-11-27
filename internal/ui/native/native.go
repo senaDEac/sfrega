@@ -144,6 +144,8 @@ type uiState struct {
 	menuBarGrab  float32
 	menuWheelTag event.Tag
 	menuBarTag   event.Tag
+	updPhase     int // 0=idle, 1=update lists ativo, 3=fade-out
+	updT0        time.Time
 	confirmBtns  [2]uibtn
 	ontopDone    map[string]bool
 
@@ -988,6 +990,11 @@ func Run(p *player.Player, musicDirs []string) error {
 			select {
 			case <-fast.C:
 				ui.winMain.Invalidate()
+				ui.mu.Lock()
+				if ui.updPhase != 0 && ui.winMenu != nil {
+					ui.winMenu.Invalidate()
+				}
+				ui.mu.Unlock()
 			case <-slow.C:
 				ui.mu.Lock()
 				if ui.winEQ != nil {

@@ -2,7 +2,6 @@ package player
 
 import (
 	"encoding/json"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -53,7 +52,7 @@ func (l *trackLibrary) ensure(path string) *TrackMeta {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Hashtags: randomTags()}
+		m = &TrackMeta{}
 		l.meta[path] = m
 		l.dirty = true
 	}
@@ -84,7 +83,7 @@ func (l *trackLibrary) setRating(path string, r int) {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Hashtags: randomTags()}
+		m = &TrackMeta{}
 		l.meta[path] = m
 	}
 	m.Rating = r
@@ -97,7 +96,7 @@ func (l *trackLibrary) addPlay(path string) {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Hashtags: randomTags()}
+		m = &TrackMeta{}
 		l.meta[path] = m
 	}
 	m.Plays++
@@ -120,7 +119,7 @@ func (l *trackLibrary) addShuffle(path string) {
 	defer l.mu.Unlock()
 	m, ok := l.meta[path]
 	if !ok {
-		m = &TrackMeta{Hashtags: randomTags()}
+		m = &TrackMeta{}
 		l.meta[path] = m
 	}
 	m.Shuffle = 1
@@ -194,36 +193,3 @@ func (l *trackLibrary) flush() {
 	}
 }
 
-// randomTags gera de 1 a 3 hashtags aleatórias.
-func randomTags() []string {
-	n := 1 + rand.Intn(3)
-	seen := map[string]bool{}
-	out := make([]string, 0, n)
-	for len(out) < n {
-		t := randomTagName()
-		if !seen[t] {
-			seen[t] = true
-			out = append(out, t)
-		}
-	}
-	return out
-}
-
-var tagA = []string{
-	"neon", "velvet", "midnight", "crimson", "hollow", "solar",
-	"umber", "frost", "ember", "static", "lucid", "drift",
-	"onyx", "prism", "rust", "sable", "tide", "vivid",
-	"willow", "zephyr", "cipher", "delta", "echo", "flux",
-}
-
-var tagB = []string{
-	"falcon", "otter", "lynx", "heron", "viper", "badger",
-	"condor", "newt", "ibex", "marten", "pika", "quail",
-	"rook", "snipe", "tapir", "urchin", "vole", "walrus",
-	"yak", "zebu", "asp", "bass", "cod", "elm",
-}
-
-func randomTagName() string {
-	return tagA[rand.Intn(len(tagA))] + "-" + tagB[rand.Intn(len(tagB))] +
-		"-" + string(rune('a'+rand.Intn(26))) + string(rune('a'+rand.Intn(26)))
-}

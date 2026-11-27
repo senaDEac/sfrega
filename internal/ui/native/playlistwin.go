@@ -584,18 +584,122 @@ func (pl *plw) saveDirsFile() {
 	saveDirList("pldirs.txt", pl.dirs)
 }
 
+// scanRoots retorna os diretórios efetivos de varredura: os registrados
+// mais raízes derivadas das faixas atuais. Pais que compartilham o mesmo
+// avô (ex.: Music/<gênero>/…) colapsam para o avô — assim pastas novas
+// criadas dentro dele também passam a ser encontradas.
+func (pl *plw) scanRoots() []string {
+	roots := append([]string(nil), pl.dirs...)
+	parents := map[string]bool{}
+	for _, t := range pl.tracks {
+		if d := filepath.Dir(t); d != "." && d != string(filepath.Separator) {
+			parents[d] = true
+		}
+	}
+	byGrand := map[string][]string{}
+	for d := range parents {
+		g := filepath.Dir(d)
+		byGrand[g] = append(byGrand[g], d)
+	}
+	for g, kids := range byGrand {
+		if len(kids) >= 2 {
+			roots = append(roots, g)
+		} else {
+			roots = append(roots, kids[0])
+		}
+	}
+	// dedup e remove dirs contidos em outro dir da lista
+	seen := map[string]bool{}
+	var out []string
+	for _, r := range roots {
+		r = filepath.Clean(r)
+		if !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	var res []string
+	for _, r := range out {
+		nested := false
+		for _, o := range out {
+			if o != r && strings.HasPrefix(r+string(filepath.Separator), o+string(filepath.Separator)) {
+				nested = true
+				break
+			}
+		}
+		if !nested {
+			res = append(res, r)
+		}
+	}
+	return res
+}
+
 // updateFromDirs re-varre os diretórios importados desta janela e anexa
 // as faixas novas (addTracks já deduplica por caminho — só entra o inédito).
 func (pl *plw) updateFromDirs() {
-	if len(pl.dirs) == 0 {
+	roots := pl.scanRoots()
+	if len(roots) == 0 {
 		return
 	}
+	for _, r := range roots {
+		pl.addDir(r)
+	}
+	pl.pruneMissing(roots)
 	var files []string
-	for _, d := range pl.dirs {
+	for _, d := range roots {
 		files = append(files, audioFilesInDir(d)...)
 	}
 	if len(files) > 0 {
 		pl.addTracks(files)
+	}
+}
+
+// pruneMissing remove da lista as faixas que estão sob uma das raízes
+// varridas mas cujo arquivo não existe mais no disco (música apagada
+// da pasta). Faixas fora das raízes nunca são podadas.
+func (pl *plw) pruneMissing(roots []string) {
+	under := func(t string) bool {
+		c := filepath.Clean(t)
+		for _, r := range roots {
+			if strings.HasPrefix(c, r+string(filepath.Separator)) {
+				return true
+			}
+		}
+		return false
+	}
+	gone := func(t string) bool {
+		_, err := os.Stat(t)
+		return err != nil
+	}
+	if pl.ui.activePL == pl {
+		cur := pl.ui.p.Tracks()
+		removed := false
+		for i := len(cur) - 1; i >= 0; i-- {
+			if under(cur[i]) && gone(cur[i]) {
+				pl.ui.p.RemoveAt(i)
+				removed = true
+			}
+		}
+		if removed {
+			pl.tracks = pl.ui.p.Tracks()
+			pl.dirty = true
+			pl.persist()
+		}
+		return
+	}
+	kept := pl.tracks[:0]
+	removed := false
+	for _, t := range pl.tracks {
+		if under(t) && gone(t) {
+			removed = true
+			continue
+		}
+		kept = append(kept, t)
+	}
+	if removed {
+		pl.tracks = kept
+		pl.dirty = true
+		pl.persist()
 	}
 }
 

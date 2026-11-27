@@ -43,6 +43,7 @@ var (
 	colMenuTrack  = color.NRGBA{R: 0xD0, G: 0xCC, B: 0xBC, A: 0xFF}
 	colMenuThumb  = color.NRGBA{R: 0x9A, G: 0x96, B: 0x86, A: 0xFF}
 	colMenuThumbD = color.NRGBA{R: 0x5A, G: 0x7A, B: 0x9A, A: 0xFF}
+	colMenuUpd    = color.NRGBA{R: 0xB0, G: 0x20, B: 0x20, A: 0xFF}
 )
 
 // mrow é uma linha do menu: item, separador ou pai de submenu.
@@ -52,6 +53,7 @@ type mrow struct {
 	kind    int // 0=item, 1=check, 2=pai (seta)
 	sep     bool
 	checked bool
+	hot     bool // linha com feedback de "atualizando" (fundo vermelho)
 	act     func()
 }
 
@@ -268,8 +270,15 @@ func (ui *uiState) menuRows() []mrow {
 				wmOntop(n, on)
 			}
 		}})
-	rows = append(rows, mrow{label: language.T("menu.update_lists"),
-		act: func() { go ui.updateAllLists() }})
+	updLbl := language.T("menu.update_lists")
+	ui.mu.Lock()
+	updBusy := ui.updPhase != 0
+	ui.mu.Unlock()
+	if updBusy {
+		updLbl = language.T("menu.updating")
+	}
+	rows = append(rows, mrow{label: updLbl, hot: true,
+		act: func() { ui.startUpdateLists() }})
 	rows = append(rows, mrow{label: language.T("menu.config"), kind: 2,
 		act: func() { ui.menuCfg = !ui.menuCfg }})
 	if ui.menuCfg {
@@ -362,9 +371,17 @@ func (ui *uiState) menuDrawRow(gtx layout.Context, row mrow, bi *int, y, rowRigh
 	b := &ui.menuBtns[*bi]
 	(*bi)++
 	rx, rw, rh := 4, rowRight-4, menuRowH
+	hotA := float32(0)
+	if row.hot {
+		hotA = ui.updAlpha()
+	}
 	clicked := ui.button(gtx, b, R(rx, y, rw, rh), func(gtx layout.Context, down bool) {
 		tx := colMenuHiText
-		if down || b.over {
+		if hotA > 0 {
+			c := colMenuUpd
+			c.A = uint8(255 * hotA)
+			fillRect(gtx.Ops, R(0, 0, rw, rh), c)
+		} else if down || b.over {
 			fillRect(gtx.Ops, R(0, 0, rw, rh), colMenuHover)
 		}
 		if row.kind == 1 {
@@ -386,6 +403,49 @@ func (ui *uiState) menuDrawRow(gtx layout.Context, row mrow, bi *int, y, rowRigh
 	if clicked {
 		row.act()
 	}
+}
+
+// startUpdateLists dispara o re-scan das listas com feedback visual:
+// fade-in de 1s no item "Update lists", espera o scan e fade-out de 1s.
+func (ui *uiState) startUpdateLists() {
+	ui.mu.Lock()
+	if ui.updPhase != 0 {
+		ui.mu.Unlock()
+		return
+	}
+	ui.updPhase = 1
+	ui.updT0 = time.Now()
+	ui.mu.Unlock()
+	go func() {
+		ui.updateAllLists()
+		ui.mu.Lock()
+		ui.updPhase = 3
+		ui.updT0 = time.Now()
+		ui.mu.Unlock()
+	}()
+}
+
+// updAlpha retorna 0..1 do destaque do item Update lists: sobe em 1s,
+// segura durante o scan e desce em 1s; ao zerar, volta ao estado idle.
+func (ui *uiState) updAlpha() float32 {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	if ui.updPhase == 0 {
+		return 0
+	}
+	el := float32(time.Since(ui.updT0).Seconds())
+	if ui.updPhase == 1 {
+		if el > 1 {
+			return 1
+		}
+		return el
+	}
+	a := 1 - el
+	if a <= 0 {
+		ui.updPhase = 0
+		return 0
+	}
+	return a
 }
 
 // menuWheel rola a lista com a roda do mouse.
