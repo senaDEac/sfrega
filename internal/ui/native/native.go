@@ -169,6 +169,7 @@ type uibtn struct {
 	over      bool
 	scrollFn  func(dy float32) // opcional: roda do mouse sobre o botão
 	lastClick time.Time        // último clique (detecção de duplo-clique)
+	lastBtns  pointer.Buttons  // botões do último Press (secundário = direito)
 }
 
 // beginScaledFrame configura o sistema de coordenadas lógico da janela e
@@ -787,6 +788,7 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 		switch e.Kind {
 		case pointer.Press:
 			b.down = true
+			b.lastBtns = e.Buttons
 		case pointer.Release:
 			if b.down {
 				clicked = true

@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/unit"
@@ -45,6 +46,7 @@ type radioStation struct {
 	Desc   string `json:"desc,omitempty"`   // descrição/tagline do site
 	Estado string `json:"estado,omitempty"`
 	Cidade string `json:"cidade,omitempty"`
+	Guide  string `json:"guide,omitempty"` // GuideId TuneIn (se não houver url)
 }
 
 var (
@@ -193,13 +195,12 @@ func fetchRadioIcon(icon string) image.Image {
 	return img
 }
 
-
 // ---- lista de estações na janela Radio ----
 
 const radioRowH = 48 // altura de cada linha (ícone 40px + nome + info)
 
 var (
-	colRadioBg   = color.NRGBA{A: 0x00} // linhas transparentes
+	colRadioBg   = color.NRGBA{A: 0x00}                            // linhas transparentes
 	colRadioLine = color.NRGBA{R: 0x80, G: 0x00, B: 0x20, A: 0xFF} // bordeaux ( playing )
 	colRadioTxt  = color.NRGBA{R: 0xFF, G: 0xE8, B: 0x00, A: 0xFF} // amarelo
 	colRadioDim  = color.NRGBA{R: 0xC0, G: 0xB0, B: 0x40, A: 0xFF} // amarelo apagado
@@ -241,7 +242,7 @@ func radioInfo(st radioStation) string {
 // (janela Radio, botão RADIOS ativo): uma rádio por linha com ícone e
 // todas as informações do catálogo. Duplo-clique toca o stream.
 func (pl *plw) plRadioGrid(gtx layout.Context, listR image.Rectangle) {
-	stations := loadRadios()
+	stations := allRadioStations() // catálogo + estações das playlists
 	rows := len(stations)
 	contentH := rows * radioRowH
 	maxScroll := contentH - listR.Dy()
@@ -320,16 +321,26 @@ func (pl *plw) plRadioGrid(gtx layout.Context, listR image.Rectangle) {
 			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(9), "○", colRadioOff, image.Pt(line.Max.X-14, ry+4))
 		}
 
-		// botão invisível: clique abre o balão de contexto da estação
+		// botão invisível: direito abre o balão, duplo-clique toca
 		b := &pl.radioBtns[idx]
 		b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
-		if pl.radioPop == nil && pl.ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
+		if pl.ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
 			if down {
 				fillRect(gtx.Ops, image.Rect(0, 0, line.Dx(), line.Dy()),
 					color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 			}
 		}) {
-			pl.openRadioPop(line.Min.X+10, line.Min.Y+10, radioPickOfStation(st))
+			if b.lastBtns.Contain(pointer.ButtonSecondary) {
+				pl.openRadioPop(line.Min.X+10, line.Min.Y+10, radioPickOfStation(st))
+			} else {
+				now := time.Now()
+				dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+				b.lastClick = now
+				if dbl {
+					b.lastClick = time.Time{}
+					pl.playRadioPick(radioPickOfStation(st))
+				}
+			}
 		}
 	}
 }

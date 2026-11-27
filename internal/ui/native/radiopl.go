@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gioui.org/io/event"
 	"gioui.org/io/key"
@@ -230,11 +231,49 @@ func (ui *uiState) playRadioEntry(e radioPlEntry) {
 }
 
 func radioPickOfStation(st radioStation) radioPick {
-	return radioPick{Name: st.Name, URL: st.URL, Icon: st.Icon, Desc: st.Desc}
+	return radioPick{Name: st.Name, URL: st.URL, Icon: st.Icon, Guide: st.Guide, Desc: st.Desc}
 }
 
 func radioPickOfResult(r radioResult) radioPick {
 	return radioPick{Name: r.Title, Icon: r.Image, Guide: r.GuideID, Desc: r.Desc, Subtitle: r.Subtitle}
+}
+
+func radioPickOfEntry(e radioPlEntry) radioPick {
+	return radioPick{Name: e.Name, URL: e.URL, Icon: e.Icon, Guide: e.Guide, Desc: e.Desc, Subtitle: e.Subtitle}
+}
+
+// radioStationKey é a chave de dedup de uma estação do catálogo.
+func radioStationKey(st radioStation) string {
+	if st.Guide != "" {
+		return "g:" + st.Guide
+	}
+	if st.URL != "" {
+		return "u:" + st.URL
+	}
+	return "n:" + strings.ToLower(st.Name)
+}
+
+// allRadioStations devolve o catálogo + estações presentes em qualquer
+// playlist de rádio, sem duplicatas (usado pelo botão RADIOS).
+func allRadioStations() []radioStation {
+	out := append([]radioStation(nil), loadRadios()...)
+	seen := map[string]bool{}
+	for _, st := range out {
+		seen[radioStationKey(st)] = true
+	}
+	for _, g := range radioPlGroups() {
+		for _, e := range loadRadioPls()[g] {
+			st := radioStation{Name: e.Name, URL: e.URL, Icon: e.Icon,
+				Guide: e.Guide, Desc: e.Desc}
+			k := radioStationKey(st)
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, st)
+		}
+	}
+	return out
 }
 
 // ---- balão de contexto ----
@@ -343,7 +382,7 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 				fillRect(gtx.Ops, image.Rect(0, 0, r.Dx(), r.Dy()),
 					color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 			}
-		}) {
+		}) && !b.lastBtns.Contain(pointer.ButtonSecondary) {
 			fn()
 		}
 	}
@@ -538,7 +577,7 @@ func (pl *plw) radioCreatePlaylist() {
 
 const (
 	radioGrpRowH = 30 // linha de grupo
-	radioPlRowH  = 26 // linha de estação dentro do grupo
+	radioPlRowH  = 44 // linha de estação dentro do grupo (ícone 40px)
 )
 
 // plRadioGroupPanel desenha o painel de grupos (Rock/Pop/NewAge/...)
@@ -616,7 +655,9 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 			rh = radioPlRowH
 		}
 		rowR := image.Rect(14, ry, winW-27, ry+rh)
-		if ry > visMin && ry < visMax && pl.radioPop == nil {
+		// estações respondem sempre (botão direito troca o balão de estação);
+		// grupos ficam inertes enquanto o balão está aberto
+		if ry > visMin && ry < visMax && (rw.entry || pl.radioPop == nil) {
 			b := &pl.plGenreBtns[ri]
 			b.scrollFn = func(dy float32) { pl.plGenreScrollAcc += dy }
 			if ui.button(gtx, b, rowR, func(gtx layout.Context, down bool) {
@@ -626,7 +667,20 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 				}
 			}) {
 				if rw.entry {
-					ui.playRadioEntry(rw.e)
+					// direito abre o balão, duplo-clique toca, simples nada
+					if b.lastBtns.Contain(pointer.ButtonSecondary) {
+						pl.openRadioPop(rowR.Min.X+16, ry+4, radioPickOfEntry(rw.e))
+					} else {
+						now := time.Now()
+						dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+						b.lastClick = now
+						if dbl {
+							b.lastClick = time.Time{}
+							ui.playRadioEntry(rw.e)
+						}
+					}
+				} else if b.lastBtns.Contain(pointer.ButtonSecondary) {
+					// botão direito em grupo não faz nada
 				} else if pl.plGenreExpand == rw.group {
 					pl.plGenreExpand = ""
 					pl.savePanel()
@@ -640,14 +694,14 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		if ry > visMin && ry < visMax {
 			if rw.entry {
 				st := radioStation{Icon: rw.e.Icon, Name: rw.e.Name}
-				ir := image.Rect(rowR.Min.X+16, ry+3, rowR.Min.X+32, ry+19)
+				ir := image.Rect(rowR.Min.X+16, ry+2, rowR.Min.X+56, ry+42)
 				if img := radioIcon(st); img != nil {
 					blit(gtx, img, ir)
 				} else {
 					fillRect(gtx.Ops, ir, colRadioPh)
 				}
-				ui.textAt(gtx, ui.fontUI, unit.Sp(9), rw.e.Name, colRadioTxt,
-					image.Pt(rowR.Min.X+38, ry+5))
+				ui.textAt(gtx, ui.fontUI, unit.Sp(10), rw.e.Name, colRadioTxt,
+					image.Pt(rowR.Min.X+62, ry+16))
 			} else {
 				exp := pl.plGenreExpand == rw.group
 				marker := "▸"

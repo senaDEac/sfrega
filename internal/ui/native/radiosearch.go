@@ -311,7 +311,7 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 					fillRect(gtx.Ops, image.Rect(0, 0, r.Dx(), r.Dy()),
 						color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 				}
-			}) {
+			}) && !pl.radioPgBtns[idx].lastBtns.Contain(pointer.ButtonSecondary) {
 				fn()
 			}
 		}
@@ -395,13 +395,24 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 		}
 		b := &pl.radioSrchBtns[row]
 		b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
-		if pl.radioPop == nil && ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
+		if ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
 			if down {
 				fillRect(gtx.Ops, image.Rect(0, 0, line.Dx(), line.Dy()),
 					color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 			}
 		}) {
-			pl.openRadioPop(line.Min.X+10, line.Min.Y+10, radioPickOfResult(r))
+			pick := radioPickOfResult(r)
+			if b.lastBtns.Contain(pointer.ButtonSecondary) {
+				pl.openRadioPop(line.Min.X+10, line.Min.Y+10, pick)
+			} else {
+				now := time.Now()
+				dbl := now.Sub(b.lastClick) < 500*time.Millisecond
+				b.lastClick = now
+				if dbl {
+					b.lastClick = time.Time{}
+					pl.playRadioPick(pick)
+				}
+			}
 		}
 	}
 }
