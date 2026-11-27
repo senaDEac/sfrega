@@ -2,6 +2,7 @@ package native
 
 import (
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"net/http"
@@ -153,7 +154,10 @@ func resolveRadioStream(guideID string) (streamURL string, err error) {
 
 // ---- UI: painel de busca na janela Radio (botão LIST) ----
 
-const radioSrchRowH = 42 // linha de resultado (ícone + nome + info)
+const (
+	radioSrchRowH  = 42 // linha de resultado (ícone + nome + info)
+	radioSrchPageN = 10 // resultados por página (setas ◀ ▶)
+)
 
 // startRadioSearch dispara a busca TuneIn em background.
 func (pl *plw) startRadioSearch() {
@@ -164,6 +168,7 @@ func (pl *plw) startRadioSearch() {
 	pl.radioSearching = true
 	pl.radioSrchStat = "buscando…"
 	pl.radioResults = nil
+	pl.radioPage = 0
 	pl.radioScroll = 0
 	pl.radioScrollAcc = 0
 	if pl.win != nil {
@@ -258,17 +263,73 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 
 	// status / resultados
 	resTop := inR.Max.Y + 4
-	areaH := listR.Max.Y - resTop
+	navR := image.Rect(listR.Max.X-92, resTop, listR.Max.X-6, resTop+18)
+	pageTop := resTop + 22
+	areaH := listR.Max.Y - pageTop
 	if pl.radioSearching {
 		ui.textAt(gtx, ui.fontUI, unit.Sp(9), "buscando estações…",
-			colRadioDim, image.Pt(listR.Min.X+4, resTop+2))
+			colRadioDim, image.Pt(listR.Min.X+4, pageTop+2))
 	}
 	if pl.radioSrchStat != "" {
 		ui.textAt(gtx, ui.fontUI, unit.Sp(9), pl.radioSrchStat,
-			colRadioDim, image.Pt(listR.Min.X+4, resTop+2))
+			colRadioDim, image.Pt(listR.Min.X+4, pageTop+2))
 	}
 
-	results := pl.radioResults
+	all := pl.radioResults
+	pages := (len(all) + radioSrchPageN - 1) / radioSrchPageN
+	if pages < 1 {
+		pages = 1
+	}
+	if pl.radioPage >= pages {
+		pl.radioPage = pages - 1
+	}
+	if pl.radioPage < 0 {
+		pl.radioPage = 0
+	}
+	pStart := pl.radioPage * radioSrchPageN
+	pEnd := pStart + radioSrchPageN
+	if pEnd > len(all) {
+		pEnd = len(all)
+	}
+	results := all[pStart:pEnd]
+
+	// navegação ◀ ▶ + "página/total" (só com mais de uma página)
+	if len(all) > radioSrchPageN {
+		pgBtn := func(idx int, r image.Rectangle, label string, enabled bool, fn func()) {
+			fillRect(gtx.Ops, r, color.NRGBA{R: 0x30, G: 0x30, B: 0x3A, A: 0xFF})
+			fg := colRadioDim
+			if enabled {
+				fg = colRadioTxt
+			}
+			ui.textAt(gtx, ui.fontUI, unit.Sp(10), label, fg,
+				image.Pt(r.Min.X+r.Dx()/2-4, r.Min.Y+4))
+			if !enabled {
+				return
+			}
+			if ui.button(gtx, &pl.radioPgBtns[idx], r, func(gtx layout.Context, down bool) {
+				if down {
+					fillRect(gtx.Ops, image.Rect(0, 0, r.Dx(), r.Dy()),
+						color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
+				}
+			}) {
+				fn()
+			}
+		}
+		prevR := image.Rect(navR.Min.X, navR.Min.Y, navR.Min.X+22, navR.Max.Y)
+		nextR := image.Rect(navR.Max.X-22, navR.Min.Y, navR.Max.X, navR.Max.Y)
+		pgBtn(0, prevR, "◀", pl.radioPage > 0, func() {
+			pl.radioPage--
+			pl.radioScroll = 0
+		})
+		pgBtn(1, nextR, "▶", pl.radioPage < pages-1, func() {
+			pl.radioPage++
+			pl.radioScroll = 0
+		})
+		ui.textAt(gtx, ui.fontUI, unit.Sp(9),
+			fmt.Sprintf("%d/%d", pl.radioPage+1, pages), colRadioDim,
+			image.Pt(prevR.Max.X+4, navR.Min.Y+4))
+	}
+
 	contentH := len(results) * radioSrchRowH
 	maxScroll := contentH - areaH
 	if maxScroll < 0 {
@@ -284,9 +345,9 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 	if pl.radioScroll < 0 {
 		pl.radioScroll = 0
 	}
-	if len(results) == 0 && !pl.radioSearching && pl.radioSrchStat == "" {
+	if len(all) == 0 && !pl.radioSearching && pl.radioSrchStat == "" {
 		ui.textAt(gtx, ui.fontUI, unit.Sp(9), "nenhum resultado — digite e pressione Enter para buscar",
-			colRadioDim, image.Pt(listR.Min.X+4, resTop+2))
+			colRadioDim, image.Pt(listR.Min.X+4, pageTop+2))
 	}
 
 	visTop := int(pl.radioScroll) / radioSrchRowH
@@ -296,9 +357,9 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 			continue
 		}
 		r := results[row]
-		ry := resTop + row*radioSrchRowH - int(pl.radioScroll)
+		ry := pageTop + row*radioSrchRowH - int(pl.radioScroll)
 		line := image.Rect(listR.Min.X, ry, listR.Max.X, ry+radioSrchRowH-1)
-		if line.Max.Y < resTop || line.Min.Y > listR.Max.Y {
+		if line.Max.Y < pageTop || line.Min.Y > listR.Max.Y {
 			continue
 		}
 

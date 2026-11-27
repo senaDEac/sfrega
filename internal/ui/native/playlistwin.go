@@ -62,6 +62,8 @@ type plw struct {
 	radioSearching bool
 	radioSrchStat  string
 	radioSrchBtns  []uibtn
+	radioPgBtns    [2]uibtn
+	radioPage      int
 	radioEdDbg     event.Tag
 
 	plScrollDragging bool
