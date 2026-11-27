@@ -13,7 +13,7 @@ type TrackMeta struct {
 	Plays    int      `json:"plays"`
 	Rating   int      `json:"rating"` // 0..5
 	Hashtags []string `json:"hashtags"`
-	Shuffle  int      `json:"shuffle"` // plays >=15s no ciclo de shuffle atual
+	Shuffle  int      `json:"shuffle"` // 0/1: já tocada >=15s no ciclo de shuffle atual
 }
 
 // trackLibrary persiste metadados por caminho de faixa em JSON.
@@ -36,6 +36,12 @@ func newTrackLibrary(path string) *trackLibrary {
 		var f libraryFile
 		if json.Unmarshal(b, &f) == nil && f.Tracks != nil {
 			l.meta = f.Tracks
+			// shuffle é binário (0/1): normaliza valores antigos >1
+			for _, m := range l.meta {
+				if m.Shuffle > 1 {
+					m.Shuffle = 1
+				}
+			}
 		}
 	}
 	return l
@@ -98,7 +104,7 @@ func (l *trackLibrary) addPlay(path string) {
 	l.dirty = true
 }
 
-// shuffleCount retorna o contador de shuffle da faixa (0 se sem meta).
+// shuffleCount retorna a marca de shuffle da faixa (0/1; 0 se sem meta).
 func (l *trackLibrary) shuffleCount(path string) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -108,7 +114,7 @@ func (l *trackLibrary) shuffleCount(path string) int {
 	return 0
 }
 
-// addShuffle incrementa o contador de shuffle (play >=15s).
+// addShuffle marca a faixa como tocada no ciclo de shuffle atual (0→1).
 func (l *trackLibrary) addShuffle(path string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -117,7 +123,7 @@ func (l *trackLibrary) addShuffle(path string) {
 		m = &TrackMeta{Hashtags: randomTags()}
 		l.meta[path] = m
 	}
-	m.Shuffle++
+	m.Shuffle = 1
 	l.dirty = true
 }
 

@@ -45,10 +45,13 @@ func main() {
 	args := flag.Args()
 	var tracks []string
 	if len(args) == 0 {
-		// sem argumentos: restaura a playlist persistida; se vazia,
-		// cai no scan dos diretórios de música comuns
-		if saved := player.LoadPlaylist(player.PlaylistFilePath()); len(saved) > 0 {
-			tracks = saved
+		// sem argumentos: restaura a playlist persistida; se o arquivo não
+		// existe (primeira execução), cai no scan dos diretórios de música.
+		// Um m3u existente porém vazio significa playlist propositalmente
+		// limpa — não reescaneia.
+		plPath := player.PlaylistFilePath()
+		if _, err := os.Stat(plPath); err == nil {
+			tracks = player.LoadPlaylist(plPath)
 		} else {
 			for _, d := range defaultMusicDirs() {
 				tracks = append(tracks, collect(d)...)

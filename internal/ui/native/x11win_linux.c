@@ -576,13 +576,14 @@ void sfrega_geo_save(void)
     mkdir(cfg, 0755);
 
     /* preserva posições de janelas hoje fechadas */
-    char old_name[3][64];
-    int old_x[3], old_y[3], nold = 0;
+    enum { MAX_GEO = 16 };
+    char old_name[MAX_GEO][64];
+    int old_x[MAX_GEO], old_y[MAX_GEO], nold = 0;
     FILE *of = fopen(path, "r");
     if (of) {
         char on[64];
         int ox, oy;
-        while (nold < 3 && fscanf(of, "%63s %d %d", on, &ox, &oy) == 3) {
+        while (nold < MAX_GEO && fscanf(of, "%63s %d %d", on, &ox, &oy) == 3) {
             snprintf(old_name[nold], 64, "%s", on);
             old_x[nold] = ox;
             old_y[nold] = oy;

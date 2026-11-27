@@ -746,13 +746,31 @@ func (p *Player) saveTracksLocked() {
 	if p.listFile == "" || p.noPersist.Load() {
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(p.listFile), 0o755)
+	p.writeM3U(p.listFile, p.tracks)
+}
+
+// writeM3U grava tracks em path no formato m3u.
+func (p *Player) writeM3U(path string, tracks []string) {
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
-	for _, t := range p.tracks {
+	for _, t := range tracks {
 		b.WriteString(t + "\n")
 	}
-	_ = os.WriteFile(p.listFile, []byte(b.String()), 0o644)
+	_ = os.WriteFile(path, []byte(b.String()), 0o644)
+}
+
+// SavePlaylistFile grava tracks no arquivo de playlist da janela principal
+// (playlist.m3u), mesmo quando outra janela está ativa no player — edições
+// na Playlist com Radio/Video tocando não podem se perder.
+func (p *Player) SavePlaylistFile(tracks []string) {
+	p.mu.Lock()
+	path := p.listFile
+	p.mu.Unlock()
+	if path == "" {
+		return
+	}
+	p.writeM3U(path, tracks)
 }
 
 // LoadPlaylist lê um arquivo m3u e retorna as faixas (ignora comentários).
@@ -799,6 +817,9 @@ func (p *Player) SetTracks(tracks []string) {
 	p.saveTracksLocked()
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
 	p.warmTags(tracks)
+	if len(tracks) == 0 {
+		p.Pause() // playlist esvaziada: para a reprodução
+	}
 }
 
 // AddTracks anexa faixas ao fim da playlist sem interromper a reprodução.

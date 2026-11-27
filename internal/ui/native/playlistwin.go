@@ -246,8 +246,16 @@ func (pl *plw) loop() {
 				logical.Y = 1
 			}
 			gtx = beginScaledFrame(gtx, pl.plScale, logical)
-			pl.plWidth = gtx.Metric.PxToDp(logical.X)
-			pl.plHeight = gtx.Metric.PxToDp(logical.Y)
+			// tamanho só vale em modo janela: em shade o frame reporta a
+			// altura da barra (~18px) e frames transitórios de abertura
+			// podem vir minúsculos — persistir isso quebraria o tamanho
+			// de reabertura ("volta sempre numa linha").
+			if logical.X >= 200 {
+				pl.plWidth = gtx.Metric.PxToDp(logical.X)
+			}
+			if !pl.shadePL.on && logical.Y >= 60 {
+				pl.plHeight = gtx.Metric.PxToDp(logical.Y)
+			}
 			pl.layoutPL(gtx)
 			e.Frame(gtx.Ops)
 		}
@@ -469,7 +477,7 @@ func (pl *plw) applyTracks(t []string) {
 		pl.tracks = t
 	}
 	pl.dirty = true
-	pl.saveJSON()
+	pl.persist()
 }
 
 // removeAt remove a faixa i da lista da janela.
@@ -481,7 +489,7 @@ func (pl *plw) removeAt(i int) {
 		pl.tracks = append(pl.tracks[:i], pl.tracks[i+1:]...)
 	}
 	pl.dirty = true
-	pl.saveJSON()
+	pl.persist()
 }
 
 // addTracks anexa faixas à lista da janela.
@@ -496,9 +504,19 @@ func (pl *plw) addTracks(files []string) {
 		pl.tracks = append(append([]string(nil), pl.tracks...), files...)
 	}
 	pl.dirty = true
-	pl.saveJSON()
+	pl.persist()
 	// preenche tags/capas em background sem tocar nos índices do player
 	go pl.ui.p.WarmTracks(pl.tracks)
+}
+
+// persist grava a lista da janela no seu arquivo de estado: Radio/Video no
+// json próprio; a Playlist principal no playlist.m3u mesmo quando outra
+// janela está ativa (edição não pode se perder ao fechar o app).
+func (pl *plw) persist() {
+	pl.saveJSON()
+	if pl.key == "pl" {
+		pl.ui.p.SavePlaylistFile(pl.tracks)
+	}
 }
 
 // syncFromPlayer copia do player a lista recém-editada.
