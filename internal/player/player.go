@@ -823,20 +823,37 @@ func (p *Player) SetTracks(tracks []string) {
 }
 
 // AddTracks anexa faixas ao fim da playlist sem interromper a reprodução.
+// Faixas cujo path já está na playlist são puladas (dedup por caminho).
 func (p *Player) AddTracks(tracks []string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(tracks) == 0 {
 		return
 	}
-	p.tracks = append(p.tracks, tracks...)
+	have := make(map[string]bool, len(p.tracks)+len(tracks))
+	for _, t := range p.tracks {
+		have[filepath.Clean(t)] = true
+	}
+	var added []string
+	for _, t := range tracks {
+		c := filepath.Clean(t)
+		if have[c] {
+			continue
+		}
+		have[c] = true
+		p.tracks = append(p.tracks, t)
+		added = append(added, t)
+	}
+	if len(added) == 0 {
+		return
+	}
 	if p.index < 0 {
 		p.index = 0
 	}
 	p.ensureMetaLocked()
 	p.saveTracksLocked()
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: p.currentTitle()})
-	p.warmTags(tracks)
+	p.warmTags(added)
 }
 
 // ensureMetaLocked cria entradas de metadados (com hashtags) para faixas novas.

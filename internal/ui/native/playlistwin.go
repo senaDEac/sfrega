@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"image"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gioui.org/app"
@@ -501,7 +502,19 @@ func (pl *plw) addTracks(files []string) {
 		pl.ui.p.AddTracks(files)
 		pl.tracks = pl.ui.p.Tracks()
 	} else {
-		pl.tracks = append(append([]string(nil), pl.tracks...), files...)
+		// janela inativa: dedup por caminho contra a lista dela
+		have := make(map[string]bool, len(pl.tracks)+len(files))
+		for _, t := range pl.tracks {
+			have[filepath.Clean(t)] = true
+		}
+		for _, t := range files {
+			c := filepath.Clean(t)
+			if have[c] {
+				continue
+			}
+			have[c] = true
+			pl.tracks = append(pl.tracks, t)
+		}
 	}
 	pl.dirty = true
 	pl.persist()
