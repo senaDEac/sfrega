@@ -205,19 +205,11 @@ var (
 	colRadioTxt  = color.NRGBA{R: 0xFF, G: 0xE8, B: 0x00, A: 0xFF} // amarelo
 	colRadioDim  = color.NRGBA{R: 0xC0, G: 0xB0, B: 0x40, A: 0xFF} // amarelo apagado
 	colRadioPh   = color.NRGBA{R: 0x30, G: 0x30, B: 0x38, A: 0xFF}
-	colRadioOk   = color.NRGBA{R: 0x50, G: 0xB0, B: 0x50, A: 0xFF}
-	colRadioOff  = color.NRGBA{R: 0xB0, G: 0x50, B: 0x50, A: 0xFF}
 )
 
-// radioInfo monta a linha de informações da estação (tudo que veio do site).
+// radioInfo monta a linha de informações da estação (descrição + local).
 func radioInfo(st radioStation) string {
 	var parts []string
-	if st.Type != "" {
-		parts = append(parts, st.Type)
-	}
-	if st.Status != "" {
-		parts = append(parts, st.Status)
-	}
 	if st.Desc != "" {
 		parts = append(parts, st.Desc)
 	}
@@ -231,9 +223,6 @@ func radioInfo(st radioStation) string {
 	}
 	if loc != "" {
 		parts = append(parts, loc)
-	}
-	if st.URL != "" {
-		parts = append(parts, st.URL)
 	}
 	return strings.Join(parts, "  ·  ")
 }
@@ -314,16 +303,15 @@ func (pl *plw) plRadioGrid(gtx layout.Context, listR image.Rectangle) {
 		}
 		nc.Pop()
 
-		// status colorido no canto direito
-		if st.Status == "onLine" {
-			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(9), "●", colRadioOk, image.Pt(line.Max.X-14, ry+4))
-		} else if st.Status == "offLine" {
-			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(9), "○", colRadioOff, image.Pt(line.Max.X-14, ry+4))
-		}
+		// (sem indicador de status: tipo/online/url removidos a pedido)
 
 		// botão invisível: direito abre o balão, duplo-clique toca
 		b := &pl.radioBtns[idx]
-		b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
+		if pl.radioPop == nil {
+			b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
+		} else {
+			b.scrollFn = nil
+		}
 		if pl.ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
 			if down {
 				fillRect(gtx.Ops, image.Rect(0, 0, line.Dx(), line.Dy()),

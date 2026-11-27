@@ -394,7 +394,11 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 			pl.radioSrchBtns = append(pl.radioSrchBtns, uibtn{})
 		}
 		b := &pl.radioSrchBtns[row]
-		b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
+		if pl.radioPop == nil {
+			b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
+		} else {
+			b.scrollFn = nil
+		}
 		if ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
 			if down {
 				fillRect(gtx.Ops, image.Rect(0, 0, line.Dx(), line.Dy()),

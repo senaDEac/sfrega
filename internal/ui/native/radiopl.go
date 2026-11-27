@@ -47,13 +47,16 @@ type radioPick struct {
 
 // radioPopState é o balão de contexto de uma estação.
 type radioPopState struct {
-	x, y  int
-	pick  radioPick
-	mode  int // 0 = menu, 1 = nome da nova playlist
-	btns  []uibtn
-	ed    widget.Editor
-	edTag event.Tag
-	menuR image.Rectangle // rect do menu (para clique-fora)
+	x, y      int
+	pick      radioPick
+	mode      int // 0 = menu, 1 = nome da nova playlist
+	btns      []uibtn
+	ed        widget.Editor
+	edTag     event.Tag
+	wheelTag  event.Tag
+	menuR     image.Rectangle // rect do menu (para clique-fora)
+	scroll    float32
+	scrollAcc float32
 }
 
 var (
@@ -309,12 +312,21 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 	ui := pl.ui
 	groups := radioPlGroups()
 
-	var mh int
+	// altura total do conteúdo e altura útil da janela
+	fullH := 8 + radioPopRow*3
 	if pop.mode == 0 {
 		// header + Tocar + Adicionar + sep + "playlists" + grupos + "+ adicionar"
-		mh = 120 + len(groups)*radioPopRow
-	} else {
-		mh = 8 + radioPopRow*3
+		fullH = 120 + len(groups)*radioPopRow
+	}
+	topMin := plTopH + 20
+	botMax := winH - plBotH - 4
+	availH := botMax - topMin
+	mh := fullH
+	if mh > availH {
+		mh = availH
+	}
+	if mh < radioPopRow*2 {
+		mh = radioPopRow * 2
 	}
 	mw := radioPopW
 	mx := pop.x
@@ -322,17 +334,27 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 	if mx+mw > winW-4 {
 		mx = winW - 4 - mw
 	}
-	if my+mh > winH-plBotH-4 {
-		my = winH - plBotH - 4 - mh
+	if my+mh > botMax {
+		my = botMax - mh
 	}
 	if mx < 4 {
 		mx = 4
 	}
-	if my < plTopH+20 {
-		my = plTopH + 20
+	if my < topMin {
+		my = topMin
 	}
 	menuR := image.Rect(mx, my, mx+mw, my+mh)
 	pop.menuR = menuR
+	maxScroll := float32(fullH - mh)
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if pop.scroll > maxScroll {
+		pop.scroll = maxScroll
+	}
+	if pop.scroll < 0 {
+		pop.scroll = 0
+	}
 
 	// bloqueador: clique fora fecha o balão
 	{
@@ -360,11 +382,45 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 	bevel(gtx, menuR, color.NRGBA{R: 0x70, G: 0x70, B: 0x80, A: 0xFF},
 		color.NRGBA{R: 0x08, G: 0x08, B: 0x0C, A: 0xFF})
 
+	// roda do mouse dentro do balão
+	inner := image.Rect(menuR.Min.X+1, menuR.Min.Y+1, menuR.Max.X-1, menuR.Max.Y-1)
+	{
+		wc := clip.Rect(inner).Push(gtx.Ops)
+		event.Op(gtx.Ops, &pop.wheelTag)
+		wc.Pop()
+		for {
+			ev, ok := gtx.Event(pointer.Filter{
+				Target:  &pop.wheelTag,
+				Kinds:   pointer.Scroll,
+				ScrollX: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+				ScrollY: pointer.ScrollRange{Min: -1 << 30, Max: 1 << 30},
+			})
+			if !ok {
+				break
+			}
+			if e, ok := ev.(pointer.Event); ok {
+				pop.scrollAcc += e.Scroll.Y
+			}
+		}
+	}
+	if pop.scrollAcc != 0 {
+		pop.scroll -= pop.scrollAcc
+		if pop.scroll > maxScroll {
+			pop.scroll = maxScroll
+		}
+		if pop.scroll < 0 {
+			pop.scroll = 0
+		}
+		pop.scrollAcc = 0
+	}
+
 	for len(pop.btns) < 16 {
 		pop.btns = append(pop.btns, uibtn{})
 	}
 
-	rowY := menuR.Min.Y + 4
+	// conteúdo transladado pelo scroll, clipado dentro do balão
+	rowY := menuR.Min.Y + 4 - int(pop.scroll)
+	ic := clip.Rect(inner).Push(gtx.Ops)
 	btnIdx := 0
 	drawRow := func(r image.Rectangle, label string, enabled bool, fn func()) {
 		fg := colRadioTxt
@@ -428,6 +484,7 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 		}
 		line("+ adicionar playlist", true, func() {
 			pop.mode = 1
+			pop.scroll = 0
 			pop.ed.SetText("")
 			if pl.win != nil {
 				pl.win.Invalidate()
@@ -481,10 +538,32 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 		drawRow(okR, "OK", true, func() { pl.radioCreatePlaylist() })
 		drawRow(ccR, "sair", true, func() {
 			pop.mode = 0
+			pop.scroll = 0
 			if pl.win != nil {
 				pl.win.Invalidate()
 			}
 		})
+	}
+	ic.Pop()
+
+	// scrollbar quando o conteúdo excede o balão
+	if maxScroll > 0 {
+		track := image.Rect(menuR.Max.X-5, menuR.Min.Y+2, menuR.Max.X-3, menuR.Max.Y-2)
+		fillRect(gtx.Ops, track, color.NRGBA{R: 0x30, G: 0x30, B: 0x3A, A: 0xFF})
+		thumbH := mh * mh / fullH
+		if thumbH < 12 {
+			thumbH = 12
+		}
+		if thumbH > mh-4 {
+			thumbH = mh - 4
+		}
+		frac := float32(0)
+		if maxScroll > 0 {
+			frac = pop.scroll / maxScroll
+		}
+		thumbY := menuR.Min.Y + 2 + int(frac*float32(mh-4-thumbH))
+		fillRect(gtx.Ops, image.Rect(track.Min.X, thumbY, track.Max.X, thumbY+thumbH),
+			color.NRGBA{R: 0x90, G: 0x90, B: 0xA0, A: 0xFF})
 	}
 }
 
@@ -552,6 +631,7 @@ func (pl *plw) radioCreatePlaylist() {
 	}
 	name := strings.TrimSpace(pop.ed.Text())
 	pop.mode = 0
+	pop.scroll = 0
 	if name == "" {
 		return
 	}
@@ -659,7 +739,11 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		// grupos ficam inertes enquanto o balão está aberto
 		if ry > visMin && ry < visMax && (rw.entry || pl.radioPop == nil) {
 			b := &pl.plGenreBtns[ri]
-			b.scrollFn = func(dy float32) { pl.plGenreScrollAcc += dy }
+			if pl.radioPop == nil {
+				b.scrollFn = func(dy float32) { pl.plGenreScrollAcc += dy }
+			} else {
+				b.scrollFn = nil
+			}
 			if ui.button(gtx, b, rowR, func(gtx layout.Context, down bool) {
 				if down {
 					fillRect(gtx.Ops, image.Rect(0, 0, rowR.Dx(), rowR.Dy()),

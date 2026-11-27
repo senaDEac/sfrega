@@ -54,6 +54,9 @@ func (pl *plw) plWheel(gtx layout.Context, r image.Rectangle) {
 		if !ok {
 			continue
 		}
+		if pl.radioPop != nil {
+			continue // balão aberto: a roda é dele
+		}
 		if pl.key == "rd" && (pl.showRadios || pl.radioSearch) {
 			pl.radioScrollAcc += e.Scroll.Y
 		} else {
@@ -1389,6 +1392,9 @@ func (pl *plw) plGenreWheel(gtx layout.Context, r image.Rectangle) {
 		}
 		e, ok := ev.(pointer.Event)
 		if !ok {
+			continue
+		}
+		if pl.radioPop != nil {
 			continue
 		}
 		pl.plGenreScrollAcc += e.Scroll.Y
