@@ -303,7 +303,7 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 			}
 			ui.textAt(gtx, ui.fontUI, unit.Sp(10), label, fg,
 				image.Pt(r.Min.X+r.Dx()/2-4, r.Min.Y+4))
-			if !enabled {
+			if !enabled || pl.radioPop != nil {
 				return
 			}
 			if ui.button(gtx, &pl.radioPgBtns[idx], r, func(gtx layout.Context, down bool) {
@@ -395,13 +395,13 @@ func (pl *plw) plRadioSearch(gtx layout.Context, listR image.Rectangle) {
 		}
 		b := &pl.radioSrchBtns[row]
 		b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
-		if ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
+		if pl.radioPop == nil && ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
 			if down {
 				fillRect(gtx.Ops, image.Rect(0, 0, line.Dx(), line.Dy()),
 					color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 			}
 		}) {
-			pl.playRadioResult(r)
+			pl.openRadioPop(line.Min.X+10, line.Min.Y+10, radioPickOfResult(r))
 		}
 	}
 }

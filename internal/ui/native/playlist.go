@@ -157,6 +157,7 @@ func (pl *plw) layoutPL(gtx layout.Context) {
 	pl.plTopBar(gtx, winW, R)
 	pl.plMiddle(gtx, winW, winH, botY, tracks)
 	pl.plBottom(gtx, winW, winH, botY, tracks)
+	pl.plRadioPop(gtx, winW, winH)
 }
 
 // plShadeBar desenha a playlist recolhida: linha única na altura do shade
@@ -440,8 +441,12 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 
 	// painel de gêneros: mesmo formato do de artistas, um gênero por linha;
 	// duplo-clique expande e mostra todas as músicas do gênero
+	// (na janela Radio lista os grupos de playlists de estações)
 	genreH := 0
-	if pl.plGenreOpen {
+	if pl.plGenreOpen && pl.key == "rd" {
+		genreH = pl.plRadioGroupPanel(gtx, winW, botY)
+	}
+	if pl.plGenreOpen && pl.key != "rd" {
 		genres := pl.meta.Genres()
 		for len(pl.plGenreBtns) < len(genres) {
 			pl.plGenreBtns = append(pl.plGenreBtns, uibtn{})

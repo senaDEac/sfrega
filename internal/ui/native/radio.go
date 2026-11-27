@@ -320,22 +320,16 @@ func (pl *plw) plRadioGrid(gtx layout.Context, listR image.Rectangle) {
 			pl.ui.textAt(gtx, pl.ui.fontUI, unit.Sp(9), "○", colRadioOff, image.Pt(line.Max.X-14, ry+4))
 		}
 
-		// botão invisível: duplo-clique toca a rádio
+		// botão invisível: clique abre o balão de contexto da estação
 		b := &pl.radioBtns[idx]
 		b.scrollFn = func(dy float32) { pl.radioScrollAcc += dy }
-		if pl.ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
+		if pl.radioPop == nil && pl.ui.button(gtx, b, line, func(gtx layout.Context, down bool) {
 			if down {
 				fillRect(gtx.Ops, image.Rect(0, 0, line.Dx(), line.Dy()),
 					color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 			}
 		}) {
-			now := time.Now()
-			dbl := now.Sub(b.lastClick) < 500*time.Millisecond
-			b.lastClick = now
-			if dbl {
-				b.lastClick = time.Time{}
-				_ = pl.ui.p.PlayStream(st.Name, st.URL)
-			}
+			pl.openRadioPop(line.Min.X+10, line.Min.Y+10, radioPickOfStation(st))
 		}
 	}
 }

@@ -65,6 +65,8 @@ type plw struct {
 	radioPgBtns    [2]uibtn
 	radioPage      int
 	radioEdDbg     event.Tag
+	radioPop       *radioPopState
+	radioPopBlock  event.Tag
 
 	plScrollDragging bool
 	plScrollDragLast float32
