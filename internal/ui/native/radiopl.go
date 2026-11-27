@@ -177,10 +177,14 @@ func radioPlToggle(group string, e radioPlEntry) {
 
 // ---- catálogo (botão RADIOS) ----
 
-// radioCatalogHas diz se a estação já existe no catálogo (por URL ou nome).
+// radioCatalogHas diz se a estação já aparece na lista do botão RADIOS
+// (catálogo + estações de todas as playlists), por GuideId, URL ou nome.
 func radioCatalogHas(p radioPick) bool {
-	for _, st := range loadRadios() {
-		if p.URL != "" && st.URL == p.URL {
+	for _, st := range allRadioStations() {
+		if p.Guide != "" && st.Guide != "" && st.Guide == p.Guide {
+			return true
+		}
+		if p.URL != "" && st.URL != "" && st.URL == p.URL {
 			return true
 		}
 		if strings.EqualFold(st.Name, p.Name) {
@@ -590,7 +594,7 @@ func (pl *plw) radioAddToCatalog() {
 	pl.closeRadioPop()
 	if p.URL != "" {
 		radioCatalogAdd(radioStation{Name: p.Name, URL: p.URL, Icon: p.Icon,
-			Type: "search", Desc: p.Desc})
+			Guide: p.Guide, Type: "search", Desc: p.Desc})
 		return
 	}
 	if p.Guide == "" {
@@ -602,7 +606,7 @@ func (pl *plw) radioAddToCatalog() {
 			return
 		}
 		radioCatalogAdd(radioStation{Name: p.Name, URL: u, Icon: p.Icon,
-			Type: "search", Desc: p.Desc})
+			Guide: p.Guide, Type: "search", Desc: p.Desc})
 		if pl.win != nil {
 			pl.win.Invalidate()
 		}
