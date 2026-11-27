@@ -463,11 +463,38 @@ func (pl *plw) plRadioPop(gtx layout.Context, winW, winH int) {
 		full := radioPlEntryOf(pop.pick)
 		inCatalog := radioCatalogHas(pop.pick)
 
-		addLbl := "Adicionar"
-		if inCatalog {
-			addLbl = "já adicionada"
+		// linha Adicionar (verde) / já adicionada + Remover (vermelho)
+		addR := image.Rect(menuR.Min.X+4, rowY, menuR.Max.X-4, rowY+radioPopRow-2)
+		white := color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+		popBtn := func(r image.Rectangle, label string, bg color.NRGBA, fn func()) {
+			fillRect(gtx.Ops, r, bg)
+			bevel(gtx, r, color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x30},
+				color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x50})
+			tw := len(label) * 5 // estimativa p/ centralizar (Sp9)
+			ui.textAt(gtx, ui.fontUI, unit.Sp(9), label, white,
+				image.Pt(r.Min.X+r.Dx()/2-tw/2, r.Min.Y+5))
+			b := &pop.btns[btnIdx]
+			btnIdx++
+			if ui.button(gtx, b, r, func(gtx layout.Context, down bool) {
+				if down {
+					fillRect(gtx.Ops, image.Rect(0, 0, r.Dx(), r.Dy()),
+						color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x20})
+				}
+			}) && !b.lastBtns.Contain(pointer.ButtonSecondary) {
+				fn()
+			}
 		}
-		line(addLbl, !inCatalog, func() { pl.radioAddToCatalog() })
+		if inCatalog {
+			ui.textAt(gtx, ui.fontUI, unit.Sp(9), "já adicionada", colRadioDim,
+				image.Pt(addR.Min.X+6, addR.Min.Y+5))
+			rmR := image.Rect(addR.Max.X-64, addR.Min.Y, addR.Max.X, addR.Max.Y)
+			popBtn(rmR, "Remover", color.NRGBA{R: 0xB0, G: 0x22, B: 0x22, A: 0xFF},
+				func() { pl.radioRemoveStation() })
+		} else {
+			popBtn(addR, "Adicionar", color.NRGBA{R: 0x1E, G: 0x7A, B: 0x46, A: 0xFF},
+				func() { pl.radioAddToCatalog() })
+		}
+		rowY += radioPopRow
 
 		// separador antes das categorias
 		fillRect(gtx.Ops, image.Rect(menuR.Min.X+4, rowY+8, menuR.Max.X-4, rowY+10),
@@ -611,6 +638,55 @@ func (pl *plw) radioAddToCatalog() {
 			pl.win.Invalidate()
 		}
 	}()
+}
+
+// radioSameStation diz se a entrada de playlist é a mesma estação do pick
+// (GuideId > URL > nome, ambos os lados precisam ter o campo para casar).
+func radioSameStation(p radioPick, e radioPlEntry) bool {
+	if p.Guide != "" && e.Guide != "" && p.Guide == e.Guide {
+		return true
+	}
+	if p.URL != "" && e.URL != "" && p.URL == e.URL {
+		return true
+	}
+	return strings.EqualFold(p.Name, e.Name)
+}
+
+// radioRemoveStation tira a estação de todos os lugares onde aparece na
+// lista do botão RADIOS: catálogo (radios.json) e todas as playlists.
+func (pl *plw) radioRemoveStation() {
+	p := pl.radioPop.pick
+	pl.closeRadioPop()
+
+	kept := radiosList[:0]
+	for _, st := range radiosList {
+		e := radioPlEntry{Name: st.Name, URL: st.URL, Guide: st.Guide}
+		if radioSameStation(p, e) {
+			continue
+		}
+		kept = append(kept, st)
+	}
+	if len(kept) != len(radiosList) {
+		radiosList = kept
+		saveRadiosCatalog()
+	}
+
+	m := loadRadioPls()
+	changed := false
+	for g, list := range m {
+		kp := list[:0]
+		for _, e := range list {
+			if radioSameStation(p, e) {
+				changed = true
+				continue
+			}
+			kp = append(kp, e)
+		}
+		m[g] = kp
+	}
+	if changed {
+		saveRadioPls()
+	}
 }
 
 // radioTogglePlaylist alterna a estação no grupo e fecha o balão.
