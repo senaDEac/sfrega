@@ -908,6 +908,9 @@ func Run(p *player.Player, musicDirs []string) error {
 		ui.eqSliders[i].val = 0.5
 		ui.eqSliders[i].commit = func(v float32) { ui.applyEQ() }
 	}
+	// restaura estado persistido do EQ (ON/AUTO/presets + ganhos) e aplica
+	ui.loadEQState()
+	ui.applyEQ()
 
 	ui.winMain = new(app.Window)
 	ui.winMain.Option(

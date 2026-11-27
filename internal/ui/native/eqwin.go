@@ -1,8 +1,12 @@
 package native
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"gioui.org/app"
@@ -112,6 +116,58 @@ func (ui *uiState) eqLoop() {
 	}
 }
 
+// eqStatePath é onde o estado do equalizador é persistido.
+func eqStatePath() string { return configPath("eqstate.txt") }
+
+// saveEQState grava ON/AUTO/presets abertos + preamp e ganhos das 10 bandas.
+func (ui *uiState) saveEQState() {
+	var b strings.Builder
+	flags := func(on bool) int {
+		if on {
+			return 1
+		}
+		return 0
+	}
+	fmt.Fprintf(&b, "%d %d %d\n", flags(ui.eqOn), flags(ui.eqAuto), flags(ui.eqPresOpen))
+	fmt.Fprintf(&b, "%g\n", ui.preampSlide.val)
+	for _, s := range ui.eqSliders {
+		fmt.Fprintf(&b, "%g\n", s.val)
+	}
+	_ = os.WriteFile(eqStatePath(), []byte(b.String()), 0o644)
+}
+
+// loadEQState restaura o estado salvo do equalizador (se existir).
+func (ui *uiState) loadEQState() {
+	b, err := os.ReadFile(eqStatePath())
+	if err != nil {
+		return
+	}
+	f := strings.Fields(string(b))
+	if len(f) < 14 {
+		return
+	}
+	ui.eqOn = f[0] == "1"
+	ui.eqAuto = f[1] == "1"
+	ui.eqPresOpen = f[2] == "1"
+	clamp01 := func(v float64) float32 {
+		if v < 0 {
+			v = 0
+		}
+		if v > 1 {
+			v = 1
+		}
+		return float32(v)
+	}
+	if v, err := strconv.ParseFloat(f[3], 32); err == nil {
+		ui.preampSlide.val = clamp01(v)
+	}
+	for i := 0; i < 10 && 4+i < len(f); i++ {
+		if v, err := strconv.ParseFloat(f[4+i], 32); err == nil {
+			ui.eqSliders[i].val = clamp01(v)
+		}
+	}
+}
+
 // applyEQ envia ganhos (dB) ao player; OFF zera tudo.
 func (ui *uiState) applyEQ() {
 	var gains [10]float64
@@ -124,6 +180,7 @@ func (ui *uiState) applyEQ() {
 	}
 	ui.p.SetEQ(gains, 0)
 	ui.p.SetPreamp(pre)
+	ui.saveEQState()
 }
 
 // eqBtn4 desenha botão EQ de 4 estados (normal/pressed/selected/sel+pressed).
@@ -191,10 +248,10 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 		ui.eqOn, func() { ui.eqOn = !ui.eqOn; ui.applyEQ() })
 	ui.eqBtn4(gtx, &ui.btnEQAuto, R(40, 18, 32, 12),
 		R(36, 119, 32, 12), R(95, 119, 32, 12), R(154, 119, 32, 12), R(213, 119, 32, 12),
-		ui.eqAuto, func() { ui.eqAuto = !ui.eqAuto })
+		ui.eqAuto, func() { ui.eqAuto = !ui.eqAuto; ui.saveEQState() })
 	ui.eqBtn4(gtx, &ui.btnEQPres, R(217, 18, 44, 12),
 		R(224, 164, 44, 12), R(224, 164, 44, 12), R(224, 176, 44, 12), R(224, 176, 44, 12),
-		ui.eqPresOpen, func() { ui.eqPresOpen = !ui.eqPresOpen })
+		ui.eqPresOpen, func() { ui.eqPresOpen = !ui.eqPresOpen; ui.saveEQState() })
 
 	// gráfico da curva EQ (86,17,113x19)
 	ui.spr(gtx, "EQMAIN", R(0, 294, 113, 19), R(86, 17, 113, 19))
