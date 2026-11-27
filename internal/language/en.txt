@@ -42,3 +42,4 @@ pl.btn.list=LIST
 pl.artist.tracks=%d tracks
 pl.list.placeholder=Man at Work
 menu.updating=UPDATING
+pl.btn.radios=RADIOS

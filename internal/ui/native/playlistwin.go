@@ -48,6 +48,12 @@ type plw struct {
 	plSel        int
 	plScrollAcc  float32
 
+	// grade de estações (só janela Radio): substitui a lista de faixas
+	showRadios     bool
+	radioScroll    float32
+	radioScrollAcc float32
+	radioBtns      []uibtn
+
 	plScrollDragging bool
 	plScrollDragLast float32
 	plScrollSink     *float32

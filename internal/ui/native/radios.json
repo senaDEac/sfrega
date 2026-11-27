@@ -1,0 +1,142 @@
+{
+ "stations": [
+  {
+   "name": "Radio 80FM",
+   "url": "http://104.247.221.130:9020/;",
+   "type": "general",
+   "icon": "assets/images/logos/radio80fm.png"
+  },
+  {
+   "name": "JovemPan Noticias SP",
+   "url": "https://ice.fabricahost.com.br/jovempanourinhos/",
+   "type": "general",
+   "icon": "assets/images/logos/jovempan.png"
+  },
+  {
+   "name": "Antena 1 São Paulo",
+   "url": "https://antenaone.crossradio.com.br/stream/1",
+   "type": "general",
+   "icon": "assets/images/logos/antena1.png"
+  },
+  {
+   "name": "transamerica",
+   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RT_SPAAC.aac",
+   "type": "general",
+   "icon": "assets/images/logos/transamerica.png"
+  },
+  {
+   "name": "KISS FM São Paulo",
+   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_KISSFMAAC.aac",
+   "type": "general",
+   "icon": "assets/images/logos/kissfm.png"
+  },
+  {
+   "name": "89FM São Paulo",
+   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_89FM.mp3",
+   "type": "generalB",
+   "icon": "assets/images/logos/89fm.png"
+  },
+  {
+   "name": "Cidade",
+   "url": "https://s06.hstbr.net:8042/live",
+   "type": "general",
+   "icon": "assets/images/logos/cidade.png"
+  },
+  {
+   "name": "Alpha FM São Paulo",
+   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_ALPHAFM.mp3",
+   "type": "generalB",
+   "icon": "assets/images/logos/alphafmsp.png"
+  },
+  {
+   "name": "Rádio Globo Rio 98.1",
+   "url": "http://medias.sgr.globo.com/hls/aRGloboRJ/aRGloboRJ.m3u8",
+   "type": "m3u8",
+   "icon": "https://cdn-profiles.tunein.com/s7065/images/logoq.png?t=156590"
+  },
+  {
+   "name": "Rádio CBN Rio 92.5",
+   "url": "https://medias.sgr.globo.com/hls/aCBNRJ/aCBNRJ.m3u8",
+   "type": "m3u8",
+   "icon": "https://cdn-profiles.tunein.com/s1143/images/logoq.png?t=156589"
+  },
+  {
+   "name": "BandNews FM Rio 90.3",
+   "url": "http://evpp.mm.uol.com.br/band/bandnewsfm_rj/playlist.m3u8",
+   "type": "m3u8",
+   "icon": "https://cdn-profiles.tunein.com/s98810/images/logoq.png"
+  },
+  {
+   "name": "Rádio Rio de Janeiro 1400",
+   "url": "https://sc1s.cdn.upx.com:8258/stream",
+   "type": "general",
+   "icon": "https://cdn-radiotime-logos.tunein.com/s100068q.png"
+  },
+  {
+   "name": "Rádio MEC FM Rio 99.3",
+   "url": "https://22722d.ha.azioncdn.net/hls-radio/STsEBCECFM/index.m3u8",
+   "type": "m3u8",
+   "icon": "https://cdn-radiotime-logos.tunein.com/s17776q.png"
+  },
+  {
+   "name": "Rádio Rio de Janeiro Light Hits",
+   "url": "https://freeuk5.listen2myradio.com/live.mp3?typeportmount=s2_14525_stream",
+   "type": "general",
+   "icon": "https://cdn-radiotime-logos.tunein.com/s235990q.png"
+  },
+  {
+   "name": "Rádio Terê FM 93.7",
+   "url": "http://cast.hoost.com.br:9093/stream",
+   "type": "general",
+   "icon": "https://cdn-radiotime-logos.tunein.com/s127715q.png"
+  },
+  {
+   "name": "Rádio Mundo Livre FM Curitiba 93.9",
+   "url": "https://rrdns-continental.webnow.com.br/mundolivre.aac",
+   "type": "general",
+   "icon": "https://cdn-profiles.tunein.com/s97340/images/logoq.png?t=159041"
+  },
+  {
+   "name": "Radio 98 FM Curitiba 98.9",
+   "url": "https://rrdns-continental.webnow.com.br/98fm.mp3",
+   "type": "general",
+   "icon": "https://cdn-profiles.tunein.com/s16621/images/logoq.png?t=636324"
+  },
+  {
+   "name": "Rádio T Curitiba 104.9",
+   "url": "http://wz1.dnip.com.br/radiotaacp/radiotaacp.stream/playlist.m3u8",
+   "type": "m3u8",
+   "icon": "https://cdn-radiotime-logos.tunein.com/s7002q.png"
+  },
+  {
+   "name": "Rádio BBN Curitiba 92.3",
+   "url": "https://bbnportuguese-lh.akamaihd.net/i/BibleBroadcasting_Portugueseios@87758/master.m3u8",
+   "type": "m3u8",
+   "icon": "https://cdn-profiles.tunein.com/s97942/images/logoq.jpg?t=153554"
+  },
+  {
+   "name": "Light FM Curitiba 95.1",
+   "url": "https://shout25.crossradio.com.br:19120/1;",
+   "type": "general",
+   "icon": "https://cdn-profiles.tunein.com/s95342/images/logoq.png?t=157800"
+  },
+  {
+   "name": "90s90s",
+   "url": "http://streams.90s90s.de/techno/mp3-192/tunein/artRadio;",
+   "type": "general",
+   "icon": "assets/images/logos/90s90s.png"
+  },
+  {
+   "name": "Bandnews FM Rio de Janeiro",
+   "url": "http://evpp.mm.uol.com.br/band/bandnewsfm_rj/playlist.m3u8",
+   "type": "m3u8",
+   "icon": "assets/images/logos/bandnewsfm_rj.png"
+  },
+  {
+   "name": "CBN São Paulo",
+   "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/CBN_RJAAC.aac?dist=tunein",
+   "type": "m3u8",
+   "icon": "assets/images/logos/aCBNSP.png"
+  }
+ ]
+}

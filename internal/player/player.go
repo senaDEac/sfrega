@@ -103,18 +103,30 @@ type pcmChunk struct {
 	pcm   []float32 // amostras intercaladas
 }
 
+// pcmDecoder é o mínimo que o Player precisa de um decodificador de áudio
+// (arquivo local via audio.Decoder ou stream via audio.StreamDecoder).
+type pcmDecoder interface {
+	ReadPCM(buf []float32, frames uint64) uint64
+	SampleRate() uint32
+	Channels() uint32
+	SeekFrame(frame int64) bool
+	Path() string
+	Close()
+}
+
 // Player é o núcleo do player.
 type Player struct {
 	mu        sync.Mutex
 	tracks    []string
 	index     int
+	liveTitle string // título de stream ao vivo ("" = faixa da playlist)
 	queue     []int         // ordem de reprodução de um grupo (nil = playlist inteira)
 	qpos      int           // posição atual dentro de queue (-1 = sem fila)
 	listFile  string        // playlist persistida em m3u ("" = desativado)
 	noPersist atomic.Bool   // outra lista ativa (Radio/Video): não gravar m3u/resume
 	tagsFile  string        // cache de tags persistido em tags.json
 	lib       *trackLibrary // metadados por faixa (plays/rating/tags)
-	dec       *audio.Decoder
+	dec       pcmDecoder
 	rb        *audio.RingBuffer
 	dev       *audio.Device
 	analyzer  *spectrum.Analyzer
@@ -921,6 +933,9 @@ func (p *Player) ResetTags() {
 }
 
 func (p *Player) currentTitle() string {
+	if p.liveTitle != "" {
+		return p.liveTitle
+	}
 	if p.index >= 0 && p.index < len(p.tracks) {
 		return p.tracks[p.index]
 	}
@@ -984,6 +999,7 @@ func (p *Player) playIndexLocked(i int) error {
 		return errors.New("player: índice inválido")
 	}
 	p.index = i
+	p.liveTitle = ""
 	if p.dec != nil {
 		p.closeTrackLocked()
 		p.rb.Clear()
@@ -1006,6 +1022,14 @@ func (p *Player) playIndexLocked(i int) error {
 func (p *Player) Index() int    { return p.index }
 func (p *Player) Count() int    { return len(p.tracks) }
 func (p *Player) Playing() bool { return p.playing.Load() }
+
+// StreamTitle retorna o nome da estação em reprodução via PlayStream
+// ("" quando uma faixa da playlist está tocando).
+func (p *Player) StreamTitle() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.liveTitle
+}
 
 // SetRepeat liga/desliga o repeat da playlist.
 func (p *Player) SetRepeat(on bool) { p.repeat.Store(on) }
@@ -1209,7 +1233,7 @@ func (p *Player) SeekFraction(f float64) error {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.dec == nil {
+	if p.dec == nil || p.index < 0 || p.index >= len(p.tracks) {
 		return errors.New("player: nada tocando")
 	}
 	total := p.durationFrames(p.tracks[p.index])
@@ -1467,7 +1491,51 @@ func (p *Player) openCurrentLocked() error {
 	p.emit(Event{Kind: "track-change", Index: p.index, Title: path,
 		Duration: p.duration(path, rate)})
 	go p.warmDuration(path)
-	go p.decodeLoop(dec, rate, ch, p.trackDone, path)
+	go p.decodeLoop(dec, rate, ch, p.trackDone, path, false)
+	return nil
+}
+
+// PlayStream toca um stream HTTP ao vivo (rádio) via ffmpeg → PCM → ring
+// buffer. Não entra na playlist: index fica -1 e o título exibido é o nome
+// da estação. Seek/repeat/shuffle não se aplicam.
+func (p *Player) PlayStream(name, url string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.queue = nil
+	p.qpos = -1
+	p.shufRemain = nil
+	p.index = -1
+	p.liveTitle = name
+	p.closeTrackLocked()
+	p.rb.Clear()
+	p.clearAnalyzeQ()
+	p.decoded.Store(0)
+	dec, err := audio.OpenStream(url)
+	if err != nil {
+		p.emit(Event{Kind: "error", Err: err, Index: -1})
+		return err
+	}
+	dev, err := audio.OpenDevice(44100, 2, p.rb)
+	if err != nil {
+		dec.Close()
+		p.emit(Event{Kind: "error", Err: err, Index: -1})
+		return err
+	}
+	dev.SetVolume(p.Volume())
+	dev.SetPan(p.Balance())
+	p.dec = dec
+	p.dev = dev
+	p.dualMono.Store(false)
+	if !dev.Start() {
+		dec.Close()
+		dev.Close()
+		p.dec, p.dev = nil, nil
+		return errors.New("player: falha ao iniciar dispositivo")
+	}
+	p.playing.Store(true)
+	p.trackDone = make(chan struct{})
+	p.emit(Event{Kind: "track-change", Index: -1, Title: name})
+	go p.decodeLoop(dec, 44100, 2, p.trackDone, name, true)
 	return nil
 }
 
@@ -1509,7 +1577,7 @@ func (p *Player) duration(path string, rate uint32) time.Duration {
 }
 
 // decodeLoop decodifica a faixa, aplica EQ/preamp, alimenta analisador e ring buffer.
-func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-chan struct{}, path string) {
+func (p *Player) decodeLoop(dec pcmDecoder, rate, channels uint32, stop <-chan struct{}, path string, live bool) {
 	chBuf := make([]float32, decodeChunkFrames*channels)
 	eq := p.eq.Load().(*eqState)
 	preamp := p.Preamp()
@@ -1530,6 +1598,11 @@ func (p *Player) decodeLoop(dec *audio.Decoder, rate, channels uint32, stop <-ch
 		}
 		frames := dec.ReadPCM(chBuf, decodeChunkFrames)
 		if frames == 0 {
+			if live {
+				// stream caiu/encerrou: para sem avançar a playlist
+				p.emit(Event{Kind: "error", Err: errors.New("stream encerrado"), Index: -1})
+				return
+			}
 			p.emit(Event{Kind: "eof", Index: p.index})
 			p.autoAdvance()
 			return

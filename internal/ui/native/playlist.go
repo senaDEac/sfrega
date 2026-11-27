@@ -54,7 +54,11 @@ func (pl *plw) plWheel(gtx layout.Context, r image.Rectangle) {
 		if !ok {
 			continue
 		}
-		pl.plList.ScrollBy(e.Scroll.Y / plRowH)
+		if pl.key == "rd" && pl.showRadios {
+			pl.radioScrollAcc += e.Scroll.Y
+		} else {
+			pl.plList.ScrollBy(e.Scroll.Y / plRowH)
+		}
 	}
 }
 
@@ -314,8 +318,12 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 	// 6 botões GENEX abaixo da linha de título, com rótulos da skin GEN
 	gbtns := []*uibtn{&pl.btnPLG1, &pl.btnPLG2, &pl.btnPLG3,
 		&pl.btnPLG4, &pl.btnPLG5, &pl.btnPLG6}
+	songsLbl := language.T("pl.btn.songs")
+	if pl.key == "rd" {
+		songsLbl = language.T("pl.btn.radios")
+	}
 	labels := []string{
-		language.T("pl.btn.genre"), language.T("pl.btn.songs"),
+		language.T("pl.btn.genre"), songsLbl,
 		language.T("pl.btn.artist"), language.T("pl.btn.folders"),
 		language.T("pl.btn.albums"), language.T("pl.btn.list"),
 	}
@@ -353,7 +361,14 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 				pl.plArtistOpen = false
 				pl.plFolderOpen = false
 			}
-			if i == 1 { // MÚSICAS: exibe todas as faixas e fecha os painéis
+			if i == 1 { // MÚSICAS/RÁDIOS: na janela Radio alterna a grade de estações
+				if pl.key == "rd" {
+					pl.showRadios = !pl.showRadios
+					pl.radioScroll = 0
+					pl.radioScrollAcc = 0
+				} else {
+					pl.showRadios = false
+				}
 				pl.plGenreOpen = false
 				pl.plArtistOpen = false
 				pl.plArtistExpand = ""
@@ -1043,6 +1058,12 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 	fillRect(gtx.Ops, listR, plBg)
 
 	pl.plWheel(gtx, listR)
+
+	// janela Radio com RADIOS ativo: grade de estações no lugar das faixas
+	if pl.key == "rd" && pl.showRadios {
+		pl.plRadioGrid(gtx, listR)
+		return
+	}
 
 	if pl.plGenSel == 5 {
 		// LIST: placeholder em destaque no lugar da lista
