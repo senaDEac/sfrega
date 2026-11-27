@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gioui.org/app"
+	"gioui.org/io/event"
 	"gioui.org/io/system"
 	"gioui.org/op"
 	"gioui.org/unit"
@@ -53,6 +54,15 @@ type plw struct {
 	radioScroll    float32
 	radioScrollAcc float32
 	radioBtns      []uibtn
+
+	// busca de rádios (botão LIST da janela Radio): campo + resultados TuneIn
+	radioSearch    bool
+	radioEd        widget.Editor
+	radioResults   []radioResult
+	radioSearching bool
+	radioSrchStat  string
+	radioSrchBtns  []uibtn
+	radioEdDbg     event.Tag
 
 	plScrollDragging bool
 	plScrollDragLast float32
@@ -174,6 +184,9 @@ func (ui *uiState) newPLW(name, key string) *plw {
 		// informativo — zerar evita botão marcado/janela fantasma no boot
 		pl.plOpen = false
 		pl.shadePL.onChange = func(on bool) { pl.saveJSON() }
+		// LIST da janela Radio abre a busca de estações (campo de texto)
+		pl.radioEd.SingleLine = true
+		pl.radioEd.Submit = true
 	}
 	pl.plPosDrag.commit = func(v float32) {
 		pl.activate()

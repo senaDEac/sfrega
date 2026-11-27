@@ -1041,6 +1041,17 @@ func (p *Player) StreamTitle() string {
 	return p.liveTitle
 }
 
+// StreamICY retorna o título ICY ("música corrente") do stream ao vivo,
+// ou "" quando não há stream ou a estação não envia metadados.
+func (p *Player) StreamICY() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if sd, ok := p.dec.(*audio.StreamDecoder); ok {
+		return sd.ICYTitle()
+	}
+	return ""
+}
+
 // SetRepeat liga/desliga o repeat da playlist.
 func (p *Player) SetRepeat(on bool) { p.repeat.Store(on) }
 

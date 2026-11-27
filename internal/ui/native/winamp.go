@@ -171,9 +171,15 @@ func (ui *uiState) lcdContent(gtx layout.Context) {
 
 	// título com marquee em (111,24,154,12)
 	streamTitle := ui.p.StreamTitle()
-	title, _ := ui.p.TrackTitle(ui.p.Index())
+	title := streamTitle // rádio ao vivo (PlayStream)
+	if title != "" {
+		// acrescenta a música corrente vinda do metadado ICY do stream
+		if icy := ui.p.StreamICY(); icy != "" {
+			title += " - " + icy
+		}
+	}
 	if title == "" {
-		title = streamTitle // rádio ao vivo (PlayStream)
+		title, _ = ui.p.TrackTitle(ui.p.Index())
 	}
 	if title == "" {
 		title = "sfrega"

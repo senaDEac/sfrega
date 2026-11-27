@@ -284,6 +284,21 @@ func (s *Skin) VisColor(i int) color.NRGBA {
 func toRGBA(im image.Image) *image.RGBA {
 	b := im.Bounds()
 	dst := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	// Paletted.At entra em pânico quando um pixel indexa além do tamanho
+	// da paleta (png malformado/ truncado) — converte manualmente com
+	// checagem de limite.
+	if pm, ok := im.(*image.Paletted); ok {
+		pal := pm.Palette
+		for y := 0; y < b.Dy(); y++ {
+			for x := 0; x < b.Dx(); x++ {
+				off := pm.PixOffset(b.Min.X+x, b.Min.Y+y)
+				if idx := int(pm.Pix[off]); idx >= 0 && idx < len(pal) {
+					dst.Set(x, y, pal[idx])
+				}
+			}
+		}
+		return dst
+	}
 	for y := 0; y < b.Dy(); y++ {
 		for x := 0; x < b.Dx(); x++ {
 			dst.Set(x, y, im.At(b.Min.X+x, b.Min.Y+y))

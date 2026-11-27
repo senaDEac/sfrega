@@ -54,7 +54,7 @@ func (pl *plw) plWheel(gtx layout.Context, r image.Rectangle) {
 		if !ok {
 			continue
 		}
-		if pl.key == "rd" && pl.showRadios {
+		if pl.key == "rd" && (pl.showRadios || pl.radioSearch) {
 			pl.radioScrollAcc += e.Scroll.Y
 		} else {
 			pl.plList.ScrollBy(e.Scroll.Y / plRowH)
@@ -348,6 +348,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 			R(0, 0, 48, 16), R(0, 16, 48, 15)) {
 			if i == 0 { // GENRE: abre/fecha a lista de gêneros
 				pl.showRadios = false
+				pl.radioSearch = false
 				pl.plGenreOpen = !pl.plGenreOpen
 				// só um painel por vez; as seleções são mantidas
 				pl.plArtistOpen = false
@@ -375,6 +376,7 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 			if i == 1 { // MÚSICAS/RÁDIOS: na janela Radio alterna a grade de estações
 				if pl.key == "rd" {
 					pl.showRadios = !pl.showRadios
+					pl.radioSearch = false
 					pl.radioScroll = 0
 					pl.radioScrollAcc = 0
 				} else {
@@ -392,6 +394,12 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 				pl.plAlbumExpandIdx = nil
 			}
 			if i == 5 { // LIST: fecha painéis e desliga o filtro, mantendo as seleções
+				if pl.key == "rd" {
+					// na janela Radio o LIST alterna a busca de estações
+					pl.radioSearch = !pl.radioSearch
+					pl.radioScroll = 0
+					pl.radioScrollAcc = 0
+				}
 				pl.showRadios = false
 				pl.plGenreOpen = false
 				pl.plArtistOpen = false
@@ -1086,6 +1094,12 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 		return
 	}
 
+	// janela Radio com LIST ativo: busca de estações (TuneIn) no lugar das faixas
+	if pl.key == "rd" && pl.radioSearch {
+		pl.plRadioSearch(gtx, listR)
+		return
+	}
+
 	if pl.plGenSel == 5 {
 		// LIST: placeholder em destaque no lugar da lista
 		m := op.Record(gtx.Ops)
@@ -1095,10 +1109,12 @@ func (pl *plw) plMiddle(gtx layout.Context, winW, winH, botY int, tracks []strin
 		lgtx := gtx
 		lgtx.Constraints.Min = image.Point{}
 		lgtx.Constraints.Max = image.Pt(listR.Dx(), listR.Dy())
+		pl.ui.shapeMu.Lock()
 		layout.Center.Layout(lgtx, func(gtx layout.Context) layout.Dimensions {
 			return widget.Label{Alignment: text.Middle, MaxLines: 1}.Layout(gtx,
 				pl.ui.shaper, pl.ui.fontBold, unit.Sp(27), language.T("pl.list.placeholder"), mat)
 		})
+		pl.ui.shapeMu.Unlock()
 		loff.Pop()
 		return
 	}
