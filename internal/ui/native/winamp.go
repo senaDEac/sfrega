@@ -31,7 +31,7 @@ func (ui *uiState) layoutMain(gtx layout.Context) {
 	// ---- titlebar ----
 	ui.spr(gtx, "TITLEBAR", R(47, 0, 222, 11), R(20, 0, 222, 11)) // contend
 	dragArea(gtx, R(16, 0, 228, 11))
-	dragAreaX11(gtx, R(16, 0, 228, 11), &ui.shadeMain)
+	dragAreaX11(gtx, R(16, 0, 228, 11), &ui.shadeMain, &ui.shadeMain)
 	if ui.spriteBtn(gtx, &ui.btnOpt, "TITLEBAR", R(6, 3, 9, 9), R(0, 0, 9, 9), R(0, 9, 9, 9)) {
 		ui.toggleMenu()
 	}
@@ -74,7 +74,7 @@ func (ui *uiState) shadeBar(gtx layout.Context, r image.Rectangle) {
 	ui.sprFit(gtx, "TITLEBAR", R(144, 5, 40, 6), R(18, 5, 42, 7))
 
 	dragArea(gtx, R(0, 0, 275, 18))
-	dragAreaX11(gtx, R(0, 0, 275, 18), &ui.shadeMain)
+	dragAreaX11(gtx, R(0, 0, 275, 18), &ui.shadeMain, &ui.shadeMain)
 
 	// botão do menu — depois do drag p/ receber os cliques
 	if ui.spriteBtn(gtx, &ui.btnWave, "TITLEBAR", R(2, 2, 14, 14),

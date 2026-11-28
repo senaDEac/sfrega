@@ -51,6 +51,17 @@ func (ui *uiState) eqWin() *app.Window {
 }
 
 func (ui *uiState) closeEQ() {
+	if androidUI() {
+		ui.mu.Lock()
+		if ui.panelKind == panelEQ {
+			ui.panelKind = panelNone
+			ui.eqOpen = false
+			saveOpenWindows(false, ui.plMain.plOpen, ui.menuOpen, ui.plRadio.plOpen, ui.plVideo.plOpen)
+		}
+		ui.mu.Unlock()
+		ui.invalidateMain()
+		return
+	}
 	if w := ui.eqWin(); w != nil {
 		w.Perform(system.ActionClose)
 	}
@@ -60,6 +71,19 @@ func (ui *uiState) closeEQ() {
 func (ui *uiState) toggleEQ() {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
+	if androidUI() {
+		if ui.panelKind == panelEQ {
+			ui.panelKind = panelNone
+			ui.eqOpen = false
+		} else {
+			ui.closeAllPanels()
+			ui.panelKind = panelEQ
+			ui.eqOpen = true
+		}
+		saveOpenWindows(ui.eqOpen, ui.plMain.plOpen, ui.menuOpen, ui.plRadio.plOpen, ui.plVideo.plOpen)
+		ui.invalidateMain()
+		return
+	}
 	if ui.winEQ == nil {
 		w := new(app.Window)
 		w.Option(
@@ -221,8 +245,8 @@ func (ui *uiState) layoutEQ(gtx layout.Context) {
 
 	dragArea(gtx, R(16, 0, 44, 14))
 	dragArea(gtx, R(208, 0, 36, 14))
-	dragAreaX11(gtx, R(16, 0, 44, 14), &ui.shadeEQ)
-	dragAreaX11(gtx, R(208, 0, 36, 14), &ui.shadeEQ)
+	dragAreaX11(gtx, R(16, 0, 44, 14), &ui.shadeEQ, &ui.shadeEQ)
+	dragAreaX11(gtx, R(208, 0, 36, 14), &ui.shadeEQ, &ui.shadeEQ)
 	if ui.spriteBtn(gtx, &ui.btnEQMin, "TITLEBAR", R(244, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.eqWin())
 	}

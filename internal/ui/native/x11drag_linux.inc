@@ -1,3 +1,4 @@
+#ifndef __ANDROID__
 #include "x11drag_linux.h"
 
 #include <X11/Xlib.h>
@@ -155,3 +156,5 @@ void sfrega_drag_end(void) {
 		g_dpy = NULL;
 	}
 }
+
+#endif /* !__ANDROID__ */

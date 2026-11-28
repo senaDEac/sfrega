@@ -22,6 +22,11 @@ func (ui *uiState) openConfirm(kind int) {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 	ui.confirmKind = kind
+	if androidUI() {
+		ui.confirmOpen = true
+		ui.invalidateMain()
+		return
+	}
 	if ui.winConfirm == nil {
 		ui.confirmScale = ui.mainScale
 		w := new(app.Window)
@@ -41,6 +46,14 @@ func (ui *uiState) openConfirm(kind int) {
 
 // closeConfirm fecha a janela de confirmação com segurança.
 func (ui *uiState) closeConfirm() {
+	if androidUI() {
+		ui.mu.Lock()
+		ui.confirmOpen = false
+		ui.confirmKind = 0
+		ui.mu.Unlock()
+		ui.invalidateMain()
+		return
+	}
 	ui.mu.Lock()
 	w := ui.winConfirm
 	ui.mu.Unlock()
@@ -121,7 +134,7 @@ func (ui *uiState) layoutConfirm(gtx layout.Context) {
 		})
 
 	dragArea(gtx, R(0, 0, 250, 22))
-	dragAreaX11(gtx, R(0, 0, 250, 22), nil)
+	dragAreaX11(gtx, R(0, 0, 250, 22), nil, dragTagConf)
 
 	// Não à esquerda (verde), Sim à direita (vermelho)
 	no := ui.button(gtx, &ui.confirmBtns[0], R(60, 50, 60, 20),

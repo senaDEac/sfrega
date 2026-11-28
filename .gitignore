@@ -46,3 +46,4 @@ secrets/
 /pkg/
 /src/sfrega-*/
 *.pkg.tar.zst
+*.idsig

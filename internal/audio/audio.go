@@ -4,7 +4,8 @@ package audio
 
 /*
 #cgo CFLAGS: -I.
-#cgo LDFLAGS: -lm -lpthread -ldl
+#cgo LDFLAGS: -lm
+#cgo linux LDFLAGS: -ldl
 #include "audio.h"
 #include <stdlib.h>
 */

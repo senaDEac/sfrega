@@ -61,6 +61,22 @@ type mrow struct {
 func (ui *uiState) toggleMenu() {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
+	if androidUI() {
+		if ui.panelKind == panelMenu {
+			ui.panelKind = panelNone
+			ui.menuOpen = false
+			ui.menuAbout, ui.menuFile, ui.menuCfg, ui.menuLang = false, false, false, false
+			ui.menuSkins, ui.menuCnt, ui.menuSpec = false, false, false
+			ui.menuScroll = 0
+		} else {
+			ui.closeAllPanels()
+			ui.panelKind = panelMenu
+			ui.menuOpen = true
+		}
+		saveOpenWindows(ui.eqOpen, ui.plMain.plOpen, ui.menuOpen, ui.plRadio.plOpen, ui.plVideo.plOpen)
+		ui.invalidateMain()
+		return
+	}
 	if ui.winMenu == nil {
 		ui.menuScale = ui.mainScale
 		w := new(app.Window)
@@ -85,6 +101,17 @@ func (ui *uiState) toggleMenu() {
 // closeMenu fecha a janela de menu com segurança (winMenu pode já ter sido
 // anulado pelo DestroyEvent enquanto um frame ainda renderiza).
 func (ui *uiState) closeMenu() {
+	if androidUI() {
+		ui.mu.Lock()
+		if ui.panelKind == panelMenu {
+			ui.panelKind = panelNone
+			ui.menuOpen = false
+			saveOpenWindows(ui.eqOpen, ui.plMain.plOpen, false, ui.plRadio.plOpen, ui.plVideo.plOpen)
+		}
+		ui.mu.Unlock()
+		ui.invalidateMain()
+		return
+	}
 	ui.mu.Lock()
 	w := ui.winMenu
 	ui.mu.Unlock()
@@ -152,7 +179,7 @@ func (ui *uiState) layoutMenu(gtx layout.Context) {
 	ui.spr(gtx, "TITLEBAR", R(0, 0, 9, 9), R(6, 3, 9, 9))
 
 	dragArea(gtx, R(16, 0, 228, 11))
-	dragAreaX11(gtx, R(16, 0, 228, 11), nil)
+	dragAreaX11(gtx, R(16, 0, 228, 11), nil, dragTagMenu)
 	if ui.spriteBtn(gtx, &ui.btnMenuMin, "TITLEBAR", R(244, 3, 9, 9),
 		R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(ui.winMenu)
@@ -270,6 +297,9 @@ func (ui *uiState) menuRows() []mrow {
 				wmOntop(n, on)
 			}
 		}})
+	if androidUI() {
+		rows = append(rows, mrow{label: "Overlay", act: func() { ui.toggleOverlay() }})
+	}
 	updLbl := language.T("menu.update_lists")
 	ui.mu.Lock()
 	updBusy := ui.updPhase != 0

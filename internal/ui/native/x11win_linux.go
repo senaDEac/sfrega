@@ -1,9 +1,12 @@
+//go:build linux && !android
+
 package native
 
 /*
 #cgo linux CFLAGS: -I${SRCDIR}
 #cgo linux LDFLAGS: -lX11
 #include "x11win_linux.h"
+#include "x11win_linux.inc"
 #include <stdlib.h>
 */
 import "C"

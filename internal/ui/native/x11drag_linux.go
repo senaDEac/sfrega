@@ -1,10 +1,11 @@
-//go:build linux
+//go:build linux && !android
 
 package native
 
 /*
 #cgo LDFLAGS: -lX11
 #include "x11drag_linux.h"
+#include "x11drag_linux.inc"
 */
 import "C"
 

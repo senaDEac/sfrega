@@ -4,12 +4,15 @@
 package native
 
 import (
+	"embed"
 	"fmt"
 	"image"
 	"image/color"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,6 +72,42 @@ var (
 	colEqBg        = color.NRGBA{R: 0x1A, G: 0x1A, B: 0x1A, A: 0xFF}
 )
 
+//go:embed fonts/*.ttf
+var fontFS embed.FS
+
+// androidUI é true no Android (gomobile): janela única, painéis internos.
+func androidUI() bool { return runtime.GOOS == "android" }
+
+// Painéis internos do Android (janela única): uma janela secundária por vez.
+const (
+	panelNone = iota
+	panelEQ
+	panelMenu
+)
+
+// closeAllPanels desliga todos os paineis (Android). Caller segura ui.mu.
+func (ui *uiState) closeAllPanels() {
+	ui.panelKind = panelNone
+	ui.panelPL = nil
+	ui.eqOpen = false
+	ui.menuOpen = false
+	for _, pl := range []*plw{ui.plMain, ui.plRadio, ui.plVideo} {
+		if pl != nil {
+			pl.plOpen = false
+		}
+	}
+}
+
+// invalidateMain agenda novo frame da janela principal (nil-safe).
+func (ui *uiState) invalidateMain() {
+	if ui.winMain != nil {
+		ui.winMain.Invalidate()
+	}
+	if ui.ovlWin != nil {
+		ui.ovlWin.Invalidate()
+	}
+}
+
 // uiState concentra widgets e fontes.
 type uiState struct {
 	mu           sync.Mutex // protege winEQ e as janelas pl*
@@ -86,6 +125,7 @@ type uiState struct {
 	winEQ      *app.Window
 	winMenu    *app.Window
 	winConfirm *app.Window
+	ovlWin     *app.Window // mini-player overlay (Android)
 	eqOpen     bool
 	menuOpen   bool
 
@@ -95,8 +135,12 @@ type uiState struct {
 	activePL                 *plw
 
 	confirmOpen  bool
-	confirmKind  int // 1 = shuffle, 2 = plays
+	confirmKind  int // 1 = shuffle, 2 = plays, 3 = tags
 	confirmScale int
+
+	// Android: painel secundário ativo dentro da janela única
+	panelKind int
+	panelPL   *plw
 
 	mainScale, eqScale int
 
@@ -170,15 +214,16 @@ type uibtn struct {
 	tag       event.Tag
 	down      bool
 	over      bool
-	scrollFn  func(dy float32)   // opcional: roda do mouse sobre o botão
+	scrollFn  func(dy float32)     // opcional: roda do mouse sobre o botão
 	dragFn    func(dx, dy float32) // opcional: chamado a cada Drag (dx,dy = delta)
-	dragDX    float32            // delta acumulado desde o Press
+	dragDX    float32              // delta acumulado desde o Press
 	dragDY    float32
-	dragPos   f32.Point          // última posição do Drag
-	moved     bool               // houve Drag (suprime o clique)
-	released  bool               // Release neste frame (mesmo após drag)
-	lastClick time.Time          // último clique (detecção de duplo-clique)
-	lastBtns  pointer.Buttons    // botões do último Press (secundário = direito)
+	dragPos   f32.Point       // última posição do Drag
+	moved     bool            // houve Drag (suprime o clique)
+	released  bool            // Release neste frame (mesmo após drag)
+	lastClick time.Time       // último clique (detecção de duplo-clique)
+	lastBtns  pointer.Buttons // botões do último Press (secundário = direito)
+	pressAt   time.Time       // instante do Press (long-press → direito no Android)
 }
 
 // beginScaledFrame configura o sistema de coordenadas lógico da janela e
@@ -686,23 +731,26 @@ func dragArea(gtx layout.Context, r image.Rectangle) {
 }
 
 var (
-	dragTag    event.Tag
-	dragActive bool
+	dragActive  bool
+	dragTagConf event.Tag = new(int)
+	dragTagMenu event.Tag = new(int)
 )
 
 // dragAreaX11 move a janela via XMoveWindow durante o drag. Complementa
 // dragArea: no X11 o Gio não implementa ActionMove (ver x11drag_linux.go).
 // sc, quando não-nil, habilita winshade: duplo-clique na área alterna a barra.
-func dragAreaX11(gtx layout.Context, r image.Rectangle, sc *shadeClk) {
+// tag deve ser único por janela — no Android todas as janelas dividem a
+// mesma surface e um tag compartilhado faria as áreas "roubarem" eventos.
+func dragAreaX11(gtx layout.Context, r image.Rectangle, sc *shadeClk, tag event.Tag) {
 	if r.Empty() {
 		return
 	}
 	clipStack := clip.Rect(r).Push(gtx.Ops)
-	event.Op(gtx.Ops, &dragTag)
+	event.Op(gtx.Ops, tag)
 	clipStack.Pop()
 	for {
 		ev, ok := gtx.Event(pointer.Filter{
-			Target: &dragTag,
+			Target: tag,
 			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
 		})
 		if !ok {
@@ -714,7 +762,13 @@ func dragAreaX11(gtx layout.Context, r image.Rectangle, sc *shadeClk) {
 		}
 		switch e.Kind {
 		case pointer.Press:
-			if e.Buttons == pointer.ButtonPrimary {
+			if sc != nil {
+				sc.pressY = e.Position.Y
+				sc.shadeFired = false
+			}
+			// no Android (touch) Buttons vem 0 — tratar como primário
+			primary := e.Buttons == pointer.ButtonPrimary || (androidUI() && e.Buttons == 0)
+			if primary {
 				if sc != nil && sc.dblClick(e.Position) {
 					sc.on = !sc.on
 					if sc.onChange != nil {
@@ -727,6 +781,16 @@ func dragAreaX11(gtx layout.Context, r image.Rectangle, sc *shadeClk) {
 				}
 			}
 		case pointer.Drag:
+			// Android: arrastar a barra de título p/ cima/baixo alterna o shade
+			if androidUI() && sc != nil && !sc.shadeFired {
+				if dy := e.Position.Y - sc.pressY; dy > 8 || dy < -8 {
+					sc.shadeFired = true
+					sc.on = !sc.on
+					if sc.onChange != nil {
+						sc.onChange(sc.on)
+					}
+				}
+			}
 			if dragActive {
 				wmDragMove()
 			}
@@ -744,11 +808,13 @@ func dragAreaX11(gtx layout.Context, r image.Rectangle, sc *shadeClk) {
 // shadeClk detecta duplo-clique numa área de título (dentro de dragAreaX11)
 // e alterna o "winshade" (janela reduzida à altura da barra). Um por janela.
 type shadeClk struct {
-	last     time.Time
-	x, y     float32
-	on       bool
-	px       int // altura da barra de shade em pixels
-	onChange func(on bool)
+	last       time.Time
+	x, y       float32
+	on         bool
+	px         int // altura da barra de shade em pixels
+	onChange   func(on bool)
+	pressY     float32 // Y do último Press (drag→shade no Android)
+	shadeFired bool
 }
 
 // arm define a altura de shade em pixels (chamado a cada frame).
@@ -799,6 +865,7 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 		case pointer.Press:
 			b.down = true
 			b.lastBtns = e.Buttons
+			b.pressAt = time.Now()
 			b.moved = false
 			b.dragDX, b.dragDY = 0, 0
 			b.dragPos = e.Position
@@ -815,6 +882,10 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 			}
 		case pointer.Release:
 			b.released = true
+			// Android não tem botão direito: pressione-e-segure = botão secundário
+			if androidUI() && b.down && time.Since(b.pressAt) > 600*time.Millisecond {
+				b.lastBtns = pointer.ButtonSecondary
+			}
 			if b.down && !b.moved {
 				clicked = true
 			}
@@ -849,6 +920,19 @@ type fader struct {
 
 func loadFonts() ([]text.FontFace, error) {
 	var faces []text.FontFace
+	parse := func(data []byte) {
+		if fc, err := opentype.ParseCollection(data); err == nil {
+			faces = append(faces, fc...)
+		}
+	}
+	// fontes embutidas: necessárias no Android (sem /usr/share/fonts)
+	entries, _ := fs.ReadDir(fontFS, "fonts")
+	for _, en := range entries {
+		data, err := fontFS.ReadFile("fonts/" + en.Name())
+		if err == nil {
+			parse(data)
+		}
+	}
 	paths := []string{
 		"/usr/share/fonts/TTF/DejaVuSans.ttf",
 		"/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
@@ -866,10 +950,7 @@ func loadFonts() ([]text.FontFace, error) {
 		if err != nil {
 			continue
 		}
-		fc, err := opentype.ParseCollection(data)
-		if err == nil {
-			faces = append(faces, fc...)
-		}
+		parse(data)
 	}
 	return faces, nil
 }
@@ -1021,12 +1102,22 @@ func Run(p *player.Player, musicDirs []string) error {
 			case <-fast.C:
 				ui.winMain.Invalidate()
 				ui.mu.Lock()
+				if ui.ovlWin != nil {
+					ui.ovlWin.Invalidate()
+				}
 				if ui.updPhase != 0 && ui.winMenu != nil {
 					ui.winMenu.Invalidate()
 				}
 				ui.mu.Unlock()
 			case <-slow.C:
 				ui.mu.Lock()
+				// overlay: flag ovl.flag é a fonte de verdade (Go <-> serviço Java)
+				if androidUI() {
+					ui.syncOverlay()
+					if ui.ovlWin != nil {
+						ui.ovlWin.Invalidate()
+					}
+				}
 				if ui.winEQ != nil {
 					ui.winEQ.Invalidate()
 				}
@@ -1054,8 +1145,12 @@ func Run(p *player.Player, musicDirs []string) error {
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
-			gtx = beginScaledFrame(gtx, ui.mainScale, image.Pt(275, 107))
-			ui.layoutMain(gtx)
+			if androidUI() {
+				ui.layoutAndroid(gtx, e)
+			} else {
+				gtx = beginScaledFrame(gtx, ui.mainScale, image.Pt(275, 107))
+				ui.layoutMain(gtx)
+			}
 			e.Frame(gtx.Ops)
 		}
 	}
@@ -1854,6 +1949,16 @@ func (ui *uiState) specColor(spec *spectrum.Spec, i, n int, v float32) color.NRG
 // anexadas à playlist e a janela Playlist é exibida.
 func (ui *uiState) eject() {
 	go func() {
+		if androidUI() {
+			androidImportMedia(ui.plMain)
+			ui.mu.Lock()
+			open := ui.plMain.plOpen
+			ui.mu.Unlock()
+			if !open {
+				ui.plMain.toggle()
+			}
+			return
+		}
 		files := ui.dialogWrap(pickAudioFiles)
 		if len(files) == 0 {
 			return

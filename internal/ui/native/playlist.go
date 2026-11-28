@@ -200,8 +200,8 @@ func (pl *plw) plShadeBar(gtx layout.Context, winW int, R func(int, int, int, in
 	// área de move exclui a zona de resize (winW-60..winW-33)
 	dragArea(gtx, R(0, 0, winW-61, 18))
 	dragArea(gtx, R(winW-32, 0, 1, 18))
-	dragAreaX11(gtx, R(0, 0, winW-61, 18), &pl.shadePL)
-	dragAreaX11(gtx, R(winW-32, 0, 1, 18), &pl.shadePL)
+	dragAreaX11(gtx, R(0, 0, winW-61, 18), &pl.shadePL, &pl.shadePL)
+	dragAreaX11(gtx, R(winW-32, 0, 1, 18), &pl.shadePL, &pl.shadePL)
 	if pl.ui.spriteBtn(gtx, &pl.btnPLMin, "TITLEBAR", R(winW-31, 4, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(pl.window())
 	}
@@ -274,7 +274,7 @@ func (pl *plw) plTopBar(gtx layout.Context, winW int, R func(int, int, int, int)
 	pl.ui.spr(gtx, "PLEDIT", R(153, 21, 25, 20), R(winW-25, 0, 25, 20))
 
 	dragArea(gtx, R(0, 0, winW-32, plTopH))
-	dragAreaX11(gtx, R(0, 0, winW-32, plTopH), &pl.shadePL)
+	dragAreaX11(gtx, R(0, 0, winW-32, plTopH), &pl.shadePL, &pl.shadePL)
 	if pl.ui.spriteBtn(gtx, &pl.btnPLMin, "TITLEBAR", R(winW-31, 3, 9, 9), R(9, 0, 9, 9), R(9, 9, 9, 9)) {
 		minimizeWindow(pl.window())
 	}

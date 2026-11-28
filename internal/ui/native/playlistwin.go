@@ -219,6 +219,19 @@ func (pl *plw) toggle() {
 	ui := pl.ui
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
+	if androidUI() {
+		if ui.panelPL == pl && pl.plOpen {
+			pl.plOpen = false
+			ui.panelPL = nil
+		} else {
+			ui.closeAllPanels()
+			pl.plOpen = true
+			ui.panelPL = pl
+		}
+		saveOpenWindows(ui.eqOpen, ui.plMain.plOpen, ui.menuOpen, ui.plRadio.plOpen, ui.plVideo.plOpen)
+		ui.invalidateMain()
+		return
+	}
 	if pl.win == nil {
 		w := new(app.Window)
 		w.Option(
@@ -452,6 +465,17 @@ func (pl *plw) close() {
 
 // closeLocked pressupõe pl.ui.mu segurado.
 func (pl *plw) closeLocked() {
+	if androidUI() {
+		if pl.plOpen {
+			pl.plOpen = false
+			if pl.ui.panelPL == pl {
+				pl.ui.panelPL = nil
+			}
+			saveOpenWindows(pl.ui.eqOpen, pl.ui.plMain.plOpen, pl.ui.menuOpen,
+				pl.ui.plRadio.plOpen, pl.ui.plVideo.plOpen)
+		}
+		return
+	}
 	if pl.win == nil {
 		return
 	}
@@ -755,6 +779,10 @@ func (pl *plw) addPicked(dir bool) {
 		ui := pl.ui
 		var files []string
 		var pickedDir string
+		if androidUI() {
+			androidImportMedia(pl)
+			return
+		}
 		if dir {
 			pick := func() []string {
 				if d := pickAudioDir(); d != "" {

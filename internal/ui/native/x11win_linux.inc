@@ -1,3 +1,4 @@
+#ifndef __ANDROID__
 #include "x11win_linux.h"
 
 #include <X11/Xlib.h>
@@ -664,3 +665,5 @@ void sfrega_geo_restore(void)
     fclose(f);
     XFlush(dpy);
 }
+
+#endif /* !__ANDROID__ */
