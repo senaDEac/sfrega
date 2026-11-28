@@ -170,9 +170,15 @@ type uibtn struct {
 	tag       event.Tag
 	down      bool
 	over      bool
-	scrollFn  func(dy float32) // opcional: roda do mouse sobre o botão
-	lastClick time.Time        // último clique (detecção de duplo-clique)
-	lastBtns  pointer.Buttons  // botões do último Press (secundário = direito)
+	scrollFn  func(dy float32)   // opcional: roda do mouse sobre o botão
+	dragFn    func(dx, dy float32) // opcional: chamado a cada Drag (dx,dy = delta)
+	dragDX    float32            // delta acumulado desde o Press
+	dragDY    float32
+	dragPos   f32.Point          // última posição do Drag
+	moved     bool               // houve Drag (suprime o clique)
+	released  bool               // Release neste frame (mesmo após drag)
+	lastClick time.Time          // último clique (detecção de duplo-clique)
+	lastBtns  pointer.Buttons    // botões do último Press (secundário = direito)
 }
 
 // beginScaledFrame configura o sistema de coordenadas lógico da janela e
@@ -774,6 +780,7 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 	event.Op(gtx.Ops, &b.tag)
 	clipStack.Pop()
 	clicked := false
+	b.released = false
 	for {
 		ev, ok := gtx.Event(pointer.Filter{
 			Target:  &b.tag,
@@ -792,8 +799,23 @@ func (ui *uiState) button(gtx layout.Context, b *uibtn, r image.Rectangle, face 
 		case pointer.Press:
 			b.down = true
 			b.lastBtns = e.Buttons
+			b.moved = false
+			b.dragDX, b.dragDY = 0, 0
+			b.dragPos = e.Position
+		case pointer.Drag:
+			dx, dy := e.Position.X-b.dragPos.X, e.Position.Y-b.dragPos.Y
+			b.dragPos = e.Position
+			if dx != 0 || dy != 0 {
+				b.moved = true
+			}
+			b.dragDX += dx
+			b.dragDY += dy
+			if b.dragFn != nil {
+				b.dragFn(dx, dy)
+			}
 		case pointer.Release:
-			if b.down {
+			b.released = true
+			if b.down && !b.moved {
 				clicked = true
 			}
 			b.down = false

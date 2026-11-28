@@ -34,6 +34,7 @@ type radioPlEntry struct {
 	Guide    string `json:"guide,omitempty"` // GuideId TuneIn (resolve ao tocar)
 	Desc     string `json:"desc,omitempty"`
 	Subtitle string `json:"subtitle,omitempty"`
+	Pos      *[2]float32 `json:"pos,omitempty"` // posição livre no box de Favoritos (fração 0..1)
 }
 
 // radioPick é a estação neutra usada pelo balão (catálogo ou busca).
@@ -760,8 +761,8 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 
 	// métricas do box de favoritos (mesma largura das linhas)
 	const (
-		favIconSz = 28
-		favCellW  = 32
+		favIconSz = 40
+		favCellW  = 44
 		favPadX   = 4
 		favPadY   = 4
 	)
@@ -771,8 +772,8 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		favPerRow = 1
 	}
 	favRows := (len(favs) + favPerRow - 1) / favPerRow
-	if favRows < 1 {
-		favRows = 1
+	if favRows < 2 {
+		favRows = 2 // altura mínima p/ permitir posicionamento livre
 	}
 	favBoxH := favPadY*2 + favRows*favCellW
 
@@ -858,14 +859,87 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 	{
 		boxR := image.Rect(14, areaTop+1, winW-27, areaTop+favBoxH-1)
 		white := color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
-		paint.FillShape(gtx.Ops, white, clip.UniformRRect(boxR, 3).Op(gtx.Ops))
-		paint.FillShape(gtx.Ops, color.NRGBA{R: 0x0C, G: 0x0C, B: 0x12, A: 0xFF},
-			clip.UniformRRect(boxR.Inset(1), 2).Op(gtx.Ops))
-		for i, e := range favs {
-			col := i % favPerRow
-			rw := i / favPerRow
-			ix := boxR.Min.X + favPadX + col*favCellW + (favCellW-favIconSz)/2
-			iy := boxR.Min.Y + favPadY + rw*favCellW + (favCellW-favIconSz)/2
+		paint.FillShape(gtx.Ops, white, clip.UniformRRect(boxR, 8).Op(gtx.Ops))
+		// interior na cor do painel = transparente
+		paint.FillShape(gtx.Ops, pl.plBgColor(),
+			clip.UniformRRect(boxR.Inset(1), 7).Op(gtx.Ops))
+		// área útil para posicionar os ícones (dentro do padding)
+		gridX := boxR.Min.X + favPadX
+		gridY := boxR.Min.Y + favPadY
+		spanX := favPerRow*favCellW - favIconSz
+		spanY := favRows*favCellW - favIconSz
+		if spanX < 0 {
+			spanX = 0
+		}
+		if spanY < 0 {
+			spanY = 0
+		}
+		posXY := func(e *radioPlEntry) (int, int) {
+			return gridX + int(e.Pos[0]*float32(spanX)),
+				gridY + int(e.Pos[1]*float32(spanY))
+		}
+		// centros dos ícones já posicionados (auto-layout desvia deles)
+		type fctr struct{ x, y int }
+		var fixed []fctr
+		for i := range favs {
+			if favs[i].Pos != nil {
+				x, y := posXY(&favs[i])
+				fixed = append(fixed, fctr{x + favIconSz/2, y + favIconSz/2})
+			}
+		}
+		autoIdx := 0
+		autoPos := func() (int, int) {
+			for try := 0; try < favPerRow*favRows*4+8; try++ {
+				col := autoIdx % favPerRow
+				rw := autoIdx / favPerRow
+				autoIdx++
+				ix := gridX + col*favCellW + (favCellW-favIconSz)/2
+				iy := gridY + rw*favCellW + (favCellW-favIconSz)/2
+				cx, cy := ix+favIconSz/2, iy+favIconSz/2
+				occupied := false
+				for _, f := range fixed {
+					dx, dy := cx-f.x, cy-f.y
+					if dx < 0 {
+						dx = -dx
+					}
+					if dy < 0 {
+						dy = -dy
+					}
+					if dx < favCellW && dy < favCellW {
+						occupied = true
+						break
+					}
+				}
+				if !occupied {
+					return ix, iy
+				}
+			}
+			return gridX, gridY
+		}
+		for i := range favs {
+			e := &favs[i]
+			bx, by := 0, 0
+			if e.Pos != nil {
+				bx, by = posXY(e)
+			} else {
+				bx, by = autoPos()
+			}
+			b := &pl.genreFavBtns[i]
+			// durante o arrasto o ícone segue o ponteiro
+			ix := bx + int(b.dragDX)
+			iy := by + int(b.dragDY)
+			if ix < gridX {
+				ix = gridX
+			}
+			if iy < gridY {
+				iy = gridY
+			}
+			if ix > gridX+spanX {
+				ix = gridX + spanX
+			}
+			if iy > gridY+spanY {
+				iy = gridY + spanY
+			}
 			ir := image.Rect(ix, iy, ix+favIconSz, iy+favIconSz)
 			st := radioStation{Icon: e.Icon, Name: e.Name}
 			if img := radioIcon(st); img != nil {
@@ -873,38 +947,53 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 			} else {
 				fillRect(gtx.Ops, ir, colRadioPh)
 				if e.Name != "" {
-					ui.textAt(gtx, ui.fontBold, unit.Sp(12),
+					ui.textAt(gtx, ui.fontBold, unit.Sp(14),
 						strings.ToUpper(e.Name[:1]), colRadioTxt,
-						image.Pt(ir.Min.X+8, ir.Min.Y+8))
+						image.Pt(ir.Min.X+13, ir.Min.Y+13))
 				}
 			}
-			cellR := image.Rect(
-				boxR.Min.X+favPadX+col*favCellW, boxR.Min.Y+favPadY+rw*favCellW,
-				boxR.Min.X+favPadX+(col+1)*favCellW, boxR.Min.Y+favPadY+(rw+1)*favCellW)
-			b := &pl.genreFavBtns[i]
-			if ui.button(gtx, b, cellR, func(gtx layout.Context, down bool) {
+			cellR := image.Rect(ir.Min.X-4, ir.Min.Y-4, ir.Max.X+4, ir.Max.Y+4)
+			b.dragFn = func(dx, dy float32) {
+				if pl.win != nil {
+					pl.win.Invalidate()
+				}
+			}
+			clk := ui.button(gtx, b, cellR, func(gtx layout.Context, down bool) {
 				if down {
 					fillRect(gtx.Ops, image.Rect(0, 0, cellR.Dx(), cellR.Dy()),
 						color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
 				}
-			}) {
-				pick := radioPickOfEntry(e)
-				if b.lastBtns.Contain(pointer.ButtonSecondary) {
-					pl.openRadioPop(cellR.Min.X+8, cellR.Min.Y+8, pick)
+			})
+			if b.released && b.moved {
+				// soltou após arrastar: grava a posição livre (fração)
+				if spanX > 0 && spanY > 0 {
+					fx := float32(ix-gridX) / float32(spanX)
+					fy := float32(iy-gridY) / float32(spanY)
+					e.Pos = &[2]float32{fx, fy}
+					saveRadioPls()
+				}
+				b.moved = false
+				b.dragDX, b.dragDY = 0, 0
+			}
+			if !clk {
+				continue
+			}
+			pick := radioPickOfEntry(*e)
+			if b.lastBtns.Contain(pointer.ButtonSecondary) {
+				pl.openRadioPop(cellR.Min.X+8, cellR.Min.Y+8, pick)
+			} else {
+				now := time.Now()
+				if now.Sub(b.lastClick) < 500*time.Millisecond {
+					b.lastClick = time.Time{}
+					pl.favPendOk = false
+					ui.playRadioEntry(*e)
 				} else {
-					now := time.Now()
-					if now.Sub(b.lastClick) < 500*time.Millisecond {
-						b.lastClick = time.Time{}
-						pl.favPendOk = false
-						ui.playRadioEntry(e)
-					} else {
-						b.lastClick = now
-						pl.favPendP = pick
-						pl.favPendX = cellR.Min.X + favCellW/2
-						pl.favPendY = cellR.Min.Y + favCellW/2
-						pl.favPendT = now
-						pl.favPendOk = true
-					}
+					b.lastClick = now
+					pl.favPendP = pick
+					pl.favPendX = cellR.Min.X + favIconSz/2
+					pl.favPendY = cellR.Min.Y + favIconSz/2
+					pl.favPendT = now
+					pl.favPendOk = true
 				}
 			}
 		}
