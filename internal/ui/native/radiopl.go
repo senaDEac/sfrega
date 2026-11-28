@@ -738,6 +738,42 @@ const (
 	radioPlRowH  = 44 // linha de estação dentro do grupo (ícone 40px)
 )
 
+// ---- tamanho customizado do box de Favoritos ----
+
+var (
+	favBoxCfgOnce sync.Once
+	favBoxCfgW       int // 0 = automático (largura total)
+	favBoxCfgH       int // 0 = automático (pelos ícones)
+)
+
+func loadFavBoxCfg() {
+	favBoxCfgOnce.Do(func() {
+		var c struct {
+			W int `json:"w"`
+			H int `json:"h"`
+		}
+		if b, err := os.ReadFile(configPath("radioFavBox.json")); err == nil {
+			if json.Unmarshal(b, &c) == nil {
+				favBoxCfgW, favBoxCfgH = c.W, c.H
+			}
+		}
+	})
+}
+
+func saveFavBoxCfg() {
+	out := struct {
+		W int `json:"w"`
+		H int `json:"h"`
+	}{W: favBoxCfgW, H: favBoxCfgH}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return
+	}
+	p := configPath("radioFavBox.json")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, b, 0o644)
+}
+
 // plRadioGroupPanel desenha o painel de grupos (Rock/Pop/NewAge/...)
 // com as estações de cada playlist; clique no grupo expande/fecha,
 // clique na estação troca o balão (direito) ou toca (duplo-clique).
@@ -766,7 +802,17 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		favPadX   = 4
 		favPadY   = 4
 	)
+	loadFavBoxCfg()
 	boxW := winW - 41
+	if favBoxCfgW > 0 {
+		boxW = favBoxCfgW
+	}
+	if boxW > winW-41 {
+		boxW = winW - 41
+	}
+	if boxW < 120 {
+		boxW = 120
+	}
 	favPerRow := (boxW - 2*favPadX) / favCellW
 	if favPerRow < 1 {
 		favPerRow = 1
@@ -776,6 +822,12 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		favRows = 2 // altura mínima p/ permitir posicionamento livre
 	}
 	favBoxH := favPadY*2 + favRows*favCellW
+	if favBoxCfgH > 0 {
+		favBoxH = favBoxCfgH
+		if favBoxH < favPadY*2+favIconSz {
+			favBoxH = favPadY*2 + favIconSz
+		}
+	}
 
 	type row struct {
 		entry bool
@@ -857,7 +909,7 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 
 	// ---- box de Favoritos: borda branca 1px, cantos arredondados ----
 	{
-		boxR := image.Rect(14, areaTop+1, winW-27, areaTop+favBoxH-1)
+		boxR := image.Rect(14, areaTop+1, 14+boxW, areaTop+favBoxH-1)
 		white := color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
 		paint.FillShape(gtx.Ops, white, clip.UniformRRect(boxR, 8).Op(gtx.Ops))
 		// interior na cor do painel = transparente
@@ -866,8 +918,8 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 		// área útil para posicionar os ícones (dentro do padding)
 		gridX := boxR.Min.X + favPadX
 		gridY := boxR.Min.Y + favPadY
-		spanX := favPerRow*favCellW - favIconSz
-		spanY := favRows*favCellW - favIconSz
+		spanX := boxW - 2*favPadX - favIconSz
+		spanY := favBoxH - 2*favPadY - favIconSz
 		if spanX < 0 {
 			spanX = 0
 		}
@@ -888,10 +940,14 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 			}
 		}
 		autoIdx := 0
+		maxRw := (favBoxH - 2*favPadY) / favCellW
+		if maxRw < 1 {
+			maxRw = 1
+		}
 		autoPos := func() (int, int) {
-			for try := 0; try < favPerRow*favRows*4+8; try++ {
+			for try := 0; try < favPerRow*maxRw*4+8; try++ {
 				col := autoIdx % favPerRow
-				rw := autoIdx / favPerRow
+				rw := (autoIdx / favPerRow) % maxRw
 				autoIdx++
 				ix := gridX + col*favCellW + (favCellW-favIconSz)/2
 				iy := gridY + rw*favCellW + (favCellW-favIconSz)/2
@@ -995,6 +1051,56 @@ func (pl *plw) plRadioGroupPanel(gtx layout.Context, winW, botY int) int {
 					pl.favPendT = now
 					pl.favPendOk = true
 				}
+			}
+		}
+
+		// orelha de resize: triângulo branco no canto inferior direito
+		tr := image.Rect(boxR.Max.X-16, boxR.Max.Y-16, boxR.Max.X-2, boxR.Max.Y-2)
+		fillRect(gtx.Ops, image.Rect(tr.Min.X, tr.Max.Y-1, tr.Max.X, tr.Max.Y), white)
+		fillRect(gtx.Ops, image.Rect(tr.Max.X-1, tr.Min.Y, tr.Max.X, tr.Max.Y), white)
+		for i := 0; i <= tr.Dx(); i++ {
+			y := tr.Max.Y - 1 - i
+			fillRect(gtx.Ops, image.Rect(tr.Min.X+i, y, tr.Min.X+i+1, y+1), white)
+		}
+		{
+			hr := image.Rect(boxR.Max.X-20, boxR.Max.Y-20, boxR.Max.X-1, boxR.Max.Y-1)
+			b := &pl.favResize
+			b.dragFn = func(dx, dy float32) {
+				if pl.win != nil {
+					pl.win.Invalidate()
+				}
+			}
+			ui.button(gtx, b, hr, func(gtx layout.Context, down bool) {
+				if down {
+					fillRect(gtx.Ops, image.Rect(0, 0, hr.Dx(), hr.Dy()),
+						color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14})
+				}
+			})
+			if b.down && !pl.favResizeOn {
+				pl.favResizeOn = true
+				pl.favResizeW0, pl.favResizeH0 = boxW, favBoxH
+			}
+			if pl.favResizeOn {
+				nw := pl.favResizeW0 + int(b.dragDX)
+				nh := pl.favResizeH0 + int(b.dragDY)
+				if nw < 120 {
+					nw = 120
+				}
+				if nh < favPadY*2+favIconSz {
+					nh = favPadY*2 + favIconSz
+				}
+				if nw > winW-41 {
+					nw = winW - 41
+				}
+				favBoxCfgW, favBoxCfgH = nw, nh
+			}
+			if b.released {
+				pl.favResizeOn = false
+				if b.moved {
+					saveFavBoxCfg()
+				}
+				b.moved = false
+				b.dragDX, b.dragDY = 0, 0
 			}
 		}
 	}

@@ -84,6 +84,10 @@ type plw struct {
 
 	// box de Favoritos no topo do painel GENRE (janela Radio)
 	genreFavBtns  []uibtn
+	favResize     uibtn
+	favResizeOn   bool
+	favResizeW0   int
+	favResizeH0   int
 	favPendOk     bool
 	favPendT      time.Time
 	favPendX      int
